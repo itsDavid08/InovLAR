@@ -763,3 +763,141 @@ body {
   font-size: 16px;
 }
 
+/* ==================== */
+/* STAFF LOGIN (PIN) STYLES */
+/* ==================== */
+.login-screen {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background-color: #f5f5f5;
+  padding: 20px;
+  text-align: center;
+}
+
+.login-screen h1 {
+  color: #333;
+  margin-bottom: 8px;
+  font-size: 2rem;
+}
+
+.login-subtitulo {
+  color: #777;
+  margin: 0 0 20px;
+  font-size: 1rem;
+}
+
+.login-voltar {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  background: none;
+  border: none;
+  color: #1E90FF;
+  font-size: 1.1rem;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.pin-display {
+  height: 40px;
+  margin: 10px 0 20px;
+  font-size: 2.5rem;
+  letter-spacing: 12px;
+  color: #1E90FF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pin-placeholder {
+  color: #ccc;
+}
+
+.login-erro {
+  color: #FF5252;
+  font-weight: bold;
+  margin: 0 0 16px;
+  min-height: 1.2rem;
+}
+
+.keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  width: 100%;
+  max-width: 320px;
+}
+
+.keypad-btn {
+  height: 80px;
+  border: none;
+  border-radius: 50%;
+  background-color: white;
+  color: #333;
+  font-size: 1.8rem;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  transition: transform 0.1s, background-color 0.2s;
+  touch-action: manipulation;
+}
+
+.keypad-btn:hover {
+  background-color: #f0f0f0;
+}
+
+.keypad-btn:active {
+  transform: scale(0.95);
+}
+
+.keypad-ok {
+  background-color: #1E90FF;
+  color: white;
+}
+
+.keypad-ok:hover {
+  background-color: #1a7fe0;
+}
+
+.keypad-acao {
+  background-color: #E0E0E0;
+}
+
+.login-sucesso {
+  color: #4CAF50;
+  font-weight: bold;
+  font-size: 1.1rem;
+  margin: 0 0 24px;
+}
+
+.login-botao-grande {
+  background-color: #1E90FF;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  padding: 14px 40px;
+  font-size: 1.1rem;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.login-botao-grande:hover {
+  background-color: #1a7fe0;
+}
+
+/* Botão "Terminar sessão" na sidebar do staff (destaque vermelho suave) */
+.sidebar-button-logout {
+  background-color: #ffd6d6;
+  color: #c0392b;
+  font-weight: bold;
+}
+
+.sidebar-button-logout:hover {
+  background-color: #ffbdbd;
+}
+

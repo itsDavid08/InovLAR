@@ -1,6 +1,7 @@
 import { useContext, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Context } from "../ContextProvider";
+import { staffLogout } from "../api/auth";
 
 const UtenteHome = () => {
     const { utentes, setUtente, deleteUtente } = useContext(Context);
@@ -43,6 +44,15 @@ const UtenteHome = () => {
     }
 
     const handleVoltar = () => {
+        navigate("/");
+    }
+
+    const handleAlterarPassword = () => {
+        navigate("/staff/alterar-password");
+    }
+
+    const handleLogout = async () => {
+        await staffLogout();
         navigate("/");
     }
 
@@ -91,6 +101,14 @@ const UtenteHome = () => {
                     style={{marginTop: "auto"}}
                 >
                     Pedidos Pendentes
+                </button>
+
+                <button className="sidebar-button" onClick={handleAlterarPassword}>
+                    Alterar palavra-passe
+                </button>
+
+                <button className="sidebar-button sidebar-button-logout" onClick={handleLogout}>
+                    Terminar sessão
                 </button>
 
                 <button

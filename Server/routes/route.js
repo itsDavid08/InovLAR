@@ -7,6 +7,8 @@ const utenteController = require('../controller/utenteController');
 const botaoController = require('../controller/botaoController');
 const pedidoController = require('../controller/pedidoController');
 const viewController = require('../controller/viewController');
+const authController = require('../controller/authController');
+const { requireStaff } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -60,6 +62,13 @@ router.get('/localIP', (req, res) => {
 
     res.json(localIP);
 });
+
+// Rotas de autenticação do staff (palavra-passe geral, definida por eles)
+router.get('/auth/staff/status', authController.status);
+router.post('/auth/staff/setup', authController.setup);
+router.post('/auth/staff/login', authController.login);
+router.post('/auth/staff/change', requireStaff, authController.change); // só autenticado
+router.post('/auth/staff/logout', authController.logout);
 
 // Rotas para Utentes
 router.get('/utentes', utenteController.getUtentes);

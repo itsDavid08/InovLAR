@@ -1,8 +1,11 @@
 const express = require('express');
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
 const http = require('http');
 const { Server } = require('socket.io');
 const {setIO} = require('./Util/socketIO.js');
+const { COOKIE_SECRET } = require('./config/auth');
+const { StaffAuth } = require('./models');
 const app = express();
 const port = 3000;
 const router = require('./routes/route.js');
@@ -10,6 +13,9 @@ const imagesRouter = require('./routes/images');
 const multer = require('multer');
 const path = require('path');
 const DIST = path.join(__dirname, '../Client/dist');
+
+// Garante que a tabela StaffAuth existe (cria só se não existir, não mexe nas outras).
+StaffAuth.sync();
 
 // Configuração do armazenamento
 const storage = multer.diskStorage({
@@ -23,7 +29,13 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 app.use(express.json());
-app.use(cors());
+// CORS com credenciais: reflete a origem do pedido (não pode ser "*" quando há cookies).
+// Em produção (Client servido aqui mesmo) é mesma origem; em dev (Vite:5173) é cross-origin.
+app.use(cors({
+    origin: (origin, cb) => cb(null, true),
+    credentials: true,
+}));
+app.use(cookieParser(COOKIE_SECRET)); // antes das rotas (preenche req.signedCookies)
 app.use(express.static('public'));
 app.use(express.static(DIST));
 
