@@ -5,6 +5,62 @@ Entrada mais recente no topo.
 
 ---
 
+## 2026-06-09 — Proteção das rotas de escrita do staff (`requireStaff`)
+
+### Contexto
+A autenticação do staff já existia, mas a API continuava toda aberta: o `RequireStaff` (React) só
+esconde ecrãs — quem soubesse o URL escrevia na base de dados sem login. Faltava aplicar o middleware
+`requireStaff` no servidor.
+
+### Decisão
+- Proteger as rotas de **escrita exclusivas do staff** com `requireStaff`.
+- **Deixar abertas** as que o tablet do **utente** usa, senão partia o quarto:
+  - `POST /pedidos` e `PUT /pedidos/:id` — o utente **cria** pedidos (botões/SOS) e **cancela/conclui os
+    próprios** ("Estou Bem", toggle do SOS, gaveta ☰). Ver `MainContent.jsx` e `RequestListDrawer.jsx`.
+  - Todos os `GET` — o `ContextProvider` carrega `utentes`/`botoes`/`pedidos/ativos/emergencia` em
+    **todos** os dispositivos no arranque (incluindo o do utente).
+- **Detalhe crítico no cliente:** os `fetch` de mutação não enviavam o cookie. Em produção (mesma
+  origem) iria à mesma; em **dev** (Vite `:5173` → API `:3000`, cross-origin) **não** → daria 401. Logo,
+  juntar `credentials: "include"` às 6 funções de mutação do staff.
+
+### Alterações
+**`Server/routes/route.js`** — `requireStaff` intercalado em **9 rotas** (sem imports novos, já estava
+importado): `POST /utentes/create`, `PUT /utentes/:id`, `DELETE /utentes/:id`,
+`POST|DELETE /utentes/:utenteId/botoes/:botaoId`, `POST /botoes`, `PUT /botoes/:id`,
+`DELETE /botoes/:id`, `DELETE /pedidos/:id`.
+
+**`Client/src/ContextProvider.jsx`** — `credentials: "include"` em **6 funções**: `editBotao`,
+`postBotao`, `postUtente`, `editUtente`, `deleteUtente`, `deleteBotao`.
+(`postPedido` e `updatePedido` **não** foram tocados — batem nas rotas abertas do utente.)
+
+### Aberto vs. protegido
+| Aberto (utente / leitura) | Protegido (`requireStaff`) |
+|---|---|
+| todos os `GET` | `POST /utentes/create`, `PUT`/`DELETE /utentes/:id` |
+| `POST /pedidos` | `POST`/`DELETE /utentes/:id/botoes/:id` |
+| `PUT /pedidos/:id` | `POST /botoes`, `PUT`/`DELETE /botoes/:id`, `DELETE /pedidos/:id` |
+
+### Teste
+Servidor arrancado, pedidos **sem cookie**:
+- As 8 rotas protegidas → **401** (o controller nem corre → nada é criado/alterado).
+- `GET /utentes`, `GET /botoes` → 200; `PUT /pedidos/:id` → não-401.
+- `npm run build` do Client → OK.
+- (Já estava provado que **com** cookie o `requireStaff` deixa passar — ver `change` na entrada abaixo.)
+
+### Notas
+- As rotas de associação de botões (`/utentes/:id/botoes/:id`) não têm uso na UI atual; ficam protegidas
+  por higiene. Se forem ligadas, a função que as chamar também precisa de `credentials: "include"`.
+- Regra daqui para a frente: **qualquer** nova rota de escrita do staff nasce com `requireStaff` no
+  servidor + `credentials: "include"` no `fetch` do cliente.
+
+### Estado
+- [x] `requireStaff` nas 9 rotas de escrita do staff
+- [x] `credentials: "include"` nas 6 mutações do staff (cliente)
+- [x] Rotas do utente (`GET`, `POST`/`PUT /pedidos`) intactas — testado
+- [x] Build do Client OK
+
+---
+
 ## 2026-06-09 — Autenticação do staff (palavra-passe geral + cookie de sessão)
 
 ### Contexto
@@ -147,7 +203,7 @@ app.use(cookieParser(COOKIE_SECRET)); // antes das rotas (preenche req.signedCoo
 - [x] Frontend: ecrã de login + guarda de rotas (`RequireStaff`)
 - [x] Alterar palavra-passe (3 passos) + Terminar sessão
 - [x] `npm run build` do Client OK
-- [ ] Proteger as rotas de **escrita** do staff no backend (depois da auth dos utentes)
+- [x] Proteger as rotas de **escrita** do staff no backend — feito (ver entrada mais recente no topo)
 - [ ] HTTPS + `secure: true` em produção
 
 ---

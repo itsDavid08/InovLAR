@@ -73,18 +73,18 @@ router.post('/auth/staff/logout', authController.logout);
 // Rotas para Utentes
 router.get('/utentes', utenteController.getUtentes);
 router.get('/utentes/:id', utenteController.getUtenteById);
-router.post('/utentes/create', utenteController.createUtente);
-router.put('/utentes/:id', utenteController.updateUtente);
-router.delete('/utentes/:id', utenteController.deleteUtente);
-router.post('/utentes/:utenteId/botoes/:botaoId', utenteController.associarBotao);
-router.delete('/utentes/:utenteId/botoes/:botaoId', utenteController.desassociarBotao);
+router.post('/utentes/create', requireStaff, utenteController.createUtente);
+router.put('/utentes/:id', requireStaff, utenteController.updateUtente);
+router.delete('/utentes/:id', requireStaff, utenteController.deleteUtente);
+router.post('/utentes/:utenteId/botoes/:botaoId', requireStaff, utenteController.associarBotao);
+router.delete('/utentes/:utenteId/botoes/:botaoId', requireStaff, utenteController.desassociarBotao);
 
 // Rotas para Botões - Añadido manejo de errores para la subida de imágenes
 router.get('/botoes', botaoController.getAllBotoes);
 router.get('/botoes/utente/:utenteId', botaoController.getBotoesByUtenteId);
-router.post('/botoes', botaoController.createBotao);
-router.put('/botoes/:id', botaoController.updateBotao);
-router.delete('/botoes/:id', botaoController.deleteBotao);
+router.post('/botoes', requireStaff, botaoController.createBotao);
+router.put('/botoes/:id', requireStaff, botaoController.updateBotao);
+router.delete('/botoes/:id', requireStaff, botaoController.deleteBotao);
 
 // Rotas para Pedidos
 router.get('/pedidos', pedidoController.getTodosPedidos);
@@ -94,7 +94,7 @@ router.get('/pedidos/:id', pedidoController.getPedidoPorId);
 router.get('/pedidos/utente/:utenteId', pedidoController.getPedidosAtivosPorUtenteId);
 router.post('/pedidos', pedidoController.criarPedido);
 router.put('/pedidos/:id', pedidoController.atualizarPedido);
-router.delete('/pedidos/:id', pedidoController.eliminarPedido);
+router.delete('/pedidos/:id', requireStaff, pedidoController.eliminarPedido);
 
 router.get('/', (req,res) => viewController.renderIndexView(res));
 

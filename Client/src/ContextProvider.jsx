@@ -43,6 +43,7 @@ export const ContextProvider = ({ children }) => {
         try {
             const response = await fetch(`${apiUrl}botoes/${botao.id}`, {
                 method: "PUT",
+                credentials: "include",
                 headers: {
                     "Content-Type": "application/json",
                 },
@@ -64,6 +65,7 @@ export const ContextProvider = ({ children }) => {
         try {
             const response = await fetch(apiUrl + "botoes", {
                 method: "POST",
+                credentials: "include",
                 headers: {
                     "Content-Type": "application/json",
                 },
@@ -108,6 +110,7 @@ export const ContextProvider = ({ children }) => {
         try {
             const response = await fetch(apiUrl + "utentes/create", {
                 method: "POST",
+                credentials: "include",
                 headers: {
                     "Content-Type": "application/json",
                 },
@@ -125,6 +128,7 @@ export const ContextProvider = ({ children }) => {
         try {
             const response = await fetch(`${apiUrl}utentes/${utente.id}`, {
                 method: "PUT",
+                credentials: "include",
                 headers: {
                     "Content-Type": "application/json",
                 },
@@ -194,6 +198,7 @@ export const ContextProvider = ({ children }) => {
         try {
             const response = await fetch(`${apiUrl}utentes/${id}`, {
                 method: "DELETE",
+                credentials: "include",
             });
             if (!response.ok) {
                 throw new Error("Failed to delete utente");
@@ -207,6 +212,7 @@ export const ContextProvider = ({ children }) => {
         try {
             const response = await fetch(`${apiUrl}botoes/${id}`, {
                 method: "DELETE",
+                credentials: "include",
             });
             if (!response.ok) {
                 throw new Error("Failed to delete botao");
