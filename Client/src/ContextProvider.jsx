@@ -17,6 +17,10 @@ export const ContextProvider = ({ children }) => {
     const [botoes, setBotoes] = useState([]);
     const [pedidosUtilizador, setPedidosUtilizador] = useState([]);
     const [pedidosPendentes, setPedidosPendentes] = useState([]);
+    // Gate de "kiosk": true quando o staff está no console (após PIN). Vive só em
+    // memória → reinicia a false no restart/reload, por isso a app arranca sempre
+    // no ecrã de bloqueio. O PIN é sempre validado no servidor (staffLogin).
+    const [staffUnlocked, setStaffUnlocked] = useState(false);
 
     const utenteIdRef = useRef(utenteId);
 
@@ -192,6 +196,8 @@ export const ContextProvider = ({ children }) => {
                 setPedidosUtilizador,
                 pedidosPendentes,
                 setPedidosPendentes,
+                staffUnlocked,
+                setStaffUnlocked,
                 deleteUtente,
                 postPedido,
                 postBotao,

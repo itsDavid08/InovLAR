@@ -1,27 +1,16 @@
-import { useEffect, useState } from "react";
+import { useContext } from "react";
 import { Navigate } from "react-router-dom";
-import { staffStatus } from "../api/auth";
+import { Context } from "../ContextProvider";
 
-// Guarda das rotas de staff: pergunta ao servidor se o dispositivo está autenticado.
-// Se não estiver, reencaminha para /staff/login (que trata de definir ou pedir a password).
+// Guarda das rotas de staff (kiosk). Deixa passar enquanto o staff estiver
+// "desbloqueado" nesta sessão (flag em memória, definida após o PIN). Como
+// reinicia a false no restart, qualquer arranque/reload cai no ecrã de bloqueio.
+// A segurança real continua no servidor (`requireStaff` nas rotas de escrita).
 export default function RequireStaff({ children }) {
-    const [estado, setEstado] = useState("carregando"); // "carregando" | "ok" | "negado"
+    const { staffUnlocked } = useContext(Context);
 
-    useEffect(() => {
-        let ativo = true;
-        staffStatus().then((s) => {
-            if (ativo) setEstado(s.autenticado ? "ok" : "negado");
-        });
-        return () => {
-            ativo = false;
-        };
-    }, []);
-
-    if (estado === "carregando") {
-        return <div className="login-screen"><h1>A verificar…</h1></div>;
-    }
-    if (estado === "negado") {
-        return <Navigate to="/staff/login" replace />;
+    if (!staffUnlocked) {
+        return <Navigate to="/" replace />;
     }
     return children;
 }

@@ -5,6 +5,79 @@ Entrada mais recente no topo.
 
 ---
 
+## 2026-06-15 — Fluxo "Pin-to-Exit" (kiosk: bloqueio → staff → gaiola do utente)
+
+### Contexto
+O fluxo antigo tinha um ecrã inicial a escolher "Utente" vs "Staff", com o lado do utente
+**livremente acessível** (qualquer um escolhia um perfil e usava o tabuleiro) e o lado do staff
+protegido por um cookie persistente (~1 ano) — ou seja, **nunca** bloqueava no arranque. Para um
+tablet partilhado num lar isto é frágil: o utente podia sair do seu tabuleiro e o staff não tinha de
+se autenticar ao reiniciar.
+
+### Decisão — modelo kiosk com saída por PIN
+O tablet passa a ter 3 estados encadeados:
+1. **Ecrã de bloqueio** (raiz `/`) — pede o PIN (ou define-o na 1ª vez). Rápido (teclado numérico).
+2. **Console de staff** (`/staff`, …) — gestão de utentes/botões/pedidos. Protegido.
+3. **Gaiola do utente** (`/main/:id`) — o tabuleiro do utente, **sem saída livre**. A única saída é
+   um ícone discreto "🛠" que abre um **modal de PIN**; PIN correto reabre o staff, cancelar/errar
+   mantém o utente no tabuleiro.
+
+**Mecanismo:** um gate de cliente `staffUnlocked` (estado em memória no `ContextProvider`). Arranca a
+`false` → a app abre sempre no bloqueio (reinício/F5 re-bloqueia). O PIN é **sempre** validado no
+servidor (`staffLogin` → bcrypt + renova o cookie), por isso a flag não é falsificável num kiosk.
+Coerente com a filosofia já registada: *guarda no frontend (UX) ≠ segurança (backend)* — o
+`requireStaff` nas rotas de escrita continua a ser a segurança real.
+
+> Nota: não há endpoint `utenteBind` no servidor (os órfãos `AbrirUtente`/`BindUtente` chamam uma
+> função que nem existe). Por isso a gaiola é imposta no cliente, com o PIN verificado no servidor.
+
+### Alterações — `Client/src/`
+- **`ContextProvider.jsx`** — novo estado `staffUnlocked` + `setStaffUnlocked` no `value`.
+- **`Components/RequireStaff.jsx`** — passa a ler `staffUnlocked` (instantâneo) em vez de consultar
+  `staffStatus()`; se bloqueado → `<Navigate to="/" />`.
+- **`Pages/StaffLogin.jsx`** (ecrã de bloqueio) — deixa de saltar via cookie (`autenticado`); pede
+  sempre o PIN. Sucesso (login **ou** setup) → `setStaffUnlocked(true)` + `/staff`. Removido o
+  "← Voltar" (é a raiz).
+- **`Components/PinPrompt.jsx`** (novo) — modal de PIN sobre o tabuleiro; valida com `staffLogin`;
+  `onSuccess`/`onCancel`. Reutiliza `Keypad` e os estilos `.login-screen`.
+- **`Pages/MainContent.jsx`** (gaiola) — o botão "🛠" deixa de navegar livre para `/utente`; agora
+  abre o `PinPrompt`. PIN correto → `setStaffUnlocked(true)` + `/staff`. Botão tornado discreto.
+  **Fecha o gate (`setStaffUnlocked(false)`) ao montar** (ver "Race condition" abaixo).
+- **`Pages/StaffHome.jsx`** — "Voltar Atrás" e "Terminar Sessão" passam a `setStaffUnlocked(false)`
+  (sair do console bloqueia o gate). "Iniciar Sessão" (`handleOpen`) **não** mexe no gate — só navega.
+
+### Race condition (corrigida) — entrar no tabuleiro pedia o PIN e voltava a `/staff`
+1ª versão fechava o gate no `handleOpen` (`setStaffUnlocked(false)` + `navigate("/main/:id")`). O
+React Router v7 trata a navegação como *transition* (baixa prioridade), mas o `setStaffUnlocked(false)`
+é aplicado primeiro (alta prioridade) → nesse instante ainda em `/staff`, o `RequireStaff` via o gate
+fechado e redirecionava para `/` (bloqueio). Sintoma: clicar "Aceder Perfil" → pedia PIN → voltava a
+`/staff`. **Fix:** o fecho do gate passou para um `useEffect([])` no `MainContent` (rota não-guardada),
+por isso nunca dispara o guarda durante a transição. (As saídas para `/` não sofrem disto: guarda e
+`navigate` apontam ambos para `/`.)
+- **`App.jsx`** — `/` → ecrã de bloqueio (era `Home`); removidas as rotas `/utente` (seletor livre)
+  e `/staff/login`. `Home.jsx` e `UtenteHome.jsx` ficam **órfãos** (não apagados).
+- **`index.css`** — `.pin-overlay` (camada fixa do modal de PIN).
+
+### Comportamento de reload (decisão)
+- `/staff` (e afins) → reload re-bloqueia (gate a false) → volta ao ecrã de bloqueio. ✓ kiosk.
+- `/main/:id` **não** é guardado → reload mantém o utente no seu tabuleiro (não fica preso no
+  bloqueio). A gaiola é imposta por não ter saída livre, não por guardar a rota.
+
+### Teste
+- `npm run build` (Client) → OK (bundle JS menor: `Home`/`UtenteHome` saíram por tree-shaking).
+- Falta verificação visual em runtime (arrancar Server + Client) — pendente.
+
+### Estado
+- [x] Gate `staffUnlocked` no Context + `RequireStaff` a usá-lo
+- [x] Ecrã de bloqueio na raiz (sempre pede PIN; sem auto-skip por cookie)
+- [x] `PinPrompt` (saída da gaiola) + `MainContent` sem saída livre
+- [x] `StaffHome` bloqueia o gate ao iniciar sessão / sair
+- [x] `App.jsx` com rotas novas; `npm run build` OK
+- [ ] Verificação visual do fluxo completo (bloqueio → staff → gaiola → PIN)
+- [ ] (Opcional) Tornar `/main/:id` à prova de gestos de saída do browser/SO (modo kiosk do tablet)
+
+---
+
 ## 2026-06-15 — Reorganização do front-end (split de layouts + camada `api/`)
 
 ### Contexto

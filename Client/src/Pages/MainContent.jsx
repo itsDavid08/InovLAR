@@ -3,10 +3,11 @@ import { useContext, useEffect, useState, useRef } from "react";
 import { Context } from "../ContextProvider";
 import RequestListDrawer from "../Components/RequestListDrawer.jsx";
 import SuccessModal from "../Components/SuccessModal.jsx";
+import PinPrompt from "../Components/PinPrompt.jsx";
 
 const MainContent = () => {
     const { id } = useParams();
-    const { utente, botoes, postPedido, updatePedido, setUtenteId, apiUrl } = useContext(Context);
+    const { utente, botoes, postPedido, updatePedido, setUtenteId, setStaffUnlocked, apiUrl } = useContext(Context);
     const audioRef = useRef(null);
 
     const botoesSintoMe = botoes.filter(b => b.categoria === "Sinto-me");
@@ -17,11 +18,27 @@ const MainContent = () => {
 
     const [isDrawerVisible, setDrawerVisible] = useState(false);
     const [isModalVisible, setModalVisible] = useState(false);
+    const [isPinVisible, setPinVisible] = useState(false);
     const navigate = useNavigate();
+
+    // Saída da gaiola: o PIN correto reabre o console de staff; cancelar/errar
+    // mantém o utente no seu tabuleiro.
+    const handleSairGaiola = () => {
+        setStaffUnlocked(true);
+        setPinVisible(false);
+        navigate("/staff");
+    };
 
     useEffect(() => {
         if (!utente || utente.id !== id) setUtenteId(id);
     }, [id]);
+
+    // Estar no tabuleiro = estar na "gaiola": fecha o gate de staff. Feito aqui
+    // (e não no StaffHome) para o guarda não redirecionar para o bloqueio durante
+    // a navegação. A partir daqui só se sai com o PIN (botão 🛠 → PinPrompt).
+    useEffect(() => {
+        setStaffUnlocked(false);
+    }, []);
 
     useEffect(() => {
         if (!audioRef.current) {
@@ -151,7 +168,7 @@ const MainContent = () => {
                 <div className="flex-grow-1 mx-2">
                     {renderSection("Sinto-me", botoesSintoMe, "#FFF9C4", "#FFD700")}
                 </div>
-                <button className="btn btn-outline-dark" onClick={() => navigate('/utente')}>🛠</button>
+                <button className="btn btn-outline-light text-muted border-0" style={{ opacity: 0.4 }} onClick={() => setPinVisible(true)} aria-label="Acesso staff">🛠</button>
             </div>
 
             <div className="d-flex gap-2 align-items-stretch">
@@ -193,6 +210,12 @@ const MainContent = () => {
 
             <SuccessModal visible={isModalVisible} onClose={hideModal} />
             <RequestListDrawer visible={isDrawerVisible} onClose={hideDrawer} utente={utente} />
+            {isPinVisible && (
+                <PinPrompt
+                    onSuccess={handleSairGaiola}
+                    onCancel={() => setPinVisible(false)}
+                />
+            )}
         </div>
     );
 };

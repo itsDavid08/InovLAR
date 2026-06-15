@@ -785,6 +785,14 @@ textarea {
 /* ==================== */
 /* STAFF LOGIN (PIN) STYLES */
 /* ==================== */
+
+/* Camada do modal de PIN (saída da gaiola): cobre o tabuleiro do utente. */
+.pin-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+}
+
 .login-screen {
   position: relative;
   display: flex;

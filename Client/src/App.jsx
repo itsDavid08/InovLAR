@@ -1,8 +1,6 @@
-import { useState } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { ContextProvider } from "./ContextProvider";
 
-import UtenteHome from "./Pages/UtenteHome.jsx";
 import MainContent from "./Pages/MainContent";
 import StaffHome from "./Pages/StaffHome.jsx";
 import PedidosPendentes from "./Pages/PedidosPendentes.jsx";
@@ -11,7 +9,6 @@ import EditUtente from "./Components/utentes/EditUtente.jsx";
 import NewUtente from "./Components/utentes/NewUtente.jsx";
 
 import EditBotoes from "./Components/botoes/EditBotoes.jsx";
-import Home from "./Pages/Home.jsx";
 import StaffLogin from "./Pages/StaffLogin.jsx";
 import ChangePassword from "./Pages/ChangePassword.jsx";
 import RequireStaff from "./Components/RequireStaff.jsx";
@@ -24,14 +21,13 @@ function App() {
 
                 <div className="main-content-area">
                     <Routes>
-                        <Route path="/" element={<Home />} />
-                        <Route path="/utente" element={<UtenteHome />} />
+                        {/* Ecrã de bloqueio (raiz): define a password na 1ª vez, ou pede o PIN. */}
+                        <Route path="/" element={<StaffLogin />} />
+
+                        {/* Tabuleiro do utente — a "gaiola". Sem saída livre: só se sai com PIN. */}
                         <Route path="/main/:id" element={<MainContent />} />
 
-                        {/* Ecrã de login do staff (define a password na 1ª vez, ou pede-a) */}
-                        <Route path="/staff/login" element={<StaffLogin />} />
-
-                        {/* Rotas só-staff: protegidas pelo guarda RequireStaff */}
+                        {/* Rotas só-staff: protegidas pelo gate de kiosk (RequireStaff). */}
                         <Route path="/edit-utente/:id" element={<RequireStaff><EditUtente /></RequireStaff>} />
                         <Route path="/new-utente" element={<RequireStaff><NewUtente /></RequireStaff>} />
                         <Route path="/staff" element={<RequireStaff><StaffHome /></RequireStaff>} />
@@ -48,10 +44,3 @@ function App() {
 }
 
 export default App;
-
-/*
-
-<RequestListDrawer visible={isDrawerVisible} onClose={hideDrawer} />
-<SuccessModal visible={isModalVisible} onClose={hideModal} />
-
-*/

@@ -5,7 +5,7 @@ import { staffLogout } from "../api/auth";
 import StaffShell from "../Components/layout/StaffShell";
 
 const StaffHome = () => {
-    const { utentes, setUtente, deleteUtente } = useContext(Context);
+    const { utentes, setUtente, deleteUtente, setStaffUnlocked } = useContext(Context);
     const navigate = useNavigate();
     const [selectedUtente, setSelectedUtente] = useState(null);
 
@@ -13,6 +13,9 @@ const StaffHome = () => {
         setSelectedUtente(utente);
     };
 
+    // Iniciar a sessão do utente: entra na "gaiola". O fecho do gate é feito pelo
+    // próprio tabuleiro ao montar — se o fizéssemos aqui, o RequireStaff (ainda
+    // montado em /staff) redirecionaria para o bloqueio durante a navegação.
     const handleOpen = (utente) => {
         setUtente(utente);
         navigate("/main/" + utente.id);
@@ -42,6 +45,7 @@ const StaffHome = () => {
     }
 
     const handleVoltar = () => {
+        setStaffUnlocked(false);
         navigate("/");
     }
 
@@ -51,6 +55,7 @@ const StaffHome = () => {
 
     const handleLogout = async () => {
         await staffLogout();
+        setStaffUnlocked(false);
         navigate("/");
     }
 

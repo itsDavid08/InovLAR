@@ -1,10 +1,14 @@
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Context } from "../ContextProvider";
 import { staffStatus, staffSetup, staffLogin } from "../api/auth";
 import Keypad from "../Components/Keypad";
 
-// Teclado numérico que serve para DEFINIR a palavra-passe (1ª vez) e para ENTRAR.
+// Ecrã de bloqueio do tablet (kiosk). Serve para DEFINIR a palavra-passe (1ª vez)
+// e para DESBLOQUEAR o console de staff. É a raiz da app: arranca sempre aqui,
+// pois o gate `staffUnlocked` está bloqueado no arranque.
 export default function StaffLogin() {
+    const { setStaffUnlocked } = useContext(Context);
     const [modo, setModo] = useState("carregando"); // "carregando" | "definir" | "login"
     const [passo, setPasso] = useState(1); // no modo "definir": 1=escolher, 2=confirmar
     const [pin, setPin] = useState("");
@@ -12,17 +16,25 @@ export default function StaffLogin() {
     const [erro, setErro] = useState("");
     const navigate = useNavigate();
 
+    // Só decidimos definir-vs-login. NÃO saltamos por causa do cookie: o tablet
+    // tem de pedir o PIN em cada arranque, mesmo que o dispositivo já esteja
+    // autenticado no servidor (o cookie continua a servir para as mutações).
     useEffect(() => {
         let ativo = true;
         staffStatus().then((s) => {
             if (!ativo) return;
-            if (s.autenticado) navigate("/staff");
-            else setModo(s.configurado ? "login" : "definir");
+            setModo(s.configurado ? "login" : "definir");
         });
         return () => {
             ativo = false;
         };
-    }, [navigate]);
+    }, []);
+
+    // Entra no console de staff: liga o gate de kiosk e navega.
+    const entrar = () => {
+        setStaffUnlocked(true);
+        navigate("/staff");
+    };
 
     const aConfirmar = modo === "definir" && passo === 2;
     const valor = aConfirmar ? pinConfirm : pin;
@@ -37,7 +49,7 @@ export default function StaffLogin() {
     const confirmar = async () => {
         if (modo === "login") {
             const { ok } = await staffLogin(pin);
-            if (ok) navigate("/staff");
+            if (ok) entrar();
             else {
                 setErro("Palavra-passe incorreta");
                 setPin("");
@@ -61,7 +73,7 @@ export default function StaffLogin() {
             return;
         }
         const { ok, data } = await staffSetup(pin);
-        if (ok) navigate("/staff");
+        if (ok) entrar();
         else setErro(data.mensagem || "Erro ao definir a palavra-passe");
     };
 
@@ -87,10 +99,6 @@ export default function StaffLogin() {
 
     return (
         <div className="login-screen">
-            <button className="login-voltar" onClick={() => navigate("/")}>
-                ← Voltar
-            </button>
-
             <h1>{titulo}</h1>
             {subtitulo && <p className="login-subtitulo">{subtitulo}</p>}
 
