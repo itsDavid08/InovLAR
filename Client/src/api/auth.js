@@ -1,6 +1,6 @@
 // Chamadas à API de autenticação do staff.
 // IMPORTANTE: todas usam `credentials: "include"` para o cookie de sessão viajar.
-const apiUrl = `${window.location.protocol}//${window.location.hostname}:3000/`;
+import { apiUrl } from "./client";
 
 async function post(path, body) {
     const res = await fetch(apiUrl + path, {

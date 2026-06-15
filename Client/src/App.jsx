@@ -7,10 +7,10 @@ import MainContent from "./Pages/MainContent";
 import StaffHome from "./Pages/StaffHome.jsx";
 import PedidosPendentes from "./Pages/PedidosPendentes.jsx";
 
-import EditUtente from "./Components/EditUtente.jsx";
-import NewUtente from "./Components/NewUtente.jsx";
+import EditUtente from "./Components/utentes/EditUtente.jsx";
+import NewUtente from "./Components/utentes/NewUtente.jsx";
 
-import EditBotoes from "./Components/EditBotoes.jsx";
+import EditBotoes from "./Components/botoes/EditBotoes.jsx";
 import Home from "./Pages/Home.jsx";
 import StaffLogin from "./Pages/StaffLogin.jsx";
 import ChangePassword from "./Pages/ChangePassword.jsx";

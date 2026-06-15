@@ -5,6 +5,66 @@ Entrada mais recente no topo.
 
 ---
 
+## 2026-06-15 — Reorganização do front-end (split de layouts + camada `api/`)
+
+### Contexto
+Vários ficheiros React acumulavam responsabilidades a mais. O caso mais visível: `EditBotoes.jsx`
+(323 linhas) tinha **dois layouts** no mesmo ficheiro — a lista/seleção e o formulário criar/editar.
+O mesmo shell de sidebar+header estava **duplicado** entre `StaffHome` e a lista de botões, os
+formulários de utente estavam em dois ficheiros quase iguais, e o `ContextProvider` (300 linhas)
+misturava todo o estado com **todas** as chamadas HTTP.
+
+### Decisão
+Reorganização **sem alterar o funcionamento** (puro *refactor* estrutural):
+- **Containers vs. apresentação:** a lógica/estado fica no container; cada layout sai para um
+  componente presentacional que recebe `props`.
+- **Camada `api/`:** os `fetch` saem do `ContextProvider` para módulos por recurso. Espelham
+  *exatamente* os pedidos originais (URLs, métodos, `credentials`, verificações de `res.ok`,
+  mensagens de erro). O `ContextProvider` mantém o estado e as atualizações otimistas.
+
+### Alterações
+**Camada `api/` (nova)** — `Client/src/api/`
+- `client.js` — `apiUrl` (base partilhada) + `get()` / `mutate()`. `mutate({ auth })`: só envia o
+  cookie de sessão com `auth: true` (mutações de staff); os pedidos do utente ficam **sem**
+  credenciais, como antes (ver entrada de 2026-06-09).
+- `botoes.js`, `utentes.js`, `pedidos.js` — funções puras que devolvem dados.
+- `auth.js` — passa a **importar** `apiUrl` de `client.js` (antes duplicava a constante).
+
+**`ContextProvider.jsx`** — delega os `fetch` na camada `api/`; mantém estado, `try/catch`,
+`setState` e *optimistic updates* idênticos. `apiUrl` deixa de ser `useState` (nunca mudava) e passa
+a constante importada. Removidos 2 `console.log` de depuração (`fetchUtente`, `updatePedido`).
+
+**Split de layouts** — `Client/src/Components/`
+- `botoes/` — `EditBotoes.jsx` (container) + `BotoesList.jsx` (lista) + `BotaoForm.jsx` (form+preview).
+- `utentes/` — `EditUtente.jsx` / `NewUtente.jsx` (wrappers de rota) + `UtenteForm.jsx` (form partilhado).
+- `layout/StaffShell.jsx` — shell de sidebar+header partilhado por `StaffHome` e `BotoesList`
+  (antes duplicado). `props`: `sidebar`, `headerRight`, `children`.
+
+**Movidos** (imports atualizados em `App.jsx`): `Components/{EditBotoes,EditUtente,NewUtente}.jsx`
+→ `Components/{botoes,utentes}/`.
+
+### Preservação de comportamento (verificado por leitura)
+- DELETE sem corpo → sem `Content-Type`, com `credentials` (igual).
+- `pedidos` POST/PUT → continuam **sem** cookie (`auth:false`).
+- `get("/imagesBotoes")` mantém a barra inicial e a `//` dupla do original.
+- Chaves do `Context.Provider value` **inalteradas** → consumidores intactos.
+- Ficheiros órfãos (`BindUtente`, `AbrirUtente`, `EscreverMensagem`) **não tocados** (decisão do utilizador).
+
+### Teste
+- `npm run build` (Client) → OK, antes e depois (mesmo aviso pré-existente do CSS na linha 555).
+- `npm run lint` **não corre** no repo (ESLint 9 sem `eslint.config.js`) — pré-existente, não relacionado.
+
+### Estado
+- [x] Camada `api/` (`client` + `botoes`/`utentes`/`pedidos`) + `auth.js` a reutilizar `apiUrl`
+- [x] `ContextProvider` slim (delega nos `api/`)
+- [x] `EditBotoes` dividido em container + `BotoesList` + `BotaoForm`
+- [x] `StaffShell` partilhado (`StaffHome` + `BotoesList`)
+- [x] `UtenteForm` partilhado (`EditUtente` + `NewUtente`)
+- [x] `App.jsx` com imports atualizados; ficheiros antigos removidos; `npm run build` OK
+- [ ] (Opcional) Migrar config do ESLint para v9 para voltar a ter `lint`
+
+---
+
 ## 2026-06-15 — Legibilidade com Windhawk "Translucent Windows" (não era bug do projeto)
 
 ### Contexto
