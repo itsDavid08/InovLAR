@@ -5,6 +5,61 @@ Entrada mais recente no topo.
 
 ---
 
+## 2026-06-15 — Legibilidade com Windhawk "Translucent Windows" (não era bug do projeto)
+
+### Contexto
+As letras liam-se bem no telemóvel mas mal no **Brave** e no **VS Code** (ambos no Windows). O VS Code
+não usa **nada** do CSS do projeto → se também ali se lia mal, a causa não podia ser o projeto. O
+denominador comum é o mod **Translucent Windows** (Windhawk, `@include *`), que torna as janelas
+translúcidas e baixa o contraste do texto sobre o que está por trás.
+
+Confirmado pelo *source* do mod: os knobs responsáveis são `type` (`acrylicblur`/`mica`…),
+`RenderingMod.ThemeBackground` (pinta fundos a preto p/ deixar passar o blur), `ExtendFrame` (estende a
+"glass frame" para a client area) e `RenderingMod.Syscolors` (`COLOR_WINDOW`→preto, texto→cinza claro).
+Para conteúdo web (Chromium) o texto **não** é recolorido pelo mod; o problema é a **translucidez da
+janela**, não a cor da letra.
+
+### Decisão
+**A) Corrigir na origem (Windhawk) — fix real:** adicionar *process rules* (`RuledPrograms`) para
+`brave.exe` e `Code.exe` com Background type = **Default** e **Theme background / Extend frame /
+Immersive dark** desligados → essas janelas voltam a ser opacas, mantendo o translucent nas restantes
+apps. (`Syscolors` é global, não tem override por-app.)
+
+**B) Defesa no projeto (CSS):** garantir base opaca e letra preta por omissão:
+- `html, body, #root { background-color:#fff }` — base opaca, o translucent não "passa" por trás.
+- `body { color:#000 }` — letra preta para tudo o que não define cor própria (o Bootstrap já punha
+  `#212529` sobre `#fff`; passámos o default a preto puro). As cores já definidas (`white`, `#333`…)
+  não são afetadas — são mais específicas.
+
+### Alterações
+**`Client/src/index.css`**
+- Bloco global: `html, body, #root` com fundo branco opaco + `body { color:#000 }`.
+- `button, input, select, textarea { color: inherit }` — ver "Update" abaixo.
+
+### Update — só os botões da `.action-sidebar` ficavam ilegíveis
+Causa: os `<button class="sidebar-button">` (`index.css:170`) têm `background-color:#E0E0E0` mas **não
+definem `color`** — os únicos botões da app sem cor própria. Os `<button>` **não herdam `color`** do
+`body`; usam a cor de sistema **`ButtonText`**, que o Windhawk com `SysColors:1` troca por `RGB(220,220,220)`
+(quase branco) → quase-branco sobre cinza claro = invisível. Por isso o `body { color:#000 }` não chegou
+lá e só estes partiam (o `Terminar sessão` tem `#c0392b` explícito; os outros botões também têm cor
+própria). O `SysColors` é **global** no mod → a regra `brave.exe` não o corrige. `color: inherit` força
+os controlos a usar o preto do `body` (corrige também botões/inputs de `.edit-container`/`.new-container`,
+com o mesmo defeito latente).
+
+### Notas
+- A mudança de CSS é sobretudo **defensiva**; o fix que se nota é o **A** (excluir as apps no Windhawk).
+- Greys secundários ainda por rever (opcional): `.login-subtitulo` `#777`, `.pedido-info-container`
+  `#7f8c8d`, inline `#666`/`#888` em `BindUtente.jsx`/`EditBotoes.jsx`, `.pin-placeholder` `#ccc`
+  (este é propositadamente fraco — placeholder do PIN).
+
+### Estado
+- [x] CSS: base opaca + letra preta por omissão (`index.css`)
+- [x] CSS: controlos de formulário com `color: inherit` → corrige `.sidebar-button` (root cause real)
+- [ ] Windhawk: regras para `brave.exe` e `Code.exe` (passo manual do utilizador)
+- [ ] (Opcional) Reforçar contraste dos greys secundários
+
+---
+
 ## 2026-06-09 — Proteção das rotas de escrita do staff (`requireStaff`)
 
 ### Contexto
