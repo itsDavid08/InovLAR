@@ -1,5 +1,4 @@
 import { useContext, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Context } from "../../ContextProvider";
 import { fetchImagensBotoes } from "../../api/botoes";
 import BotoesList from "./BotoesList";
@@ -8,9 +7,9 @@ import BotaoForm from "./BotaoForm";
 // Editor de botões. Container: detém o estado e a lógica e decide qual layout
 // mostrar — BotoesList (selecionar) ou BotaoForm (criar/editar).
 const EditBotoes = () => {
-    const navigate = useNavigate();
     const { botoes, editBotao, deleteBotao, postBotao, apiUrl } = useContext(Context);
     const [selectedBotao, setSelectedBotao] = useState(null);
+    const [searchQuery, setSearchQuery] = useState("");
     const [mode, setMode] = useState("list"); // 'list', 'edit', 'new'
     const [formData, setFormData] = useState({
         nome: '',
@@ -36,20 +35,15 @@ const EditBotoes = () => {
             });
     }, [apiUrl]);
 
-    const handleSelectBotao = (botao) => {
-        setSelectedBotao(botao);
-    };
-
-    const handleEdit = () => {
-        if (selectedBotao) {
-            setFormData({
-                nome: selectedBotao.nome,
-                mensagem: selectedBotao.mensagem,
-                categoria: selectedBotao.categoria,
-                imagem: selectedBotao.imagem
-            });
-            setMode("edit");
-        }
+    const handleEdit = (botao) => {
+        setSelectedBotao(botao); // ainda usado no handleSubmit (edit usa {...selectedBotao, ...formData})
+        setFormData({
+            nome: botao.nome,
+            mensagem: botao.mensagem,
+            categoria: botao.categoria,
+            imagem: botao.imagem
+        });
+        setMode("edit");
     };
 
     const handleNew = () => {
@@ -62,12 +56,9 @@ const EditBotoes = () => {
         setMode("new");
     };
 
-    const handleDelete = async () => {
-        if (selectedBotao) {
-            if (window.confirm(`Tens certeza de eliminar o botão ${selectedBotao.nome}?`)) {
-                await deleteBotao(selectedBotao.id);
-                setSelectedBotao(null);
-            }
+    const handleDelete = async (botao) => {
+        if (window.confirm(`Tens certeza de eliminar o botão ${botao.nome}?`)) {
+            await deleteBotao(botao.id);
         }
     };
 
@@ -115,13 +106,12 @@ const EditBotoes = () => {
     return (
         <BotoesList
             botoes={botoes}
-            selectedBotao={selectedBotao}
             apiUrl={apiUrl}
-            onSelect={handleSelectBotao}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
             onEdit={handleEdit}
             onDelete={handleDelete}
             onNew={handleNew}
-            onBack={() => navigate('/staff')}
         />
     );
 };

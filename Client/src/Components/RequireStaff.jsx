@@ -10,7 +10,7 @@ export default function RequireStaff({ children }) {
     const { staffUnlocked } = useContext(Context);
 
     if (!staffUnlocked) {
-        return <Navigate to="/login" replace />;
+        return <Navigate to="/" replace />;
     }
     return children;
 }
