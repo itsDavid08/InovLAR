@@ -9,6 +9,7 @@ import EditUtente from "./Components/utentes/EditUtente.jsx";
 import NewUtente from "./Components/utentes/NewUtente.jsx";
 
 import EditBotoes from "./Components/botoes/EditBotoes.jsx";
+import Welcome from "./Pages/Welcome.jsx";
 import StaffLogin from "./Pages/StaffLogin.jsx";
 import ChangePassword from "./Pages/ChangePassword.jsx";
 import RequireStaff from "./Components/RequireStaff.jsx";
@@ -21,8 +22,11 @@ function App() {
 
                 <div className="main-content-area">
                     <Routes>
-                        {/* Ecrã de bloqueio (raiz): define a password na 1ª vez, ou pede o PIN. */}
-                        <Route path="/" element={<StaffLogin />} />
+                        {/* Boas-vindas (raiz): convida a iniciar sessão. */}
+                        <Route path="/" element={<Welcome />} />
+
+                        {/* Ecrã de bloqueio: define a password na 1ª vez, ou pede o PIN. */}
+                        <Route path="/login" element={<StaffLogin />} />
 
                         {/* Tabuleiro do utente — a "gaiola". Sem saída livre: só se sai com PIN. */}
                         <Route path="/main/:id" element={<MainContent />} />

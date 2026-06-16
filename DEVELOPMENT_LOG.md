@@ -5,6 +5,42 @@ Entrada mais recente no topo.
 
 ---
 
+## 2026-06-16 — Ecrã de boas-vindas na raiz (`/`), login movido para `/login`
+
+### Contexto
+A raiz `/` abria diretamente o `StaffLogin` (teclado de PIN). Pretendia-se uma **página de
+boas-vindas** na raiz, com um botão que conduz o staff ao ecrã de autenticação por PIN.
+
+### Decisão — página separada em vez de estado interno
+Optou-se por uma **página `Welcome.jsx` dedicada** em `/` e mover o ecrã de bloqueio para `/login`,
+em vez de acrescentar um estado de "boas-vindas" dentro do próprio `StaffLogin`. É mais explícito
+(uma rota por ecrã), mantém o `StaffLogin` focado só na autenticação, e o redirect do `RequireStaff`
+passa a apontar diretamente ao login. Custo: pequenas mudanças nas rotas e no redirect.
+
+**Fluxo:** `/` (boas-vindas) → botão **Iniciar sessão** → `/login` (PIN/definir) → `/staff`.
+Acesso a rota protegida sem `staffUnlocked` → redirect para `/login`.
+
+### Alterações — `Client/src/`
+- **`Pages/Welcome.jsx`** (novo) — ecrã de boas-vindas; botão "Iniciar sessão" → `navigate("/login")`.
+  Reutiliza `.login-screen`/`.login-subtitulo`.
+- **`App.jsx`** — `/` passa a `<Welcome />`; nova rota `/login` → `<StaffLogin />`.
+- **`Components/RequireStaff.jsx`** — redirect de bloqueio muda de `/` para `/login`.
+- **`Pages/StaffLogin.jsx`** — reposto o "← Voltar" (agora navega para `/` boas-vindas); comentário
+  do topo atualizado (já não é a raiz, vive em `/login`).
+- **`index.css`** — estilos novos `.welcome-box` e `.login-iniciar` (botão azul `#1E90FF`, coerente
+  com o resto do tema).
+
+### Estado
+Build do cliente (`vite build`) passa sem erros novos (mantém-se apenas o aviso CSS pré-existente em
+`#ff8080; !important;`). `StaffHome` (Voltar/Logout → `/`) intencionalmente mantido: após bloquear/
+sair, a porta de entrada natural é o boas-vindas.
+
+> Nota/possível follow-up: `EditUtente.jsx` faz `navigate('/')` quando o utente não é encontrado —
+> com a mudança, um staff autenticado cai no boas-vindas; talvez fizesse mais sentido `/staff`.
+> Não alterado (fora do âmbito desta tarefa).
+
+---
+
 ## 2026-06-15 — Fluxo "Pin-to-Exit" (kiosk: bloqueio → staff → gaiola do utente)
 
 ### Contexto

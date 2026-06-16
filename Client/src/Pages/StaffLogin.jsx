@@ -5,8 +5,9 @@ import { staffStatus, staffSetup, staffLogin } from "../api/auth";
 import Keypad from "../Components/Keypad";
 
 // Ecrã de bloqueio do tablet (kiosk). Serve para DEFINIR a palavra-passe (1ª vez)
-// e para DESBLOQUEAR o console de staff. É a raiz da app: arranca sempre aqui,
-// pois o gate `staffUnlocked` está bloqueado no arranque.
+// e para DESBLOQUEAR o console de staff. Vive em /login: chega-se aqui pelo botão
+// do ecrã de boas-vindas (/) ou por redirect do RequireStaff quando o gate
+// `staffUnlocked` está bloqueado.
 export default function StaffLogin() {
     const { setStaffUnlocked } = useContext(Context);
     const [modo, setModo] = useState("carregando"); // "carregando" | "definir" | "login"
@@ -99,6 +100,9 @@ export default function StaffLogin() {
 
     return (
         <div className="login-screen">
+            <button className="login-voltar" onClick={() => navigate("/")}>
+                ← Voltar
+            </button>
             <h1>{titulo}</h1>
             {subtitulo && <p className="login-subtitulo">{subtitulo}</p>}
 
