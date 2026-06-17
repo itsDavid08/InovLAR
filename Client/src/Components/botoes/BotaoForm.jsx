@@ -10,6 +10,7 @@ const BotaoForm = ({
     imagensDisponiveis,
     categoriasDisponiveis,
     apiUrl,
+    versoes,
     onSubmit,
     onImageSelect,
     onUploadImagem,
@@ -17,6 +18,9 @@ const BotaoForm = ({
     onCancel,
 }) => {
     const uploadInputRef = useRef(null);
+    // Acrescenta ?v=timestamp às imagens substituídas nesta sessão, para o browser
+    // não mostrar a versão em cache do mesmo URL (ver DEVELOPMENT_LOG, cache-busting).
+    const imgSrc = (img) => `${apiUrl}${img}${versoes?.get(img) ? `?v=${versoes.get(img)}` : ''}`;
     return (
         <div className="bg-background text-on-background min-h-screen flex flex-col font-body-md">
             <header className="bg-surface dark:bg-inverse-surface top-0 sticky bg-surface-container-low dark:bg-surface-container shadow-sm z-30 border-b border-surface-variant">
@@ -107,7 +111,7 @@ const BotaoForm = ({
                             {imagensDisponiveis.map((img, index) => (
                                 <div key={index} className="relative group/img">
                                     <img
-                                        src={apiUrl + img}
+                                        src={imgSrc(img)}
                                         alt={`Opção ${index}`}
                                         className={`w-full aspect-square object-cover rounded-lg cursor-pointer transition-all ${formData.imagem === img ? 'ring-4 ring-primary scale-95 shadow-md' : 'hover:scale-105 shadow-sm'}`}
                                         onClick={() => onImageSelect(img)}
@@ -150,7 +154,7 @@ const BotaoForm = ({
                         <div className="flex items-center flex-col text-center mt-4">
                             <div className="w-24 h-24 mb-4 rounded-2xl bg-secondary-container text-on-secondary-container flex items-center justify-center overflow-hidden shadow-sm transform group-hover:scale-105 transition-transform duration-300">
                                 <img
-                                    src={apiUrl + (formData.imagem || (imagensDisponiveis.length > 0 ? imagensDisponiveis[0] : '/imagesBotoes/default.png'))}
+                                    src={imgSrc(formData.imagem || (imagensDisponiveis.length > 0 ? imagensDisponiveis[0] : '/imagesBotoes/default.png'))}
                                     alt={formData.nome}
                                     className="w-full h-full object-cover"
                                 />

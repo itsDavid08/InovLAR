@@ -34,10 +34,10 @@ export function deleteBotao(id) {
     });
 }
 
-export async function uploadImagemBotao(file) {
+export async function uploadImagemBotao(file, onConflict = 'replace') {
     const formData = new FormData();
     formData.append('imagem', file);
-    const res = await fetch(apiUrl + 'imagesBotoes/upload', {
+    const res = await fetch(`${apiUrl}imagesBotoes/upload?onConflict=${onConflict}`, {
         method: 'POST',
         credentials: 'include',
         body: formData,

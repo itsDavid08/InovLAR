@@ -20,7 +20,17 @@ const storageImagesBotoes = multer.diskStorage({
         fs.mkdir(dir, { recursive: true }, (err) => cb(err, dir));
     },
     filename: (req, file, cb) => {
-        cb(null, file.originalname);
+        const dir = path.join(__dirname, '../public/imagesBotoes');
+        const original = path.basename(file.originalname); // segurança: remove componentes de caminho (path traversal)
+        if (req.query.onConflict === 'rename') {
+            const ext = path.extname(original);
+            const base = path.basename(original, ext);
+            let nome = original, n = 1;
+            while (fs.existsSync(path.join(dir, nome))) nome = `${base}(${n++})${ext}`;
+            cb(null, nome);
+        } else {
+            cb(null, original); // substituir ou primeira vez
+        }
     }
 });
 

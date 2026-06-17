@@ -86,6 +86,51 @@ Aplicadas as duas correções que ficaram pendentes na revisão:
   `try/catch` com `console.error` + `window.alert` (coerente com o `handleSubmit`), eliminando as
   *unhandled rejections* e dando feedback ao staff quando o upload/delete falha.
 
+### Update (mesmo dia) — nome original no upload: colisão de nomes + cache-busting (padrão reutilizável)
+O upload passou a guardar com o **nome original** do ficheiro (em vez de um nome único gerado), a pedido
+do utilizador (ficheiros reconhecíveis na pasta). Isso levanta três pontos, resolvidos aqui:
+
+**1. Segurança — `path.basename()` no nome do ficheiro.**
+Usar `file.originalname` diretamente no destino permitiria *path traversal*: um cliente que **falsifique
+à mão** o header multipart com `filename: "../../x.png"` escreveria fora da pasta `imagesBotoes/`. Não é
+explorável pela UI normal e exige staff já autenticado (`requireStaff`) — é **defesa em profundidade**,
+não um buraco aberto — mas fecha-se com `path.basename(file.originalname)` no callback `filename` do
+Multer, que descarta quaisquer componentes de caminho.
+
+**2. Colisão de nomes — `ConflitoImagemModal` com 3 opções.**
+Guardar pelo nome original faz com que dois ficheiros homónimos colidam. Quando o nome já existe
+(deteção **no cliente** via `imagensDisponiveis`, fresca na sessão) abre um modal com:
+- **Adicionar como cópia** → o backend procura o próximo nome livre `nome(1).ext`, `nome(2).ext`… (loop
+  `fs.existsSync`). Formato `()` e **não** `_`, porque já há ficheiros que usam `_` no nome (ex.
+  `mudar_de_posicao.png`) — `()` evita ambiguidade.
+- **Substituir a existente** → escreve o nome original (sobrescreve).
+- **Cancelar** → não faz nada.
+O modo viaja por **query param** (`?onConflict=rename|replace`), não no corpo, porque está disponível de
+forma síncrona no callback `filename` do Multer (os campos de texto do multipart só existem **depois** de
+o Multer processar — tarde demais para decidir o nome).
+
+**3. Cache-busting (`versoes`) — porquê existe e quando reutilizar.**
+*Problema:* ao **substituir** uma imagem, o URL é exatamente o mesmo (`/imagesBotoes/Auxiliar.png`); o
+browser serve a versão **em cache** e o staff não vê a nova. Em desktop um F5 resolve, mas **em
+telemóvel/kiosk recarregar nem sempre é prático** — por isso resolve-se no código.
+*Solução (cache-busting por query param):* um `Map` de estado `versoes: path → timestamp` em
+`EditBotoes`. Quando um upload **substitui um path que já existia**, regista-se
+`versoes.set(path, Date.now())`. Na renderização (`BotaoForm`), o `src` fica
+`` `${apiUrl}${path}${versoes.get(path) ? '?v='+versoes.get(path) : ''}` ``. URLs diferentes = recursos
+diferentes para o browser → vai buscar a nova; o Express **ignora** o query param ao servir o estático.
+*Âmbito deliberadamente local:* o `versoes` vive só em `EditBotoes` e desce como prop a `BotaoForm`.
+**Não é um conceito a espalhar pelo código** — o resto da app passa pelo API e vive no estado React
+(re-render automático com dados frescos), por isso não sofre deste problema. Só **ficheiros estáticos
+servidos num URL fixo cujo conteúdo é substituível** precisam disto.
+
+> **⚠️ Reutilização futura — ler isto antes de reinventar.** Está planeado (ainda **não** implementado)
+> permitir **foto de perfil dos utentes** — e eventualmente do staff. Esse caso é **idêntico**: ficheiro
+> estático, URL fixo, conteúdo substituível. Quando chegar, aplicar **o mesmo padrão de cache-busting**
+> (`?v=timestamp` no `src`, marcado no momento da substituição), confinado ao componente que edita/mostra
+> essas fotos. Não inventar solução nova — é o `versoes` outra vez. (Alternativa, se um dia for genérico
+> demais para gerir à mão: servir a pasta de uploads com `Cache-Control: no-cache`, mas isso penaliza
+> **todas** as imagens, não só as substituídas — por agora não compensa.)
+
 ### Estado
 - [x] Migração dos 52 ficheiros para a raiz + subpastas removidas
 - [x] BD: 42 paths atualizados para a estrutura plana
@@ -97,8 +142,11 @@ Aplicadas as duas correções que ficaram pendentes na revisão:
 - [x] **Placeholder `default.png` criado + os 5 sítios unificados** em `/imagesBotoes/default.png`
   (sem `urgent.png` provisório; barra inicial corrigida) — ver Update acima
 - [x] **Tratamento de erro** (`try/catch` + `alert`) em `handleUploadImagem`/`handleDeleteImagem`
-- [ ] Verificação visual em runtime (carregar, selecionar, eliminar; confirmar que o botão afetado
-  não desaparece e mostra o placeholder)
+- [x] **Nome original no upload** + `path.basename()` (segurança contra *path traversal*)
+- [x] **`ConflitoImagemModal`** (3 opções: cópia `nome(1)` / substituir / cancelar) + query `onConflict`
+- [x] **Cache-busting `versoes`** (substituição visível sem refresh) — padrão reutilizável p/ fotos de perfil
+- [ ] Verificação visual em runtime (carregar, selecionar, eliminar, colisão de nome, substituir;
+  confirmar que o botão afetado não desaparece e mostra o placeholder)
 
 ---
 
