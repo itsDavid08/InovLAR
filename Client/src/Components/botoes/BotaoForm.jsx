@@ -1,5 +1,7 @@
 // Layout "criar/editar botão" do editor de botões: formulário + pré-visualização.
 // Componente presentacional — todo o estado e a lógica vivem em EditBotoes.
+import { useRef } from "react";
+
 const BotaoForm = ({
     mode,
     formData,
@@ -10,8 +12,11 @@ const BotaoForm = ({
     apiUrl,
     onSubmit,
     onImageSelect,
+    onUploadImagem,
+    onDeleteImagem,
     onCancel,
 }) => {
+    const uploadInputRef = useRef(null);
     return (
         <div className="bg-background text-on-background min-h-screen flex flex-col font-body-md">
             <header className="bg-surface dark:bg-inverse-surface top-0 sticky bg-surface-container-low dark:bg-surface-container shadow-sm z-30 border-b border-surface-variant">
@@ -78,18 +83,44 @@ const BotaoForm = ({
                     </div>
 
                     <div>
-                        <label className="block text-on-surface-variant font-label-xl text-sm font-semibold mb-2">
-                            Imagem
-                        </label>
+                        <div className="flex justify-between items-center mb-2">
+                            <label className="text-on-surface-variant font-label-xl text-sm font-semibold">
+                                Imagem
+                            </label>
+                            <button
+                                type="button"
+                                onClick={() => uploadInputRef.current?.click()}
+                                className="flex items-center gap-1 text-primary text-sm font-semibold hover:underline"
+                            >
+                                <span className="material-symbols-outlined text-base">upload</span>
+                                Carregar imagem
+                            </button>
+                            <input
+                                ref={uploadInputRef}
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={e => { if (e.target.files[0]) onUploadImagem(e.target.files[0]); e.target.value = ''; }}
+                            />
+                        </div>
                         <div className="grid grid-cols-4 sm:grid-cols-5 gap-3 max-h-64 overflow-y-auto p-2 bg-surface-container rounded-lg border border-outline-variant">
                             {imagensDisponiveis.map((img, index) => (
-                                <img
-                                    key={index}
-                                    src={apiUrl + img}
-                                    alt={`Opção ${index}`}
-                                    className={`w-full aspect-square object-cover rounded-lg cursor-pointer transition-all ${formData.imagem === img ? 'ring-4 ring-primary scale-95 shadow-md' : 'hover:scale-105 shadow-sm'}`}
-                                    onClick={() => onImageSelect(img)}
-                                />
+                                <div key={index} className="relative group/img">
+                                    <img
+                                        src={apiUrl + img}
+                                        alt={`Opção ${index}`}
+                                        className={`w-full aspect-square object-cover rounded-lg cursor-pointer transition-all ${formData.imagem === img ? 'ring-4 ring-primary scale-95 shadow-md' : 'hover:scale-105 shadow-sm'}`}
+                                        onClick={() => onImageSelect(img)}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => onDeleteImagem(img)}
+                                        className="absolute top-0.5 right-0.5 hidden group-hover/img:flex bg-error text-on-error rounded-full p-0.5 shadow"
+                                        title="Eliminar imagem"
+                                    >
+                                        <span className="material-symbols-outlined text-sm leading-none">delete</span>
+                                    </button>
+                                </div>
                             ))}
                         </div>
                     </div>
@@ -119,7 +150,7 @@ const BotaoForm = ({
                         <div className="flex items-center flex-col text-center mt-4">
                             <div className="w-24 h-24 mb-4 rounded-2xl bg-secondary-container text-on-secondary-container flex items-center justify-center overflow-hidden shadow-sm transform group-hover:scale-105 transition-transform duration-300">
                                 <img
-                                    src={apiUrl + (formData.imagem || (imagensDisponiveis.length > 0 ? imagensDisponiveis[0] : "imagesBotoes/default.png"))}
+                                    src={apiUrl + (formData.imagem || (imagensDisponiveis.length > 0 ? imagensDisponiveis[0] : '/imagesBotoes/default.png'))}
                                     alt={formData.nome}
                                     className="w-full h-full object-cover"
                                 />

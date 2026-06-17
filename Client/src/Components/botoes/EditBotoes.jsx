@@ -1,6 +1,6 @@
 import { useContext, useEffect, useState } from "react";
 import { Context } from "../../ContextProvider";
-import { fetchImagensBotoes } from "../../api/botoes";
+import { fetchImagensBotoes, uploadImagemBotao, deleteImagemBotao } from "../../api/botoes";
 import BotoesList from "./BotoesList";
 import BotaoForm from "./BotaoForm";
 
@@ -81,6 +81,29 @@ const EditBotoes = () => {
         setFormData({ ...formData, imagem: img });
     };
 
+    const handleUploadImagem = async (file) => {
+        try {
+            const { path } = await uploadImagemBotao(file);
+            setImagensDisponiveis(prev => [...prev, path]);
+            setFormData(prev => ({ ...prev, imagem: path }));
+        } catch (err) {
+            console.error("Erro ao carregar imagem:", err);
+            window.alert("Não foi possível carregar a imagem. Verifique que é um ficheiro de imagem válido.");
+        }
+    };
+
+    const handleDeleteImagem = async (imgPath) => {
+        if (!window.confirm(`Eliminar esta imagem? Os botões que a usam ficarão sem imagem associada.`)) return;
+        try {
+            await deleteImagemBotao(imgPath);
+            setImagensDisponiveis(prev => prev.filter(i => i !== imgPath));
+            if (formData.imagem === imgPath) setFormData(prev => ({ ...prev, imagem: '' }));
+        } catch (err) {
+            console.error("Erro ao eliminar imagem:", err);
+            window.alert("Não foi possível eliminar a imagem.");
+        }
+    };
+
     const handleCancel = () => {
         setMode("list");
         setSelectedBotao(null);
@@ -98,6 +121,8 @@ const EditBotoes = () => {
                 apiUrl={apiUrl}
                 onSubmit={handleSubmit}
                 onImageSelect={handleImageSelect}
+                onUploadImagem={handleUploadImagem}
+                onDeleteImagem={handleDeleteImagem}
                 onCancel={handleCancel}
             />
         );

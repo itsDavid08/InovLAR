@@ -16,8 +16,7 @@ const Botao = sequelize.define(
         },
         imagem: {
             type: DataTypes.STRING,
-            allowNull: false,
-            validate: { notEmpty: true }
+            allowNull: true
         },
         categoria: {
             type: DataTypes.STRING,

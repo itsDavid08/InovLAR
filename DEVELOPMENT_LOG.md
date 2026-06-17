@@ -5,6 +5,103 @@ Entrada mais recente no topo.
 
 ---
 
+## 2026-06-17 — Upload e eliminação de imagens de botões + estrutura plana em `imagesBotoes/`
+
+### Contexto
+O editor de botões só deixava **escolher** imagens de um conjunto pré-existente, organizado em
+**subpastas por categoria** (`imagesBotoes/chamar/`, `/medicamentos/`, `/necesidades/`, `/sinto/`,
+`/tecnologia/`). Faltava: (1) **carregar** imagens novas a partir do dispositivo; (2) **eliminar**
+imagens (ex.: upload incorreto ou imagem privada). Requisito crítico do utilizador: eliminar uma
+imagem **não pode eliminar nem partir** os botões que a usam.
+
+### Decisão
+
+**1. Estrutura plana — todas as imagens na raiz de `imagesBotoes/`.**
+As subpastas por categoria eram redundantes: a categoria já vive em `botao.categoria`. Migrou-se tudo
+para a raiz, o que simplifica o upload (destino único) e a eliminação (sem ter de distinguir imagens
+"de sistema" em subpastas de imagens carregadas pelo utilizador). A função recursiva de listagem
+(`listarImagensRecursivo`) deixou de ser necessária → substituída por um `readdirSync` plano.
+
+**2. Upload separado, botão referencia por path (rotas de create/update inalteradas).**
+Fluxo: o utilizador escolhe um ficheiro → `POST /imagesBotoes/upload` (multipart) → o servidor guarda
+em `imagesBotoes/` com nome único → devolve `{ path }` → o path entra na grelha e fica selecionado →
+o submit continua a enviar **JSON com o path** (como antes). Assim, `createBotao`/`updateBotao` e o
+controller **não mudam**.
+
+**3. Eliminação que não parte os botões — `imagem` passa a poder ser `null`.**
+`DELETE /imagesBotoes` (path no body) apaga o ficheiro e faz `Botao.update({ imagem: null })` nos
+botões que o usavam — **não os elimina**. Para isso, `Botao.imagem` passou de `allowNull: false` para
+`allowNull: true`. Quem usava a imagem fica com `imagem = null` e os sítios de exibição usam um
+fallback. Se algum botão foi afetado, notifica os clientes por socket (`notificarAlteracaoBD`).
+- **Segurança do path:** valida `startsWith('/imagesBotoes/')`, rejeita `..` e rejeita `/` aninhado
+  (pós-migração tudo é plano) → impede *path traversal* e apagar fora da pasta.
+- **Auth:** as duas rotas novas levam `requireStaff` (regra de 2026-06-09: escrita de staff nasce
+  protegida no servidor + `credentials: "include"` no cliente).
+
+### Migração (one-off, já executada)
+- **52 ficheiros** movidos das 5 subpastas para `imagesBotoes/` (sem conflitos de nome); subpastas
+  removidas. Total na raiz: 53 (com o `urgent.png` que já lá estava).
+- **BD (`apcm.sqlite`):** 42 registos da tabela `Botoes` atualizados para o path plano
+  (`/imagesBotoes/<sub>/x.png` → `/imagesBotoes/x.png`). O `id=1` (`urgent.png`) já estava na raiz.
+
+### Alterações
+
+**Servidor**
+- **`routes/images.js`** — recursão (`listarImagensRecursivo`) → `readdirSync` plano (só ficheiros de
+  imagem na raiz).
+- **`models/Botao.js`** — `imagem`: `allowNull: false` + `notEmpty` → `allowNull: true`.
+- **`routes/route.js`** — novo storage Multer para `../public/imagesBotoes` (nome único, mantém
+  extensão) + `POST /imagesBotoes/upload` (devolve `{ path }`) + `DELETE /imagesBotoes` (apaga
+  ficheiro + `imagem=null` nos botões afetados + socket). Imports novos: `{ Botao }` de `../models`,
+  `{ notificarAlteracaoBD }` de `../Util/socketIO`. Removida a config Multer antiga (`uploads/`,
+  não usada nos botões).
+
+**Cliente — `src/`**
+- **`api/botoes.js`** — importa `apiUrl` de `client.js`; novas `uploadImagemBotao(file)` (FormData,
+  `credentials: include`) e `deleteImagemBotao(imgPath)` (DELETE com `{ path }` no body).
+- **`Components/botoes/EditBotoes.jsx`** — `handleUploadImagem` (adiciona à grelha + seleciona) e
+  `handleDeleteImagem` (confirma, apaga, remove da grelha, limpa a seleção se era a ativa); passados
+  ao `BotaoForm`.
+- **`Components/botoes/BotaoForm.jsx`** — botão "Carregar imagem" (input file escondido via `useRef`) +
+  ícone de lixo (hover) por imagem na grelha; novas props `onUploadImagem`/`onDeleteImagem`.
+- **`Pages/MainContent.jsx`** e **`Pages/PedidosPendentes.jsx`** (2 ocorrências) — fallback para
+  `imagem = null` (corrige também o bug de precedência `apiUrl + x || ""` em PedidosPendentes).
+
+### Verificação (por leitura)
+- `express.json()` montado (`main.js`) → body do DELETE é lido. ✓
+- Routers sem conflito: `POST`/`DELETE /imagesBotoes*` em `route.js`, `GET /imagesBotoes` em
+  `images.js` (métodos diferentes; `express.static('public')` só responde a GET/HEAD). ✓
+- `Botao` exportado de `models/index.js`; `notificarAlteracaoBD` resolvido em runtime (igual aos
+  controllers). ✓
+
+### Update (mesmo dia) — placeholder `default.png` + tratamento de erro
+Aplicadas as duas correções que ficaram pendentes na revisão:
+- **`default.png` neutro** gerado em `Server/public/imagesBotoes/` (PowerShell + `System.Drawing`:
+  fundo cinza, ícone de "imagem" + texto "Sem imagem", 256×256). Os **5 sítios** de exibição passam a
+  usar `/imagesBotoes/default.png` (com barra inicial): `MainContent.jsx`, `PedidosPendentes.jsx` (2×),
+  `BotoesList.jsx`, `RequestListDrawer.jsx` e o preview do `BotaoForm.jsx`. Removido o `urgent.png`
+  provisório (era o ícone de **emergência**, enganador para um botão sem imagem) e corrigida a barra
+  inicial em falta que já existia nos fallbacks antigos.
+- **Tratamento de erro** em `EditBotoes.jsx`: `handleUploadImagem` e `handleDeleteImagem` passam a ter
+  `try/catch` com `console.error` + `window.alert` (coerente com o `handleSubmit`), eliminando as
+  *unhandled rejections* e dando feedback ao staff quando o upload/delete falha.
+
+### Estado
+- [x] Migração dos 52 ficheiros para a raiz + subpastas removidas
+- [x] BD: 42 paths atualizados para a estrutura plana
+- [x] `images.js` plano (sem recursão)
+- [x] `Botao.imagem` `allowNull: true`
+- [x] `POST /imagesBotoes/upload` + `DELETE /imagesBotoes` (com `requireStaff` e validação de path)
+- [x] `uploadImagemBotao`/`deleteImagemBotao` no cliente + UI (carregar + lixo)
+- [x] Fallback em `MainContent` e `PedidosPendentes`
+- [x] **Placeholder `default.png` criado + os 5 sítios unificados** em `/imagesBotoes/default.png`
+  (sem `urgent.png` provisório; barra inicial corrigida) — ver Update acima
+- [x] **Tratamento de erro** (`try/catch` + `alert`) em `handleUploadImagem`/`handleDeleteImagem`
+- [ ] Verificação visual em runtime (carregar, selecionar, eliminar; confirmar que o botão afetado
+  não desaparece e mostra o placeholder)
+
+---
+
 ## 2026-06-16 — Ações por item (menu ⋮) + "Novo X" no cabeçalho; sidebar mais leve
 
 ### Contexto

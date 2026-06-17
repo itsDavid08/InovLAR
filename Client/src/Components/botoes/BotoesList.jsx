@@ -61,7 +61,7 @@ const BotoesList = ({
                         <div className="flex items-center flex-col text-center mt-4">
                             <div className="w-32 h-32 mb-4 rounded-2xl bg-secondary-container text-on-secondary-container flex items-center justify-center overflow-hidden border-2 border-surface-container shadow-sm transform group-hover:scale-105 transition-transform duration-300">
                                 <img
-                                    src={apiUrl + (botao.imagem || "imagesBotoes/default.png")}
+                                    src={apiUrl + (botao.imagem || '/imagesBotoes/default.png')}
                                     alt={botao.nome}
                                     className="w-full h-full object-cover"
                                 />

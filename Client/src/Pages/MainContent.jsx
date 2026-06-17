@@ -123,7 +123,7 @@ const MainContent = () => {
                         aria-label={button.nome}
                         style={{ minWidth: 100, minHeight: 100, height: "16vh", maxHeight: 120, flex: "1 1 0" }}
                     >
-                        <img src={apiUrl + button.imagem} alt={button.nome} style={{ maxWidth: "50px", maxHeight: "50px" }} />
+                        <img src={apiUrl + (button.imagem || '/imagesBotoes/default.png')} alt={button.nome} style={{ maxWidth: "50px", maxHeight: "50px" }} />
                         <span className="fw-bold mt-2 text-center">{button.nome}</span>
                     </button>
                 ))}

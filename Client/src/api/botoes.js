@@ -1,5 +1,5 @@
 // Chamadas à API dos botões. Devolvem dados; o estado vive no ContextProvider.
-import { get, mutate } from "./client";
+import { get, mutate, apiUrl } from "./client";
 
 export const fetchBotoes = () => get("botoes");
 
@@ -32,4 +32,27 @@ export function deleteBotao(id) {
         auth: true,
         errorMsg: "Failed to delete botao",
     });
+}
+
+export async function uploadImagemBotao(file) {
+    const formData = new FormData();
+    formData.append('imagem', file);
+    const res = await fetch(apiUrl + 'imagesBotoes/upload', {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+    });
+    if (!res.ok) throw new Error('Erro ao fazer upload da imagem');
+    return res.json();
+}
+
+export async function deleteImagemBotao(imgPath) {
+    const res = await fetch(apiUrl + 'imagesBotoes', {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: imgPath }),
+    });
+    if (!res.ok) throw new Error('Erro ao eliminar a imagem');
+    return res.json();
 }

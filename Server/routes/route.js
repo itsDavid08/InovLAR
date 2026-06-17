@@ -9,41 +9,27 @@ const pedidoController = require('../controller/pedidoController');
 const viewController = require('../controller/viewController');
 const authController = require('../controller/authController');
 const { requireStaff } = require('../middleware/auth');
+const { notificarAlteracaoBD } = require('../Util/socketIO');
 
 const router = express.Router();
+const { Botao } = require('../models');
 
-// Configuración mejorada de Multer con creación automática de directorio
-const storage = multer.diskStorage({
+const storageImagesBotoes = multer.diskStorage({
     destination: (req, file, cb) => {
-        const uploadDir = path.join(__dirname, '../public/uploads');
-
-        // Crear directorio si no existe (de forma recursiva)
-        fs.mkdir(uploadDir, { recursive: true }, (err) => {
-            if (err) {
-                console.error('Error al crear directorio de uploads:', err);
-                return cb(err);
-            }
-            cb(null, uploadDir);
-        });
+        const dir = path.join(__dirname, '../public/imagesBotoes');
+        fs.mkdir(dir, { recursive: true }, (err) => cb(err, dir));
     },
     filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+        cb(null, file.originalname);
     }
 });
 
-// Configuración adicional de Multer para validación
-const upload = multer({
-    storage: storage,
+const uploadImagemBotao = multer({
+    storage: storageImagesBotoes,
     fileFilter: (req, file, cb) => {
-        const filetypes = /jpeg|jpg|png|gif/;
-        const mimetype = filetypes.test(file.mimetype);
-        const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
-
-        if (mimetype && extname) {
-            return cb(null, true);
-        }
-        cb(new Error('Error: Solo se permiten imágenes (JPEG, JPG, PNG, GIF)'));
+        const ok = /jpeg|jpg|png|gif/i.test(file.mimetype) &&
+                   /\.(jpeg|jpg|png|gif)$/i.test(file.originalname);
+        ok ? cb(null, true) : cb(new Error('Apenas imagens (JPEG, JPG, PNG, GIF)'));
     }
 });
 
@@ -79,7 +65,33 @@ router.delete('/utentes/:id', requireStaff, utenteController.deleteUtente);
 router.post('/utentes/:utenteId/botoes/:botaoId', requireStaff, utenteController.associarBotao);
 router.delete('/utentes/:utenteId/botoes/:botaoId', requireStaff, utenteController.desassociarBotao);
 
-// Rotas para Botões - Añadido manejo de errores para la subida de imágenes
+// Upload e eliminação de imagens de botões
+router.post('/imagesBotoes/upload', requireStaff, uploadImagemBotao.single('imagem'), (req, res) => {
+    if (!req.file) return res.status(400).json({ erro: 'Nenhuma imagem enviada' });
+    res.json({ path: `/imagesBotoes/${req.file.filename}` });
+});
+
+router.delete('/imagesBotoes', requireStaff, async (req, res) => {
+    const { path: imgPath } = req.body;
+    if (!imgPath || !imgPath.startsWith('/imagesBotoes/') || imgPath.includes('..')) {
+        return res.status(400).json({ erro: 'Operação não permitida' });
+    }
+    const filename = imgPath.replace('/imagesBotoes/', '');
+    if (filename.includes('/')) return res.status(400).json({ erro: 'Operação não permitida' });
+
+    const filePath = path.join(__dirname, '../public/imagesBotoes', filename);
+    try {
+        await fs.promises.unlink(filePath);
+        const [affectedCount] = await Botao.update({ imagem: null }, { where: { imagem: imgPath } });
+        if (affectedCount > 0) notificarAlteracaoBD();
+        res.json({ eliminado: imgPath, botoesAfetados: affectedCount });
+    } catch (err) {
+        if (err.code === 'ENOENT') return res.status(404).json({ erro: 'Imagem não encontrada' });
+        res.status(500).json({ erro: 'Erro ao eliminar imagem' });
+    }
+});
+
+// Rotas para Botões
 router.get('/botoes', botaoController.getAllBotoes);
 router.get('/botoes/utente/:utenteId', botaoController.getBotoesByUtenteId);
 router.post('/botoes', requireStaff, botaoController.createBotao);
