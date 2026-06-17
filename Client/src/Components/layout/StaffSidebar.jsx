@@ -2,18 +2,14 @@ import { useContext } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Context } from "../../ContextProvider";
 import { staffLogout } from "../../api/auth";
+import { NAV_ITEMS } from "./navItems";
 
 // Sidebar partilhado das páginas de staff (StaffHome, EditBotoes, …).
 // Estrutura fixa: header + nav links (com highlight da página ativa) + slot de
 // ações específicas da página (children) + footer "Terminar Sessão".
 // A navegação entre secções faz-se pelos próprios links — por isso já não há
 // botão "Voltar Atrás" (era redundante e mantinha o cookie de servidor vivo).
-const NAV_ITEMS = [
-    { label: "Utentes", icon: "groups", path: "/staff" },
-    { label: "Botões", icon: "tune", path: "/editBotoes" },
-    { label: "Pedidos Pendentes", icon: "pending_actions", path: "/staff/pedidos" },
-    { label: "Alterar Password", icon: "lock", path: "/staff/alterar-password" },
-];
+// Os itens de navegação vivem em navItems.js (partilhados com StaffBottomNav).
 
 const StaffSidebar = ({ children }) => {
     const { setStaffUnlocked } = useContext(Context);

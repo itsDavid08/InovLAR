@@ -38,7 +38,6 @@ const EditUtente = () => {
     return (
         <UtenteForm
             title="Editar Utente"
-            containerClass="edit-container"
             formData={formData}
             setFormData={setFormData}
             onSubmit={handleSubmit}

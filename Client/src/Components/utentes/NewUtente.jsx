@@ -21,7 +21,6 @@ const NewUtente = () => {
     return (
         <UtenteForm
             title="Novo Utente"
-            containerClass="new-container"
             formData={formData}
             setFormData={setFormData}
             onSubmit={handleSubmit}

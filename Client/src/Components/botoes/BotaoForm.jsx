@@ -35,7 +35,7 @@ const BotaoForm = ({
             </header>
 
             <div className="p-6 md:p-12 flex-1 overflow-y-auto max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-                <form onSubmit={onSubmit} className="bg-surface-container-lowest p-8 rounded-xl shadow-sm border border-surface-variant flex flex-col gap-6">
+                <form onSubmit={onSubmit} className="order-2 lg:order-1 bg-surface-container-lowest p-8 rounded-xl shadow-sm border border-surface-variant flex flex-col gap-6">
                     {mode === "edit" && <input type="hidden" value={selectedBotao?.id} readOnly />}
 
                     <div>
@@ -146,8 +146,8 @@ const BotaoForm = ({
                     </div>
                 </form>
 
-                {/* Preview Area */}
-                <div className="bg-surface-container-lowest p-8 rounded-xl shadow-sm border border-surface-variant flex flex-col items-center">
+                {/* Preview Area — em mobile fica em cima do formulário (order-1) */}
+                <div className="order-1 lg:order-2 bg-surface-container-lowest p-8 rounded-xl shadow-sm border border-surface-variant flex flex-col items-center">
                     <h2 className="font-display-lg text-2xl font-bold text-on-surface mb-6 w-full underline decoration-primary decoration-4 underline-offset-8">Pré-visualização</h2>
 
                     <div className="bg-surface-container-lowest rounded-lg p-6 shadow-sm border border-surface-variant hover:shadow-md hover:border-primary transition-all relative overflow-hidden group w-full max-w-sm text-center">

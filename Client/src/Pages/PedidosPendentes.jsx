@@ -1,6 +1,7 @@
 import { useState, useEffect, useContext, useRef } from "react";
 import { Context } from "../ContextProvider";
 import { useNavigate } from "react-router-dom";
+import StaffBottomNav from "../Components/layout/StaffBottomNav";
 import "../index.css";
 
 function PedidosPendentes() {
@@ -141,6 +142,13 @@ function PedidosPendentes() {
                     )}
                 </div>
             </div>
+
+            {/* Espaçador só-mobile: garante que o conteúdo não fica tapado pela
+                barra inferior fixa (independente do CSS de .pedidos-container). */}
+            <div className="h-20 md:hidden" />
+
+            {/* Mesma navegação inferior das restantes páginas de staff (mobile). */}
+            <StaffBottomNav />
         </div>
     );
 }
