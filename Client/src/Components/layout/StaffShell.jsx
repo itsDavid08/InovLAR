@@ -22,8 +22,10 @@ const StaffShell = ({ sidebar, children }) => {
             <main className="flex-1 md:ml-72 flex flex-col min-h-screen">
                 {/* pb em mobile = altura da barra inferior (4rem) + folga + safe-area,
                     para a última linha de cartões não ficar escondida pela barra. */}
-                <div className="p-4 sm:p-6 md:px-10 md:py-8 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-8 flex-1 overflow-y-auto">
+                <div className="p-4 sm:p-6 md:px-10 md:py-8 flex-1 overflow-y-auto">
                     {children}
+                    {/* Espaçador para o último cartão não ficar tapado pela barra de navegação inferior (h-16 = 64px). */}
+                    <div className="h-16 md:hidden" aria-hidden="true" />
                 </div>
             </main>
 
