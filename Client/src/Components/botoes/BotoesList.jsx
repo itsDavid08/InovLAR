@@ -1,6 +1,7 @@
 // Layout "lista/selecionar" do editor de botões: grelha de botões com menu de
 // ações por item (⋮) + sidebar partilhada (StaffSidebar). Componente
 // presentacional — o estado e a lógica (procura incluída) vivem em EditBotoes.
+import { useState, useRef } from "react";
 import StaffShell from "../layout/StaffShell";
 import StaffSidebar from "../layout/StaffSidebar";
 import ItemMenu from "../layout/ItemMenu";
@@ -14,6 +15,11 @@ const BotoesList = ({
     onDelete,
     onNew,
 }) => {
+    // Qual cartão tem o menu de ações aberto (só um de cada vez). O ref aponta para
+    // esse cartão e serve de fronteira ao "clicar fora" do ItemMenu (ver ItemMenu.jsx).
+    const [openMenuId, setOpenMenuId] = useState(null);
+    const openCardRef = useRef(null);
+
     // Procura só por nome (por agora). Outros critérios podem ser adicionados depois.
     const botoesFiltrados = botoes.filter((b) =>
         b.nome.toLowerCase().includes(searchQuery.toLowerCase())
@@ -51,11 +57,19 @@ const BotoesList = ({
                 {botoesFiltrados.map((botao) => (
                     <div
                         key={botao.id}
-                        className="bg-surface-container-lowest rounded-lg p-3 sm:p-4 shadow-sm border border-surface-variant hover:shadow-md transition-all relative overflow-hidden group"
+                        ref={openMenuId === botao.id ? openCardRef : null}
+                        onClick={() => setOpenMenuId((id) => (id === botao.id ? null : botao.id))}
+                        className="bg-surface-container-lowest rounded-lg p-3 sm:p-4 shadow-sm border border-surface-variant hover:shadow-md transition-all relative overflow-hidden group cursor-pointer"
                     >
                         <div className="absolute top-0 left-0 w-full h-1 bg-surface-variant"></div>
                         <div className="absolute top-2 right-2 z-10">
-                            <ItemMenu onEdit={() => onEdit(botao)} onDelete={() => onDelete(botao)} />
+                            <ItemMenu
+                                open={openMenuId === botao.id}
+                                onOpenChange={(v) => setOpenMenuId(v ? botao.id : null)}
+                                boundaryRef={openCardRef}
+                                onEdit={() => onEdit(botao)}
+                                onDelete={() => onDelete(botao)}
+                            />
                         </div>
                         <div className="flex items-center flex-col text-center mt-2 sm:mt-4">
                             <div className="w-20 h-20 sm:w-24 sm:h-24 lg:w-28 lg:h-28 mb-2 sm:mb-3 rounded-2xl bg-secondary-container text-on-secondary-container flex items-center justify-center overflow-hidden border-2 border-surface-container shadow-sm transform group-hover:scale-105 transition-transform duration-300">

@@ -1,4 +1,4 @@
-import { useContext, useState } from "react";
+import { useContext, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Context } from "../ContextProvider";
 import StaffShell from "../Components/layout/StaffShell";
@@ -9,6 +9,10 @@ const StaffHome = () => {
     const { utentes, setUtente, deleteUtente } = useContext(Context);
     const navigate = useNavigate();
     const [searchQuery, setSearchQuery] = useState("");
+    // Qual cartão tem o menu de ações aberto (só um de cada vez). O ref aponta para
+    // esse cartão e serve de fronteira ao "clicar fora" do ItemMenu (ver ItemMenu.jsx).
+    const [openMenuId, setOpenMenuId] = useState(null);
+    const openCardRef = useRef(null);
 
     // Iniciar a sessão do utente: entra na "gaiola". O fecho do gate é feito pelo
     // próprio tabuleiro ao montar — se o fizéssemos aqui, o RequireStaff (ainda
@@ -70,7 +74,9 @@ const StaffHome = () => {
                 {utentesFiltrados.map((utente) => (
                     <div
                         key={utente.id}
-                        className="bg-surface-container-lowest rounded-lg p-4 shadow-sm border border-surface-variant hover:shadow-md transition-all relative overflow-hidden group"
+                        ref={openMenuId === utente.id ? openCardRef : null}
+                        onClick={() => setOpenMenuId((id) => (id === utente.id ? null : utente.id))}
+                        className="bg-surface-container-lowest rounded-lg p-4 shadow-sm border border-surface-variant hover:shadow-md transition-all relative overflow-hidden group cursor-pointer"
                     >
                         <div className="absolute top-0 left-0 w-full h-1 bg-status-green"></div>
                         <div className="flex items-start justify-between mb-3">
@@ -81,7 +87,13 @@ const StaffHome = () => {
                                 <div className="px-2 py-1 rounded text-xs font-staff-mono font-bold text-status-green flex items-center gap-1">
                                     <span className="material-symbols-outlined text-[14px]">check_circle</span> Estável
                                 </div>
-                                <ItemMenu onEdit={() => handleEdit(utente)} onDelete={() => handleDelete(utente)} />
+                                <ItemMenu
+                                    open={openMenuId === utente.id}
+                                    onOpenChange={(v) => setOpenMenuId(v ? utente.id : null)}
+                                    boundaryRef={openCardRef}
+                                    onEdit={() => handleEdit(utente)}
+                                    onDelete={() => handleDelete(utente)}
+                                />
                             </div>
                         </div>
                         <h3 className="font-body-xl text-body-xl font-semibold text-on-surface mb-1 truncate" title={utente.nome}>{utente.nome}</h3>
@@ -91,7 +103,7 @@ const StaffHome = () => {
                         <div className="flex gap-2">
                             <button
                                 className="flex-1 py-2 rounded-full font-staff-mono text-staff-mono transition-colors bg-surface-container-high text-on-surface hover:bg-surface-variant"
-                                onClick={() => handleOpen(utente)}
+                                onClick={(e) => { e.stopPropagation(); handleOpen(utente); }}
                             >
                                 Aceder Perfil
                             </button>

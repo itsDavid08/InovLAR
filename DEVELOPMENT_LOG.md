@@ -917,3 +917,112 @@ simples). `NewUtente`/`EditUtente` deixaram de passar a prop `containerClass`.
 - [x] `vite build` sem erros
 - [ ] Verificação visual mobile (formulários, listas, sem cartões tapados)
 - [ ] (Opcional) Remover CSS morto `.new-container` / `.edit-container`
+
+---
+
+## 2026-06-18 — Folga da barra inferior: espaçador fixo em vez de `padding-bottom`
+
+### Motivação
+A correção da entrada anterior ("Ajustes mobile…", 2026-06-17) reservava espaço com
+`pb-[calc(6rem+env(safe-area-inset-bottom))]` no contentor do `StaffShell`. Mesmo
+assim a barra inferior continuava a **tapar a última linha** de cartões (Utentes e
+Botões) — e, depois de a substituir por um espaçador grande, a folga ficou
+**exagerada**. Objetivo: folga igual ao espaço entre cartões, sem ser tapada.
+
+### Causa
+No mesmo `className` coexistiam `sm:p-6` e o `pb-[calc(...)]` base. Em ecrãs ≥ 640px
+(`sm`) — onde a barra inferior ainda aparece mas já se aplica `sm:p-6` — a regra
+`padding:1.5rem` do `sm:p-6` (dentro de `@media`, logo **mais abaixo** na folha de
+estilos) **vencia** o `padding-bottom` base do `pb-[calc(...)]`, repondo-o para 24px
+→ a barra de 64px tapava os cartões. (Isto abrange o intervalo 640–767px, em que a
+sidebar ainda está escondida e a barra inferior está visível.)
+
+### Decisão
+Em vez de lutar com a especificidade do `padding`, **reservar o espaço com um
+espaçador explícito** a seguir aos `children`:
+```jsx
+<div className="p-4 sm:p-6 md:px-10 md:py-8 flex-1 overflow-y-auto">
+    {children}
+    {/* Espaçador para o último cartão não ficar tapado pela barra inferior (h-16 = 64px). */}
+    <div className="h-16 md:hidden" aria-hidden="true" />
+</div>
+```
+- `h-16` = **64px** = altura exata da barra (`StaffBottomNav`, `h-16`). Com o padding
+  do contentor dá a mesma folga visual do `p-4` (16px) entre cartões — nem a mais
+  (a 1ª tentativa, `h-24`/96px, ficou exagerada) nem a menos.
+- `md:hidden` → só existe em mobile; em desktop não há barra e o `md:py-8` chega.
+- Imune à especificidade: é um elemento real no fluxo, não um `padding` reponível.
+
+### Alterações — `Client/src/Components/layout/StaffShell.jsx`
+- Removido `pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-8` do contentor.
+- Acrescentado `<div className="h-16 md:hidden" aria-hidden="true" />` após `{children}`.
+
+### Notas
+- Alteração só de classes no JSX (sem novos imports/JS); o `vite build` é corrido na
+  entrada seguinte e cobre as duas alterações.
+
+### Estado
+- [x] Espaçador `h-16` em mobile (StaffShell) — última linha já não fica tapada
+- [x] Folga reduzida de 96px → 64px (mesmo gap visual do `p-4`)
+- [ ] Verificação visual mobile (Utentes + Botões: último cartão totalmente visível)
+- [ ] (Opcional) Incluir `env(safe-area-inset-bottom)` no espaçador para iPhones com
+  *home indicator* (`h-[calc(4rem+env(safe-area-inset-bottom))]`) — em ecrãs sem
+  safe-area é idêntico aos 64px atuais
+
+---
+
+## 2026-06-18 — Clicar no cartão abre o menu de ações (⋮) — Utentes e Botões
+
+### Motivação (feedback do utilizador)
+Clicar no corpo do cartão (Utentes e Botões) não fazia nada; Editar/Eliminar só
+estavam no ícone ⋮, pequeno para tocar em mobile. Pedido: **clicar no cartão também
+abre o mesmo menu** do ⋮.
+
+### Decisão — opção "reutilizar o `ItemMenu`" (a mais simples, sem UI nova)
+Entre duas hipóteses apresentadas (A: reutilizar o dropdown do ⋮; B: estado
+"selecionado" com botões inline), o utilizador escolheu **A**. O cartão inteiro passa
+a abrir/fechar o popover já existente.
+
+**`ItemMenu` passa a poder ser controlado:**
+- Sem `open`/`onOpenChange` → continua a gerir o próprio estado (retrocompatível).
+- Com `open` + `onOpenChange` → o estado vive no pai (a lista), para o clique no
+  cartão e o clique no ⋮ partilharem o mesmo estado.
+- Nova prop `boundaryRef`: a **fronteira do "clicar fora"** passa a ser o **cartão**,
+  não só o ícone. Assim, clicar no corpo do cartão **alterna** (abre/fecha) sem o
+  piscar "fecha-no-mousedown + reabre-no-click"; só cliques verdadeiramente fora
+  fecham. O `onClick` do cartão faz toggle; o ⋮ e os botões de ação fazem
+  `stopPropagation` para não dispararem o toggle do cartão.
+
+### Alterações — `Client/src/`
+- **`Components/layout/ItemMenu.jsx`** — modo controlado opcional (`open`,
+  `onOpenChange`) + `boundaryRef`; `setOpen` encaminha para o pai quando controlado.
+  Sem props, comporta-se exatamente como antes.
+- **`Pages/StaffHome.jsx`** — `openMenuId` (qual cartão tem o menu aberto) +
+  `openCardRef`; cartão com `onClick` (toggle), `ref` condicional e `cursor-pointer`;
+  "Aceder Perfil" ganhou `stopPropagation` (mantém a ação primária intacta); `ItemMenu`
+  controlado.
+- **`Components/botoes/BotoesList.jsx`** — mesmo padrão (o cartão de botão não tinha
+  ação primária → o cartão todo abre o menu).
+
+### Notas
+- **Um menu aberto de cada vez:** `openMenuId` é único por lista → abrir num cartão
+  fecha o de outro. O `openCardRef` só é colado ao cartão atualmente aberto, por isso
+  basta **um** ref por lista (não um por cartão).
+- **Acessibilidade:** o cartão clicável é um `<div>` (segue o padrão já usado no
+  projeto, ex.: imagens com `onClick` no `BotaoForm`). O ⋮ continua a ser um `<button>`
+  real (focável por teclado) e, nos Utentes, "Aceder Perfil" também → as ações têm
+  sempre um alvo focável. Tornar o cartão `role="button"` + suporte de teclado fica
+  como follow-up opcional.
+
+### Verificação
+- `npm run build` (Client) → ✓ built (3050 módulos). Mantém-se só o aviso CSS
+  pré-existente (`#ff8080; !important;`, `index.css:555`) e o aviso de tamanho de
+  chunk, ambos não relacionados.
+
+### Estado
+- [x] `ItemMenu` controlado + `boundaryRef`
+- [x] `StaffHome` — clicar no cartão abre o menu; "Aceder Perfil" intacto
+- [x] `BotoesList` — clicar no cartão abre o menu
+- [x] `vite build` sem erros novos
+- [ ] Verificação visual mobile (abrir por clique no cartão e pelo ⋮; fechar fora;
+  Editar/Eliminar; "Aceder Perfil" não abre o menu)
