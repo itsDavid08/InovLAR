@@ -58,11 +58,11 @@ const ItemMenu = ({ onEdit, onDelete, open: openProp, onOpenChange, boundaryRef,
                 <>
                     {/* Fundo escurecido — só no sheet (mobile). Toque fecha. */}
                     <div
-                        className="md:hidden fixed inset-0 z-40 bg-black/40"
+                        className="md:hidden fixed inset-0 z-40 bg-black/40 animate-fade-in"
                         onClick={(e) => { e.stopPropagation(); setOpen(false); }}
                     />
                     {/* Painel: bottom sheet em mobile, popover ancorado em desktop. */}
-                    <div className="z-50 fixed inset-x-0 bottom-0 rounded-t-2xl p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] border-t bg-surface-container-lowest border-surface-variant shadow-lg md:absolute md:inset-x-auto md:bottom-auto md:right-0 md:top-full md:mt-1 md:w-40 md:rounded-lg md:border md:p-1">
+                    <div className="z-50 fixed inset-x-0 bottom-0 rounded-t-2xl p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] border-t bg-surface-container-lowest border-surface-variant shadow-lg animate-sheet-up md:absolute md:inset-x-auto md:bottom-auto md:right-0 md:top-full md:mt-1 md:w-40 md:rounded-lg md:border md:p-1 md:origin-top-right md:animate-pop-in">
                         {/* Cabeçalho — só no sheet (mobile). */}
                         <div className="md:hidden">
                             <div className="mx-auto mt-1 mb-3 h-1 w-9 rounded-full bg-surface-variant" />

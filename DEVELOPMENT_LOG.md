@@ -1139,3 +1139,51 @@ essa mesma nota previa.
 - [x] `vite build` sem erros novos
 - [ ] Verificação visual mobile (Botões: ⋮ dos outros cartões tapados e não clicáveis
   com o sheet aberto)
+
+---
+
+## 2026-06-18 — Animação de abertura do menu de ações (sheet / popover / fundo)
+
+### Motivação
+O menu (popover no desktop, bottom sheet em mobile) **aparecia instantaneamente**.
+Pedido: abrir **com animação**.
+
+### Decisão — animações de *entrada* via config do Tailwind (sem libs)
+Como o Tailwind é carregado por CDN com **config inline** no `index.html`, as
+animações foram registadas aí (`theme.extend.keyframes` + `theme.extend.animation`),
+ficando disponíveis como utilitários normais (com variantes `md:`):
+- **`fade-in`** (200ms) — fundo escurecido (backdrop) do sheet.
+- **`sheet-up`** (260ms) — o painel desliza de baixo (`translateY(100%)→0`) em mobile.
+- **`pop-in`** (140ms) — *fade* + leve escala (`scale(.96)→1`) no popover do desktop,
+  com `origin-top-right` (cresce a partir do ⋮).
+
+Aplicação no painel (um só elemento, responsivo): `animate-sheet-up` (base/mobile)
+**+** `md:animate-pop-in md:origin-top-right` (desktop sobrepõe a animação). O backdrop
+leva `animate-fade-in`.
+
+Porquê só CSS/keyframes: as animações **correm ao montar** (o painel é
+`{open && …}`), sem estado extra nem dependências (framer-motion etc.). Coerente com a
+stack atual (React + Tailwind).
+
+### Alterações
+- **`Client/index.html`** — `keyframes` + `animation` (`fade-in`, `sheet-up`, `pop-in`)
+  no `theme.extend`.
+- **`Client/src/Components/layout/ItemMenu.jsx`** — backdrop `animate-fade-in`; painel
+  `animate-sheet-up md:animate-pop-in md:origin-top-right`.
+
+### Notas / limitação
+- **Só animação de entrada.** Ao fechar, o menu desmonta de imediato (sem animação de
+  saída) — animar a saída exigiria manter o elemento montado durante a transição
+  (estado "a fechar" + `onAnimationEnd` para desmontar). Fica como follow-up se se
+  quiser o fecho também animado.
+
+### Verificação
+- `npm run build` (Client) → ✓ built (3050 módulos). Só o aviso CSS pré-existente
+  e o de tamanho de chunk — não relacionados.
+
+### Estado
+- [x] Keyframes/animation no `index.html` (Tailwind config)
+- [x] `ItemMenu` — sheet desliza (mobile), popover faz *pop-in* (desktop), backdrop *fade*
+- [x] `vite build` sem erros novos
+- [ ] Verificação visual (abrir em mobile e desktop)
+- [ ] (Opcional) Animação de **fecho** (saída)
