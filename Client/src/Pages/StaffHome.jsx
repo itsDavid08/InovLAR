@@ -76,8 +76,10 @@ const StaffHome = () => {
                         key={utente.id}
                         ref={openMenuId === utente.id ? openCardRef : null}
                         onClick={() => setOpenMenuId((id) => (id === utente.id ? null : utente.id))}
-                        className="bg-surface-container-lowest rounded-lg p-4 shadow-sm border border-surface-variant hover:shadow-md transition-all relative overflow-hidden group cursor-pointer"
+                        className={`bg-surface-container-lowest rounded-lg p-4 shadow-sm border border-surface-variant hover:shadow-md transition-all relative overflow-hidden group cursor-pointer ${openMenuId === utente.id ? "z-50" : ""}`}
                     >
+                        {/* z-50 quando aberto: eleva o cartão e o seu sheet/backdrop acima
+                            dos vizinhos e da barra inferior. */}
                         <div className="absolute top-0 left-0 w-full h-1 bg-status-green"></div>
                         <div className="flex items-start justify-between mb-3">
                             <div className="w-14 h-14 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center font-display-lg text-[20px] border-2 border-surface-container">
@@ -91,6 +93,9 @@ const StaffHome = () => {
                                     open={openMenuId === utente.id}
                                     onOpenChange={(v) => setOpenMenuId(v ? utente.id : null)}
                                     boundaryRef={openCardRef}
+                                    title={utente.nome}
+                                    subtitle="Quarto Geral"
+                                    thumbnail={<span className="font-display-lg text-[16px]">{utente.nome.split(' ').map((n) => n[0]).slice(0, 2).join('')}</span>}
                                     onEdit={() => handleEdit(utente)}
                                     onDelete={() => handleDelete(utente)}
                                 />

@@ -1026,3 +1026,116 @@ a abrir/fechar o popover já existente.
 - [x] `vite build` sem erros novos
 - [ ] Verificação visual mobile (abrir por clique no cartão e pelo ⋮; fechar fora;
   Editar/Eliminar; "Aceder Perfil" não abre o menu)
+
+---
+
+## 2026-06-18 — Menu de ações como *bottom sheet* em mobile (popover só no desktop)
+
+### Motivação (feedback do utilizador, em mobile)
+Na grelha de Botões em telemóvel são 2 colunas → cartões pequenos (~170px). O menu
+do ⋮ era um popover `absolute` de `w-40` (160px) ancorado dentro do cartão: ocupava
+quase toda a largura, **sobrepunha-se à imagem/título e ficava espremido/cortado**
+(o cartão tem `overflow-hidden`). No desktop, com cartões maiores, o popover fica bem.
+
+### Decisão — menu responsivo dentro do próprio `ItemMenu`
+Mantém-se **um só componente**, com duas apresentações por *breakpoint*:
+- **Desktop (`md+`)**: o popover de sempre, ancorado ao ⋮ (`md:absolute md:right-0
+  md:top-full md:w-40`).
+- **Mobile (`<md`)**: **bottom sheet** que desliza de baixo (`fixed inset-x-0
+  bottom-0`), com **fundo escurecido** (backdrop), **pega**, **cabeçalho** (miniatura
+  + nome + subtítulo do item) e linhas grandes **Editar / Eliminar / Cancelar**.
+
+Porquê assim:
+- Padrão **nativo** reconhecível (intuitivo para quem não conhece a app) e com **alvos
+  de toque grandes**. Mantém o ⋮ visível como gatilho descobrível (não repete o erro
+  do "estado selecionado" testado e descartado, que escondia o gatilho e fazia crescer
+  todos os cartões da linha).
+- **Sem portais:** o painel usa `position: fixed`, que **escapa ao `overflow-hidden`**
+  do cartão. Nenhum ascendente tem `transform`/`filter`/`contain`, por isso o `fixed`
+  é relativo à *viewport* (confirmado na árvore StaffShell → grid → cartão).
+
+### Mecânica de fecho (sem piscar)
+- O backdrop e o painel são **descendentes do cartão no DOM** (apesar de `fixed`), por
+  isso o `boundaryRef` (= cartão) **contém-nos** → o handler de "clicar fora"
+  (`mousedown`) **não** fecha ao tocar no sheet. O fecho vem do `onClick` explícito do
+  backdrop / "Cancelar" / escolha de ação (todos com `stopPropagation`).
+- `z-index`: backdrop `z-40`, painel `z-50` (fica acima da `StaffBottomNav`, `z-40`,
+  que o sheet tapa por completo).
+- Safe-area do iPhone no fundo do sheet: `pb-[calc(0.5rem+env(safe-area-inset-bottom))]`.
+
+### Alterações — `Client/src/`
+- **`Components/layout/ItemMenu.jsx`** — painel reescrito: backdrop `md:hidden` +
+  painel com classes responsivas (sheet em mobile / popover em `md+`); cabeçalho e
+  "Cancelar" são `md:hidden`; botões Editar/Eliminar crescem em mobile
+  (`py-3.5 md:py-2`, ícone `text-[22px] md:text-sm`). Novas props **`title`**,
+  **`subtitle`**, **`thumbnail`** para o cabeçalho do sheet (opcionais → sem elas o
+  comportamento desktop é igual ao anterior).
+- **`Pages/StaffHome.jsx`** — passa `title={utente.nome}`, `subtitle="Quarto Geral"` e
+  `thumbnail` (iniciais) ao `ItemMenu`.
+- **`Components/botoes/BotoesList.jsx`** — passa `title={botao.nome}`,
+  `subtitle={categoria}` e `thumbnail` (imagem do botão) ao `ItemMenu`.
+
+### Notas
+- O ⋮ e o clique no cartão continuam a abrir o mesmo menu (lógica controlada
+  `open`/`onOpenChange` + `boundaryRef` da entrada anterior, "Clicar no cartão abre o
+  menu"). Só mudou a **apresentação** em mobile.
+- Antes do *bottom sheet* foi experimentada (e descartada pelo utilizador) a opção do
+  "estado selecionado" com botões inline — guardada numa branch à parte.
+
+### Verificação
+- `npm run build` (Client) → ✓ built (3050 módulos). Só o aviso CSS pré-existente
+  (`#ff8080; !important;`, `index.css:555`) e o de tamanho de chunk — não relacionados.
+
+### Estado
+- [x] `ItemMenu` — sheet em mobile + popover em desktop (responsivo)
+- [x] Backdrop + pega + cabeçalho (miniatura/nome) + Cancelar (mobile)
+- [x] `StaffHome` e `BotoesList` passam `title`/`subtitle`/`thumbnail`
+- [x] `vite build` sem erros novos
+- [ ] Verificação visual mobile (sheet desliza, não tapa nada, fecha por backdrop/
+  Cancelar/ação) e desktop (popover inalterado)
+
+---
+
+## 2026-06-18 — Correção: ⋮ dos outros cartões por cima do bottom sheet (Botões)
+
+### Sintoma
+No ecrã de Botões, com o bottom sheet aberto, os ícones ⋮ dos **outros** cartões
+apareciam **por cima** do sheet e continuavam clicáveis. No ecrã de Utentes não
+acontecia.
+
+### Causa — *stacking context* aprisionado
+Em `BotoesList`, o ⋮ está dentro de `<div className="absolute top-2 right-2 z-10">`.
+Esse `position + z-index` cria um **contexto de empilhamento**, que prende o
+backdrop (`z-40`) e o painel (`z-50`) do sheet ao nível **`z-10`** relativo à
+*viewport*. Como os ⋮ dos outros cartões também estão a `z-10` e vêm **depois no
+DOM**, pintam por cima do backdrop. Em `StaffHome` o ⋮ não tem wrapper com
+`z-index`, por isso o sheet já escapava para o contexto raiz (sem o problema).
+
+### Correção — elevar o cartão aberto
+Quando um cartão está aberto, ganha **`z-50`** (já tinha `relative`). Isso eleva
+**todo o seu subárvore** — incluindo o backdrop/painel `fixed` — acima dos cartões
+vizinhos (`z-auto`/`z-10`) e da `StaffBottomNav` (`z-40`). O backdrop passa a tapar
+e a **bloquear cliques** nos ⋮ dos outros cartões. Sem portais — coerente com a
+decisão registada de os evitar; resolve o "problema de stacking entre cartões" que
+essa mesma nota previa.
+
+### Alterações — `Client/src/`
+- **`Components/botoes/BotoesList.jsx`** — cartão: `className` condicional com `z-50`
+  quando `openMenuId === botao.id`.
+- **`Pages/StaffHome.jsx`** — mesma elevação condicional (defensivo/consistente;
+  ali já funcionava por não haver wrapper `z-10`).
+
+### Notas
+- `z-index` é só ordem de pintura → sem alteração de layout. `overflow-hidden` do
+  cartão continua a **não** cortar o sheet (é `fixed`, contido pela *viewport*; nenhum
+  ascendente tem `transform`/`filter`).
+
+### Verificação
+- `npm run build` (Client) → ✓ built (3050 módulos). Só o aviso CSS pré-existente
+  e o de tamanho de chunk — não relacionados.
+
+### Estado
+- [x] Cartão aberto elevado a `z-50` (Botões + Utentes)
+- [x] `vite build` sem erros novos
+- [ ] Verificação visual mobile (Botões: ⋮ dos outros cartões tapados e não clicáveis
+  com o sheet aberto)

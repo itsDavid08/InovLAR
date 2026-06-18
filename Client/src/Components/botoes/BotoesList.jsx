@@ -59,14 +59,19 @@ const BotoesList = ({
                         key={botao.id}
                         ref={openMenuId === botao.id ? openCardRef : null}
                         onClick={() => setOpenMenuId((id) => (id === botao.id ? null : botao.id))}
-                        className="bg-surface-container-lowest rounded-lg p-3 sm:p-4 shadow-sm border border-surface-variant hover:shadow-md transition-all relative overflow-hidden group cursor-pointer"
+                        className={`bg-surface-container-lowest rounded-lg p-3 sm:p-4 shadow-sm border border-surface-variant hover:shadow-md transition-all relative overflow-hidden group cursor-pointer ${openMenuId === botao.id ? "z-50" : ""}`}
                     >
+                        {/* z-50 quando aberto (acima): eleva o cartão e o seu sheet/backdrop
+                            acima dos cartões vizinhos, senão os ⋮ dos outros ficam por cima. */}
                         <div className="absolute top-0 left-0 w-full h-1 bg-surface-variant"></div>
                         <div className="absolute top-2 right-2 z-10">
                             <ItemMenu
                                 open={openMenuId === botao.id}
                                 onOpenChange={(v) => setOpenMenuId(v ? botao.id : null)}
                                 boundaryRef={openCardRef}
+                                title={botao.nome}
+                                subtitle={botao.categoria || 'Sem categoria'}
+                                thumbnail={<img src={apiUrl + (botao.imagem || '/imagesBotoes/default.png')} alt="" className="w-full h-full object-cover" />}
                                 onEdit={() => onEdit(botao)}
                                 onDelete={() => onDelete(botao)}
                             />
