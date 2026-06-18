@@ -7,6 +7,7 @@ import { apiUrl } from "./api/client";
 import * as botoesApi from "./api/botoes";
 import * as utentesApi from "./api/utentes";
 import * as pedidosApi from "./api/pedidos";
+import { staffStatus } from "./api/auth";
 
 export const Context = createContext(); // Exportación nombrada
 
@@ -17,10 +18,15 @@ export const ContextProvider = ({ children }) => {
     const [botoes, setBotoes] = useState([]);
     const [pedidosUtilizador, setPedidosUtilizador] = useState([]);
     const [pedidosPendentes, setPedidosPendentes] = useState([]);
-    // Gate de "kiosk": true quando o staff está no console (após PIN). Vive só em
-    // memória → reinicia a false no restart/reload, por isso a app arranca sempre
-    // no ecrã de bloqueio. O PIN é sempre validado no servidor (staffLogin).
+    // Gate de "kiosk": true quando o staff tem acesso ao console. O acesso é
+    // restaurado do cookie do dispositivo ao arrancar (useEffect abaixo) — logo um
+    // reload mantém a sessão. Exceção: entrar na "gaiola" (/main) revoga o acesso
+    // (ver MainContent). O PIN é sempre validado no servidor (staffLogin); a
+    // segurança real é o `requireStaff` nas rotas de escrita.
     const [staffUnlocked, setStaffUnlocked] = useState(false);
+    // `false` até a verificação do cookie ao arrancar terminar. Enquanto isso, o
+    // RequireStaff mostra um esqueleto (em vez de branco / piscar para o login).
+    const [staffChecked, setStaffChecked] = useState(false);
 
     const utenteIdRef = useRef(utenteId);
 
@@ -152,6 +158,20 @@ export const ContextProvider = ({ children }) => {
 
     }, []);
 
+    // Restaura o acesso de staff a partir do cookie do dispositivo (sessão
+    // persistente). Exceção: na "gaiola" (/main) não restaura — entrar no
+    // tabuleiro do utente revoga o acesso (ver MainContent). No fim marca
+    // `staffChecked` para o RequireStaff deixar de mostrar o esqueleto.
+    useEffect(() => {
+        if (window.location.pathname.startsWith("/main")) {
+            setStaffChecked(true);
+            return;
+        }
+        staffStatus()
+            .then((s) => { if (s.autenticado) setStaffUnlocked(true); })
+            .finally(() => setStaffChecked(true));
+    }, []);
+
     useEffect(() => {
         if (utenteId) {
             utenteIdRef.current = utenteId;
@@ -198,6 +218,7 @@ export const ContextProvider = ({ children }) => {
                 setPedidosPendentes,
                 staffUnlocked,
                 setStaffUnlocked,
+                staffChecked,
                 deleteUtente,
                 postPedido,
                 postBotao,

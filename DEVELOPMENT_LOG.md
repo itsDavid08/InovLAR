@@ -1187,3 +1187,66 @@ stack atual (React + Tailwind).
 - [x] `vite build` sem erros novos
 - [ ] Verificação visual (abrir em mobile e desktop)
 - [ ] (Opcional) Animação de **fecho** (saída)
+
+---
+
+## 2026-06-18 — Sessão persistente por cookie + esqueleto (revê o reload do Pin-to-Exit)
+
+### Contexto — decisão revista (ler antes de "corrigir")
+Em 2026-06-15 ("Fluxo Pin-to-Exit") decidiu-se que **qualquer reload/reinício
+re-bloqueia** (gate `staffUnlocked` só em memória, arranca a `false`). O utilizador
+pediu agora para **manter o acesso no reload** (como o cookie de 2026-06-09), mas
+**sem perder o objetivo do kiosk** — que um utente não chegue ao staff sem PIN.
+
+Modelo acordado (palavras do utilizador):
+> autentica → mantém cookie → entra na tabela do utente → **perde acesso (cookie)** →
+> botão 🛠 → pede PIN → reautentica → … → terminar sessão → perde cookie.
+
+Ou seja: a fronteira do kiosk **deixa de ser o reload** e **passa a ser entrar no
+tabuleiro do utente** (a "gaiola"). Esta entrada **substitui** a regra "reload
+re-bloqueia" do Pin-to-Exit; o resto desse fluxo mantém-se.
+
+### Decisão
+1. **Restaurar o acesso do cookie ao arrancar.** O `ContextProvider` pergunta ao
+   servidor (`staffStatus`) e, se `autenticado`, faz `setStaffUnlocked(true)`. Novo
+   estado `staffChecked` (false até a verificação terminar).
+   - **Anti-race:** o restauro **não corre em `/main`** (verifica
+     `window.location.pathname`) — senão reabriria o acesso dentro da gaiola, que
+     a montar faz exatamente o contrário.
+2. **Esperar pela verificação sem branco.** O `RequireStaff` mostra um **esqueleto**
+   (`StaffSkeleton`) enquanto `!staffChecked`, em vez de página em branco ou
+   "A carregar…" — pedido do utilizador (estilo Instagram: chrome real + blocos
+   `animate-pulse`). Só depois decide: render ou `Navigate("/")`.
+3. **Entrar na gaiola revoga o acesso.** O `MainContent`, ao montar, além de
+   `setStaffUnlocked(false)`, passa a chamar **`staffLogout()`** (limpa o cookie).
+   Assim, voltar ao staff exige o PIN (🛠 → `PinPrompt` → `staffLogin`).
+4. **Logout** continua a limpar o cookie (`StaffSidebar`, inalterado).
+
+### Alterações — `Client/src/`
+- **`ContextProvider.jsx`** — importa `staffStatus`; novo `staffChecked`; `useEffect`
+  de restauro do cookie (salta `/main`); expõe `staffChecked` no Context.
+- **`Components/RequireStaff.jsx`** — usa `staffChecked`; enquanto verifica → render
+  `<StaffSkeleton />`; só depois redireciona/permite.
+- **`Components/layout/StaffSkeleton.jsx`** (novo) — esqueleto com o shell real
+  (`StaffShell` + `StaffSidebar`) e cartões "fantasma" (`animate-pulse`).
+- **`Pages/MainContent.jsx`** — `staffLogout()` ao entrar na gaiola (revoga acesso).
+- **`Pages/StaffLogin.jsx`** — só comentário (deixou de ser verdade "pede PIN em cada
+  arranque"; o reload com cookie já não passa por aqui).
+
+### Tradeoff de segurança (assumido)
+Um reinício do tablet **mantém** o staff autenticado se a sessão não tiver sido
+"entregue" a um utente. A proteção do kiosk passa a estar na **entrega do tabuleiro**
+(entrar em `/main` revoga), não no reinício. A segurança do servidor (`requireStaff`
+nas rotas de escrita) é independente disto e mantém-se.
+
+### Verificação
+- `npm run build` (Client) → ✓ built (3051 módulos; +1 = `StaffSkeleton`). Só o aviso
+  CSS pré-existente e o de tamanho de chunk.
+
+### Estado
+- [x] Restauro do acesso por cookie ao arrancar (`staffChecked`)
+- [x] `RequireStaff` mostra esqueleto durante a verificação (sem branco)
+- [x] Entrar na gaiola (`/main`) limpa o cookie (revoga acesso)
+- [x] `vite build` sem erros novos
+- [ ] Verificação no dispositivo: reload em `/staff` mantém; entrar num utente +
+  voltar pede PIN; logout pede PIN

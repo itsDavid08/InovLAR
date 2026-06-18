@@ -17,9 +17,9 @@ export default function StaffLogin() {
     const [erro, setErro] = useState("");
     const navigate = useNavigate();
 
-    // Só decidimos definir-vs-login. NÃO saltamos por causa do cookie: o tablet
-    // tem de pedir o PIN em cada arranque, mesmo que o dispositivo já esteja
-    // autenticado no servidor (o cookie continua a servir para as mutações).
+    // Só decidimos definir-vs-login. Quem chega aqui não tem sessão a restaurar:
+    // o reload de uma página de staff com cookie válido é tratado pelo
+    // RequireStaff (restaura o acesso e não passa por aqui). Por isso pede o PIN.
     useEffect(() => {
         let ativo = true;
         staffStatus().then((s) => {

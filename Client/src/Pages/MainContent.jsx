@@ -1,6 +1,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useContext, useEffect, useState, useRef } from "react";
 import { Context } from "../ContextProvider";
+import { staffLogout } from "../api/auth";
 import RequestListDrawer from "../Components/RequestListDrawer.jsx";
 import SuccessModal from "../Components/SuccessModal.jsx";
 import PinPrompt from "../Components/PinPrompt.jsx";
@@ -33,11 +34,13 @@ const MainContent = () => {
         if (!utente || utente.id !== id) setUtenteId(id);
     }, [id]);
 
-    // Estar no tabuleiro = estar na "gaiola": fecha o gate de staff. Feito aqui
-    // (e não no StaffHome) para o guarda não redirecionar para o bloqueio durante
-    // a navegação. A partir daqui só se sai com o PIN (botão 🛠 → PinPrompt).
+    // Estar no tabuleiro = estar na "gaiola": fecha o gate de staff E limpa o
+    // cookie do dispositivo — entrar no tabuleiro do utente revoga o acesso de
+    // staff. Feito aqui (e não no StaffHome) para o guarda não redirecionar
+    // durante a navegação. A partir daqui só se sai com o PIN (🛠 → PinPrompt).
     useEffect(() => {
         setStaffUnlocked(false);
+        staffLogout().catch(() => {});
     }, []);
 
     useEffect(() => {
