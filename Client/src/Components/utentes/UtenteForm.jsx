@@ -1,8 +1,8 @@
 // Formulário partilhado de utente (criar/editar) + pré-visualização ao vivo.
 // Presentacional: os dados e a submissão vivem nos wrappers EditUtente/NewUtente.
-// Mesmo layout do BotaoForm: header com voltar + grid form|preview. Em mobile a
-// pré-visualização fica em cima (order-1) e o formulário por baixo; em desktop
-// volta a ficar form à esquerda, preview à direita.
+// Mesmo layout do BotaoForm: header com voltar + form|preview lado a lado. Em
+// mobile (flex-col-reverse) a pré-visualização fica em cima e o formulário por
+// baixo; em desktop (lg:flex-row) form à esquerda, preview à direita.
 const UtenteForm = ({
     title,
     formData,
@@ -36,8 +36,8 @@ const UtenteForm = ({
                 </div>
             </header>
 
-            <div className="p-6 md:p-12 flex-1 overflow-y-auto max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-                <form onSubmit={onSubmit} className="order-2 lg:order-1 bg-surface-container-lowest p-8 rounded-xl shadow-sm border border-surface-variant flex flex-col gap-6">
+            <div className="p-6 md:p-12 flex-1 overflow-y-auto max-w-7xl mx-auto w-full flex flex-col-reverse lg:flex-row gap-8 items-start">
+                <form onSubmit={onSubmit} className="w-full lg:flex-1 bg-surface-container-lowest p-8 rounded-xl shadow-sm border border-surface-variant flex flex-col gap-6">
                     {hiddenId !== undefined && (
                         <input type="hidden" value={hiddenId} readOnly />
                     )}
@@ -87,8 +87,9 @@ const UtenteForm = ({
                     </div>
                 </form>
 
-                {/* Preview Area — em mobile fica em cima do formulário (order-1) */}
-                <div className="order-1 lg:order-2 bg-surface-container-lowest p-8 rounded-xl shadow-sm border border-surface-variant flex flex-col items-center">
+                {/* Preview — flex-col-reverse põe-a em cima em mobile; lg:flex-row à direita em desktop.
+                    (Não usar order-*: o Tailwind Play CDN não deixa lg:order-* sobrepor o order-* base.) */}
+                <div className="w-full lg:flex-1 bg-surface-container-lowest p-8 rounded-xl shadow-sm border border-surface-variant flex flex-col items-center">
                     <h2 className="font-display-lg text-2xl font-bold text-on-surface mb-6 w-full underline decoration-primary decoration-4 underline-offset-8">Pré-visualização</h2>
 
                     <div className="bg-surface-container-lowest rounded-lg p-6 shadow-sm border border-surface-variant hover:shadow-md hover:border-primary transition-all relative overflow-hidden group w-full max-w-sm">

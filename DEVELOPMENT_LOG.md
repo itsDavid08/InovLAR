@@ -1250,3 +1250,137 @@ nas rotas de escrita) é independente disto e mantém-se.
 - [x] `vite build` sem erros novos
 - [ ] Verificação no dispositivo: reload em `/staff` mantém; entrar num utente +
   voltar pede PIN; logout pede PIN
+
+---
+
+## 2026-06-18 — Polir o menu de ações: forma do popover + hover recortado
+
+### Sintomas (desktop/tablet)
+1. O popover (⋮) tinha **cantos exageradamente redondos** (parecia uma cápsula).
+2. O **hover** de Editar/Eliminar era **retangular** e ultrapassava os cantos
+   redondos do painel.
+
+### Causa
+- **Raios:** o `tailwind.config` (inline no `index.html`) **redefine a escala** —
+  `rounded` = 1rem (16px), `rounded-lg` = **2rem (32px)**, `rounded-xl` = 3rem
+  (48px). Bom para os **cartões** (elementos grandes), mas grande demais para um
+  menu pequeno: o painel a `rounded-lg` (32px) e os botões a `rounded-xl` (48px)
+  ficavam quase cápsulas.
+- **Hover:** o painel não tinha `overflow-hidden`, por isso o fundo retangular do
+  botão em hover transbordava os cantos redondos.
+
+### Correção — `Client/src/Components/layout/ItemMenu.jsx`
+- **`overflow-hidden`** no painel → o hover dos botões é recortado pela forma
+  redonda do painel.
+- **Raios explícitos** (a contornar a escala do config): painel
+  `rounded-t-[16px]` (sheet) / `md:rounded-[14px]` (popover); miniatura
+  `rounded-[10px]`.
+- **Botões sem cantos próprios e encostados às margens** (removido
+  `rounded-xl md:rounded-md` e o padding interno do painel) → o realce ocupa a
+  largura toda e encaixa nos cantos do painel (padrão de dropdown limpo). Em
+  mobile, linhas full-width; "Cancelar" separado por `border-t`.
+- Popover um pouco mais largo (`md:w-44`) e ícones `md:text-[18px]`.
+
+### Nota (pegadinha a lembrar)
+A escala de `borderRadius` do projeto é grande de propósito (cartões). Para
+elementos pequenos (menus, chips), usar **valores explícitos** `rounded-[Npx]` em
+vez de `rounded-lg/xl`, senão ficam com cantos enormes.
+
+### Verificação
+- `npm run build` (Client) → ✓ built (3051 módulos). Só o aviso CSS pré-existente.
+
+### Estado
+- [x] `overflow-hidden` + raios explícitos no painel
+- [x] Hover encaixa nos cantos redondos (desktop e mobile)
+- [x] `vite build` sem erros novos
+- [ ] Verificação visual (popover em pc/tablet; sheet em mobile)
+
+---
+
+## 2026-06-18 — Popover invisível no desktop: separar popover (md) do sheet (mobile)
+
+### Sintoma
+Depois de adicionar `overflow-hidden` (entrada anterior), o popover no desktop/tablet
+**deixou de se ver** — só uma linha fina no cartão.
+
+### Causa — altura a colapsar (estava lá antes, ficou exposta)
+O menu era **um só elemento** com classes base (sheet) + overrides `md:` (popover).
+No desktop ficava com `md:top-full` (topo) **e** `bottom-0` da base ao mesmo tempo,
+ambos relativos ao contentor minúsculo do ⋮ → **altura ≈ 0**. Antes do
+`overflow-hidden`, os botões **transbordavam** para fora da caixa de 0px e viam-se
+(daí o aspeto "cápsula" do screenshot anterior). Ao adicionar `overflow-hidden`, esse
+conteúdo transbordante passou a ser **recortado** → nada visível.
+
+### Correção — dois elementos separados
+Em vez de um elemento com overrides `md:` (frágil: depende de TODos os
+`fixed`/`inset-x-0`/`bottom-0` da base serem corretamente anulados), agora são **dois**:
+- **Popover desktop** (`hidden md:block`): `absolute right-0 top-full mt-1 w-44` — só
+  `top`/`right`, **sem `bottom` nem `fixed`** → a altura vem do conteúdo, **não
+  colapsa**. `overflow-hidden` + `rounded-[14px]` mantêm o hover recortado.
+- **Sheet mobile** (`md:hidden`): `fixed inset-x-0 bottom-0` + backdrop, como antes.
+- Botões Editar/Eliminar extraídos para um helper `acoes(compact)` (sem duplicação;
+  `compact` = popover, normal = sheet).
+
+### Alterações — `Client/src/Components/layout/ItemMenu.jsx`
+- Bloco `{open && …}` reescrito: popover e sheet como elementos distintos; helper
+  `acoes`. Comentário de topo atualizado.
+
+### Lição
+Para um componente com **duas formas por breakpoint**, é mais seguro **dois elementos**
+(`hidden md:block` / `md:hidden`) do que um só a depender de anular `position`/`inset`
+da base com `md:` — um override em falta colapsa o layout silenciosamente.
+
+### Verificação
+- `npm run build` (Client) → ✓ (3051 módulos). Só o aviso CSS pré-existente.
+- [ ] **Visual (pendente, confirmar no dispositivo):** popover no pc/tablet aparece
+  como dropdown arredondado com Editar/Eliminar visíveis; hover encaixa nos cantos;
+  sheet em mobile inalterado.
+
+---
+
+## 2026-06-19 — Preview dos formulários à direita no desktop (corrige `order` que não pega no Play CDN)
+
+### Sintoma (feedback do utilizador)
+Em **Editar Utente** e **Editar/Novo Botão**, no **desktop** a pré-visualização aparecia
+à **esquerda** do formulário — devia estar à **direita**. Em mobile já estava bem (em cima).
+
+### Causa — o `lg:order-*` não sobrepõe o `order-*` base no Tailwind **Play CDN**
+A entrada de 2026-06-17 pôs a preview em cima no mobile com `order`:
+`form order-2 lg:order-1`, `preview order-1 lg:order-2`. A teoria era "desktop volta a
+form à esquerda / preview à direita", mas **nunca aconteceu**.
+
+O projeto carrega o Tailwind pelo **Play CDN** (`cdn.tailwindcss.com`, ver `index.html`),
+não por um build. Medido com `getComputedStyle` na página real (viewport 1280):
+- `order(form)` = **2** e `order(preview)` = **1** → os `lg:order-*` **não ganham** ao
+  `order-*` base. A ordem do mobile "vaza" para o desktop e a preview (order-1) fica na
+  **coluna esquerda**.
+- `lg:grid-cols-2`, `lg:flex-row` e afins funcionam — é **só o utilitário `order`** que
+  falha o override no CDN. (Daí parecer correto no código mas render errado.)
+
+### Correção — deixar de usar `order-*`
+Trocar o mecanismo por `flex` (sem `order`):
+- Contentor: `grid grid-cols-1 lg:grid-cols-2` → **`flex flex-col-reverse lg:flex-row`**.
+- Form e Preview: tiram `order-* lg:order-*` e ganham **`w-full lg:flex-1`**.
+
+`flex-col-reverse` põe a preview (2.º filho no DOM) **em cima** no mobile; `lg:flex-row`
+volta à ordem do DOM (**form à esquerda, preview à direita**) no desktop. `w-full` garante
+largura total no mobile (que o `grid-cols-1` dava de borla) e `lg:flex-1` colunas iguais
+no desktop. **Não se reordena o JSX** (form continua primeiro no código).
+
+### Alterações
+- **`BotaoForm.jsx`** e **`UtenteForm.jsx`** — contentor + classes do form/preview como
+  acima; comentários atualizados a avisar para **não voltar a usar `order-*`** (o CDN
+  não o respeita em override por breakpoint).
+
+### Verificação (medido no componente real, não só em teoria)
+Servidor de preview + `getComputedStyle`/`getBoundingClientRect` no ecrã real
+**Novo Botão** (BotaoForm):
+- **1280px:** `flex-direction: row`, preview à **direita**, colunas iguais (568px). ✓
+- **375px:** `flex-direction: column-reverse`, preview **em cima**, largura total (327px),
+  empilhado. ✓
+- UtenteForm: mesma mudança (classes idênticas). ✓
+
+### Lição
+Com o **Tailwind Play CDN**, um `lg:<util>` **nem sempre** sobrepõe o `<util>` base do
+mesmo elemento — confirmado a falhar no `order`. Para inverter posição por breakpoint,
+preferir `flex-col-reverse`/`lg:flex-row` (ou reordenar o DOM) em vez de `order-*`.
