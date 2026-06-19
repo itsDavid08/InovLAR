@@ -110,7 +110,7 @@ const StaffHome = () => {
                                 className="flex-1 py-2 rounded-full font-staff-mono text-staff-mono transition-colors bg-surface-container-high text-on-surface hover:bg-surface-variant"
                                 onClick={(e) => { e.stopPropagation(); handleOpen(utente); }}
                             >
-                                Aceder Perfil
+                                Tabela InovLAR
                             </button>
                         </div>
                     </div>
