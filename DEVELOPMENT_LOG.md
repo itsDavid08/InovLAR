@@ -1384,3 +1384,52 @@ Servidor de preview + `getComputedStyle`/`getBoundingClientRect` no ecrã real
 Com o **Tailwind Play CDN**, um `lg:<util>` **nem sempre** sobrepõe o `<util>` base do
 mesmo elemento — confirmado a falhar no `order`. Para inverter posição por breakpoint,
 preferir `flex-col-reverse`/`lg:flex-row` (ou reordenar o DOM) em vez de `order-*`.
+
+---
+
+## 2026-06-19 — Editor de Tabela por utente ("Gerir Tabela") — Fase 1 a 3
+
+### Contexto
+A tabela do kiosk (`/main/:id`) mostra botões **hardcoded por categoria**, igual para todos os
+utentes. A junction `UtenteBotoes` (com `associarBotao`/`desassociarBotao`) existe mas **nenhum
+frontend a usa**, e não guarda posição, ordem nem layout por dispositivo. Pedido: um editor visual
+*drag-and-drop* por utente, acessível pelo menu ⋮ do cartão em `/staff`, com layout independente por
+**smartphone / tablet / pc** e persistido em BD. Desenho seguiu o mockup **B (Material 3)** do Claude
+Design — alinhado aos tokens M3 já usados no staff.
+
+### Decisão
+1. **Tabela dedicada ao layout** (`TabelaLayout`), não estender `UtenteBotoes`. Uma linha por
+   `(utenteId, dispositivo)`; tudo num campo **`config` JSON**: `{ cols, size, cells }`.
+   - `cells` é um **array achatado** (índice = posição *row-major* na grelha; `null` = vazio).
+     Mover/trocar = mexer no array; sem tabela de posições. SQLite suporta `DataTypes.JSON`.
+2. **Persistência por `Model.sync()`** em `main.js` (como o `StaffAuth.sync()` já fazia) — o projeto
+   **não corre migrações**; o `sync({force:false})` cria a tabela se não existir.
+3. **GET público / PUT `requireStaff`** — o GET vai ser preciso no kiosk (Fase 4); o PUT é só staff,
+   como as outras escritas.
+4. **`@dnd-kit/core`** (sem `sortable` — bastam `useDraggable`/`useDroppable`). Cada célula é
+   *droppable*; botão da biblioteca e botão colocado são *draggable*. Largar na biblioteca = remover.
+5. **Estilo B com tokens M3 existentes** (`primary`, `surface-container`, `outline-variant`…), sem
+   cores hardcoded. Cor de categoria fica só como **ponto decorativo** no agrupamento da biblioteca
+   (as cores nos botões "ficam para depois", como pedido).
+6. **`ItemMenu` com ação opcional `onManage`** — o `BotoesList` não a passa, por isso fica intacto.
+
+### Alterações
+- **Backend (novos):** `Server/models/TabelaLayout.js`, `Server/controller/tabelaController.js`.
+- **Backend (editados):** `Server/models/index.js` (regista o modelo), `Server/main.js`
+  (`TabelaLayout.sync()`), `Server/routes/route.js` (rotas GET/PUT
+  `/utentes/:id/tabela/:dispositivo`).
+- **Frontend (novos):** `Client/src/api/tabela.js`; `Client/src/Pages/GerirTabela.jsx` (wrapper:
+  carrega os 3 layouts, estado por dispositivo, guarda só os alterados);
+  `Client/src/Components/tabela/{constants.js, ButtonTile.jsx, TabelaEditor.jsx}` (editor M3 +
+  *frame* a simular o dispositivo via `maxWidth`/`aspect-ratio` + lógica DnD).
+- **Frontend (editados):** `Client/src/Components/layout/ItemMenu.jsx` (`onManage` + ação "Gerir
+  Tabela"), `Client/src/Pages/StaffHome.jsx` (`handleManage` + prop), `Client/src/App.jsx` (rota
+  `/gerir-tabela/:id` protegida por `RequireStaff`).
+- **Dependência:** `@dnd-kit/core` em `Client/`.
+
+### Estado
+- `npm run build` (Client) ✓ — 3059 módulos, dnd-kit resolvido. `node --check` ✓ nos 5 ficheiros
+  do servidor. Falta **teste manual end-to-end** (arrastar/guardar/recarregar) e a **Fase 4**:
+  o `MainContent` ler o `config` guardado em vez do layout hardcoded.
+- Cuidado conhecido: o aviso `[esbuild css minify] ... #ff8080; !important` é **pré-existente**
+  (CSS antigo), não vem desta mudança.

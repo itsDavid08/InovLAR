@@ -7,6 +7,7 @@ import PedidosPendentes from "./Pages/PedidosPendentes.jsx";
 
 import EditUtente from "./Components/utentes/EditUtente.jsx";
 import NewUtente from "./Components/utentes/NewUtente.jsx";
+import GerirTabela from "./Pages/GerirTabela.jsx";
 
 import EditBotoes from "./Components/botoes/EditBotoes.jsx";
 import Welcome from "./Pages/Welcome.jsx";
@@ -33,6 +34,7 @@ function App() {
 
                         {/* Rotas só-staff: protegidas pelo gate de kiosk (RequireStaff). */}
                         <Route path="/edit-utente/:id" element={<RequireStaff><EditUtente /></RequireStaff>} />
+                        <Route path="/gerir-tabela/:id" element={<RequireStaff><GerirTabela /></RequireStaff>} />
                         <Route path="/new-utente" element={<RequireStaff><NewUtente /></RequireStaff>} />
                         <Route path="/staff" element={<RequireStaff><StaffHome /></RequireStaff>} />
                         <Route path="/staff/alterar-password" element={<RequireStaff><ChangePassword /></RequireStaff>} />

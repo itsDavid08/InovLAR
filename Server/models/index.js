@@ -3,8 +3,9 @@ const Botao = require('./Botao');
 const Utente = require('./Utente');
 const Pedido = require('./Pedido');
 const StaffAuth = require('./StaffAuth');
+const TabelaLayout = require('./TabelaLayout');
 
-const models = { Botao, Utente, Pedido, StaffAuth };
+const models = { Botao, Utente, Pedido, StaffAuth, TabelaLayout };
 
 const initDb = async () => {
     try {

@@ -26,6 +26,10 @@ const StaffHome = () => {
         navigate(`/edit-utente/${utente.id}`);
     };
 
+    const handleManage = (utente) => {
+        navigate(`/gerir-tabela/${utente.id}`);
+    };
+
     const handleDelete = async (utente) => {
         if (window.confirm(`Tens certeza que pretendes eliminar ${utente.nome}?`)) {
             await deleteUtente(utente.id);
@@ -96,6 +100,7 @@ const StaffHome = () => {
                                     title={utente.nome}
                                     subtitle="Quarto Geral"
                                     thumbnail={<span className="font-display-lg text-[16px]">{utente.nome.split(' ').map((n) => n[0]).slice(0, 2).join('')}</span>}
+                                    onManage={() => handleManage(utente)}
                                     onEdit={() => handleEdit(utente)}
                                     onDelete={() => handleDelete(utente)}
                                 />

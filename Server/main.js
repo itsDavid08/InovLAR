@@ -5,7 +5,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const {setIO} = require('./Util/socketIO.js');
 const { COOKIE_SECRET } = require('./config/auth');
-const { StaffAuth } = require('./models');
+const { StaffAuth, TabelaLayout } = require('./models');
 const app = express();
 const port = 3000;
 const router = require('./routes/route.js');
@@ -14,8 +14,9 @@ const multer = require('multer');
 const path = require('path');
 const DIST = path.join(__dirname, '../Client/dist');
 
-// Garante que a tabela StaffAuth existe (cria só se não existir, não mexe nas outras).
+// Garante que as tabelas existem (cria só se não existirem, não mexe nas outras).
 StaffAuth.sync();
+TabelaLayout.sync();
 
 // Configuração do armazenamento
 const storage = multer.diskStorage({

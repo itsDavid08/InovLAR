@@ -8,6 +8,7 @@ const botaoController = require('../controller/botaoController');
 const pedidoController = require('../controller/pedidoController');
 const viewController = require('../controller/viewController');
 const authController = require('../controller/authController');
+const tabelaController = require('../controller/tabelaController');
 const { requireStaff } = require('../middleware/auth');
 const { notificarAlteracaoBD } = require('../Util/socketIO');
 
@@ -74,6 +75,10 @@ router.put('/utentes/:id', requireStaff, utenteController.updateUtente);
 router.delete('/utentes/:id', requireStaff, utenteController.deleteUtente);
 router.post('/utentes/:utenteId/botoes/:botaoId', requireStaff, utenteController.associarBotao);
 router.delete('/utentes/:utenteId/botoes/:botaoId', requireStaff, utenteController.desassociarBotao);
+
+// Layout da tabela por dispositivo
+router.get('/utentes/:id/tabela/:dispositivo', tabelaController.getTabela);
+router.put('/utentes/:id/tabela/:dispositivo', requireStaff, tabelaController.saveTabela);
 
 // Upload e eliminação de imagens de botões
 router.post('/imagesBotoes/upload', requireStaff, uploadImagemBotao.single('imagem'), (req, res) => {

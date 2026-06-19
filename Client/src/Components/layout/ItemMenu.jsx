@@ -18,7 +18,7 @@ import { useState, useRef, useEffect } from "react";
 //    a ser o cartão, por isso clicar no corpo do cartão alterna o menu sem piscar.
 //
 // Conteúdo do cabeçalho do sheet (mobile): `title`, `subtitle`, `thumbnail` (opcionais).
-const ItemMenu = ({ onEdit, onDelete, open: openProp, onOpenChange, boundaryRef, title, subtitle, thumbnail }) => {
+const ItemMenu = ({ onEdit, onDelete, onManage, open: openProp, onOpenChange, boundaryRef, title, subtitle, thumbnail }) => {
     const [openLocal, setOpenLocal] = useState(false);
     const controlado = openProp !== undefined;
     const open = controlado ? openProp : openLocal;
@@ -51,6 +51,15 @@ const ItemMenu = ({ onEdit, onDelete, open: openProp, onOpenChange, boundaryRef,
     // sheet (mobile). `compact` reduz padding/ícone para o popover.
     const acoes = (compact) => (
         <>
+            {onManage && (
+                <button
+                    onClick={(e) => escolher(e, onManage)}
+                    className={`w-full flex items-center gap-3 px-4 text-left text-on-surface hover:bg-surface-container transition-colors ${compact ? "py-2.5" : "py-3"}`}
+                >
+                    <span className={`material-symbols-outlined ${compact ? "text-[18px]" : "text-[22px]"}`}>grid_view</span>
+                    <span className={`font-staff-mono ${compact ? "text-staff-mono" : "text-base"}`}>Gerir Tabela</span>
+                </button>
+            )}
             <button
                 onClick={(e) => escolher(e, onEdit)}
                 className={`w-full flex items-center gap-3 px-4 text-left text-on-surface hover:bg-surface-container transition-colors ${compact ? "py-2.5" : "py-3"}`}
