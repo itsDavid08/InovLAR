@@ -10,8 +10,8 @@ const ButtonTile = ({ botao, apiUrl, size = "M", fill = false }) => {
             <img
                 src={apiUrl + (botao.imagem || "/imagesBotoes/default.png")}
                 alt={botao.nome}
-                className={fill ? "flex-1 min-h-0 w-auto max-w-full object-contain" : ""}
-                style={fill ? { maxHeight: t.icon } : { width: t.icon, height: t.icon, objectFit: "contain" }}
+                className={fill ? "flex-1 min-h-0 w-full object-contain" : ""}
+                style={fill ? undefined : { width: t.icon, height: t.icon, objectFit: "contain" }}
                 draggable={false}
             />
             <span

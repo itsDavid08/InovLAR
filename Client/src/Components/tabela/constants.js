@@ -13,6 +13,12 @@ export const TAMANHOS = {
 
 export const COL_OPCOES = [2, 3, 4, 5, 6];
 
+export const COLS_MIN = 2;
+export const COLS_MAX = 8;
+
+// escala do ícone/texto consoante a densidade (menos colunas = botões maiores)
+export const escalaPorColunas = (cols) => (cols <= 4 ? "G" : cols <= 6 ? "M" : "P");
+
 // Cor por categoria — só decorativa (ponto no agrupamento da biblioteca).
 export const COR_CATEGORIA = {
     "Sinto-me": "#F9A825",

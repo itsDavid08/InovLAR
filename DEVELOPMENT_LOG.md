@@ -1505,3 +1505,45 @@ página rola normalmente, biblioteca empilhada por baixo do canvas).
 - `npm run build` (Client) ✓ — sem erros novos (mantém-se o aviso pré-existente `#ff8080; !important`).
 - Desktop: barra superior fixa, biblioteca com scroll interno, página não cresce. Mobile inalterado.
   Falta **verificação visual** no browser (desktop com muitos botões + mobile).
+
+---
+
+## 2026-06-22 — Editor de tabelas: slider de tamanho + tiles quadrados + scroll interno da moldura
+
+### Contexto
+O tamanho dos botões era controlado por 3 saltos discretos (P/M/G) que, no modelo anterior, esticavam
+os tiles para encher a moldura — logo o P/M/G só mexia no ícone/texto e os tiles **não eram quadrados**.
+O utilizador queria: (a) tiles **sempre quadrados**; (b) um controlo **contínuo** (slider) em que botão
+mais pequeno = cabem mais; (c) **valores intermédios** (entre "muito grande" e "muito pequeno").
+
+### Decisão
+- **Um só controlo (slider) substitui o P/M/G e o dropdown "Colunas".** Como os tiles são quadrados, o
+  tamanho do botão é `larguraMoldura / colunas` — discreto mas com **7 níveis** (2–8 colunas), o que dá
+  os intermédios que faltavam. O slider mexe diretamente nas **colunas** (que é o valor determinístico
+  já guardado, indexa o array `cells` em *row-major*); evita-se `auto-fill` de CSS porque colunas
+  dinâmicas quebrariam o mapeamento guardado.
+- **Orientação intuitiva:** slider à **direita = botões maiores** (menos colunas). Implementado com
+  `value = COLS_MIN + COLS_MAX - cols` (sem inverter o significado de `cols` no resto do código).
+- **Escala do ícone/texto derivada das colunas** (`escalaPorColunas`: ≤4→G, ≤6→M, senão P) — mantém o
+  `ButtonTile`/`TAMANHOS` sem alterações estruturais. O `size` guardado continua sincronizado
+  (`handleCols` faz `setCols` + `setSize`), por isso o backend/kiosk (Fase 4) não muda.
+- **Tiles quadrados** (`aspect-square`) e **scroll interno** na moldura (`overflow-y-auto` + `maxHeight:
+  100%`): quando há mais botões do que cabem, a moldura rola por dentro (continuam dentro da borda do
+  dispositivo, sem transbordar nem crescer a página).
+- **`ButtonTile` (modo `fill`)** — a imagem deixa de ter cap fixo de px (`maxHeight: t.icon`) e passa a
+  `flex-1 w-full object-contain`, para o ícone **escalar com o tile** (botão maior → ícone maior).
+
+### Alterações
+- **`constants.js`** — `COLS_MIN=2`, `COLS_MAX=8`, `escalaPorColunas(cols)`. `COL_OPCOES` fica órfão
+  (mantido, inofensivo).
+- **`ButtonTile.jsx`** — imagem do modo `fill` passa a `flex-1 min-h-0 w-full object-contain` (sem
+  `maxHeight`).
+- **`TabelaEditor.jsx`** — import atualizado; `escala`/`handleCols`; **removido** o segmented P/M/G da
+  barra superior; **dropdown "Colunas" → slider** (ícones `apps`/`crop_square`); `GridCell` quadrada
+  (`aspect-square`); grelha só com `gridTemplateColumns` + `content-start`; moldura com scroll interno;
+  `GridCell` recebe `size={escala}`.
+
+### Estado
+- `npm run build` (Client) ✓ — sem erros novos (mantém-se o aviso pré-existente `#ff8080; !important`).
+- Falta **verificação visual**: arrastar/largar com tiles quadrados, o slider a mudar tamanho/densidade
+  em cada dispositivo, e o scroll interno quando há muitos botões.
