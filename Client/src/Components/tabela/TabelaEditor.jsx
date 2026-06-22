@@ -4,7 +4,7 @@ import {
     useDraggable, useDroppable,
 } from "@dnd-kit/core";
 import ButtonTile from "./ButtonTile";
-import { DISPOSITIVOS, TAMANHOS, COL_OPCOES, COR_CATEGORIA } from "./constants";
+import { DISPOSITIVOS, COL_OPCOES, COR_CATEGORIA } from "./constants";
 
 // remove nulls finais (mantém o array compacto)
 const trim = (arr) => { let e = arr.length; while (e > 0 && arr[e - 1] == null) e--; return arr.slice(0, e); };
@@ -26,15 +26,14 @@ const LibraryTile = ({ botao, apiUrl }) => {
 const GridCell = ({ pos, botao, apiUrl, size, onRemove }) => {
     const { setNodeRef: dropRef, isOver } = useDroppable({ id: `cell:${pos}`, data: { tipo: "cell", pos } });
     const drag = useDraggable({ id: `slot:${pos}`, data: { tipo: "slot", pos }, disabled: !botao });
-    const t = TAMANHOS[size] || TAMANHOS.M;
     return (
-        <div ref={dropRef} className="relative" style={{ minHeight: t.min }}>
+        <div ref={dropRef} className="relative h-full min-h-0">
             {botao ? (
                 <div ref={drag.setNodeRef} {...drag.listeners} {...drag.attributes}
                     className={`group relative h-full cursor-grab active:cursor-grabbing ${drag.isDragging ? "opacity-40" : ""}`}>
-                    <ButtonTile botao={botao} apiUrl={apiUrl} size={size} />
+                    <ButtonTile botao={botao} apiUrl={apiUrl} size={size} fill />
                     <button onClick={(e) => { e.stopPropagation(); onRemove(pos); }}
-                        className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-error text-on-error flex items-center justify-center shadow opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-error text-on-error flex items-center justify-center shadow opacity-0 group-hover:opacity-100 transition-opacity z-10"
                         aria-label="Remover">
                         <span className="material-symbols-outlined text-[16px]">close</span>
                     </button>
@@ -52,6 +51,26 @@ const Segment = ({ ativo, onClick, children }) => (
         {children}
     </button>
 );
+
+// ---- biblioteca (droppable para remover) — fora do componente para não perder o foco da pesquisa ----
+const LibDrop = ({ children }) => {
+    const { setNodeRef } = useDroppable({ id: "lib", data: { tipo: "lib" } });
+    return <div ref={setNodeRef} className="w-full lg:w-[430px] shrink-0 bg-surface-container rounded-[24px] p-5 flex flex-col">{children}</div>;
+};
+
+// ---- zona de lixo (só visível durante o arrasto) ----
+const TrashZone = ({ visible }) => {
+    const { setNodeRef, isOver } = useDroppable({ id: "trash", data: { tipo: "trash" } });
+    return (
+        <div ref={setNodeRef}
+            className={`fixed left-1/2 -translate-x-1/2 bottom-6 z-50 flex items-center gap-2 px-6 py-3 rounded-full border-2 border-dashed shadow-lg transition-all duration-200
+                ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"}
+                ${isOver ? "bg-error text-on-error border-error scale-105" : "bg-surface-container-high text-on-surface-variant border-outline-variant"}`}>
+            <span className="material-symbols-outlined">delete</span>
+            <span className="text-staff-mono font-semibold">{isOver ? "Solte para eliminar" : "Arraste aqui para eliminar"}</span>
+        </div>
+    );
+};
 
 const TabelaEditor = ({
     utenteNome, botoes, apiUrl,
@@ -90,7 +109,7 @@ const TabelaEditor = ({
         setCells((prev) => {
             const next = prev.slice();
             const need = (i) => { while (next.length <= i) next.push(null); };
-            if (o.tipo === "lib") {                       // largar na biblioteca = remover
+            if (o.tipo === "trash" || o.tipo === "lib") { // largar no lixo ou na biblioteca = remover
                 if (a.tipo === "slot") { need(a.pos); next[a.pos] = null; }
                 return trim(next);
             }
@@ -115,11 +134,6 @@ const TabelaEditor = ({
         if (tipo === "slot") return botaoPorId[cells[Number(val)]];
         return null;
     })();
-
-    const LibDrop = ({ children }) => {
-        const { setNodeRef } = useDroppable({ id: "lib", data: { tipo: "lib" } });
-        return <div ref={setNodeRef} className="w-full lg:w-[430px] shrink-0 bg-surface-container rounded-[24px] p-5 flex flex-col">{children}</div>;
-    };
 
     return (
         <DndContext sensors={sensors} onDragStart={({ active }) => setActiveId(active.id)} onDragEnd={onDragEnd} onDragCancel={() => setActiveId(null)}>
@@ -178,7 +192,7 @@ const TabelaEditor = ({
                 {/* ===== Corpo ===== */}
                 <div className="flex-1 flex flex-col lg:flex-row gap-5 p-4 sm:p-6 overflow-auto">
                     {/* Canvas */}
-                    <div className="flex-1 bg-surface-container-lowest rounded-[24px] shadow-sm p-5 sm:p-6 flex flex-col min-w-0">
+                    <div className="flex-1 bg-surface-container-lowest rounded-[24px] shadow-sm p-5 sm:p-6 flex flex-col min-w-0 min-h-0">
                         <div className="flex items-end justify-between gap-3 mb-4">
                             <div>
                                 <h2 className="font-display-lg text-xl font-bold text-on-surface">Quadro Atual</h2>
@@ -194,10 +208,11 @@ const TabelaEditor = ({
                         </div>
 
                         {/* Borda a simular o dispositivo */}
-                        <div className="flex-1 flex items-start justify-center overflow-auto">
-                            <div className="w-full rounded-[20px] border-2 border-outline-variant bg-surface p-3 sm:p-4"
+                        <div className="flex-1 flex items-center justify-center overflow-auto min-h-0">
+                            <div className="w-full rounded-[20px] border-2 border-outline-variant bg-surface p-3 sm:p-4 overflow-hidden"
                                 style={{ maxWidth: dev.maxW, aspectRatio: dev.aspect }}>
-                                <div className="grid gap-3 h-full content-start" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+                                <div className="grid gap-3 h-full min-h-0"
+                                    style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))` }}>
                                     {Array.from({ length: slots }).map((_, pos) => (
                                         <GridCell key={pos} pos={pos} botao={botaoPorId[cells[pos]]} apiUrl={apiUrl} size={size}
                                             onRemove={(p) => setCells((prev) => trim(prev.map((v, i) => (i === p ? null : v))))} />
@@ -232,6 +247,8 @@ const TabelaEditor = ({
                     </LibDrop>
                 </div>
             </div>
+
+            <TrashZone visible={!!activeId} />
 
             <DragOverlay dropAnimation={null}>
                 {activeBotao ? <div style={{ width: 96 }}><ButtonTile botao={activeBotao} apiUrl={apiUrl} size="P" /></div> : null}

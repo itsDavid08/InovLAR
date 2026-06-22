@@ -1433,3 +1433,49 @@ Design — alinhado aos tokens M3 já usados no staff.
   o `MainContent` ler o `config` guardado em vez do layout hardcoded.
 - Cuidado conhecido: o aviso `[esbuild css minify] ... #ff8080; !important` é **pré-existente**
   (CSS antigo), não vem desta mudança.
+
+---
+
+## 2026-06-22 — Editor de tabelas: dispositivo na horizontal, foco da pesquisa e zona de lixo
+
+### Contexto
+Três problemas reportados no editor (`Client/src/Components/tabela/`):
+1. A moldura do dispositivo (telemóvel/tablet/PC) aparecia **na vertical** e os botões **transbordavam**
+   para fora da moldura em todos os tamanhos.
+2. A barra de pesquisa da biblioteca **perdia o foco** logo após a 1ª tecla (só escrevia uma letra).
+3. Não havia forma de **eliminar** botões já colocados além do `x` no hover (pouco descoberto).
+
+### Decisão
+1. **Horizontal + caber sempre.** Todos os modelos passam a paisagem em `constants.js` (smartphone
+   `9/16`→`16/9`; tablet `4/3` e pc `16/10` já eram horizontais). A grelha passa a ter
+   `gridTemplateRows: repeat(rows, minmax(0,1fr))` dentro de uma moldura com `aspect-ratio` fixo +
+   `overflow-hidden`: a grelha **divide a altura do "ecrã"** e os tiles encolhem para nunca saírem da
+   moldura, em vez de empurrarem o conteúdo para fora (antes era `content-start` + `minHeight` por
+   célula → transbordo). Os tiles ganham um modo **`fill`** no `ButtonTile` (imagem
+   `flex-1 min-h-0 object-contain`, texto `truncate`) para escalarem dentro da célula; a biblioteca e o
+   `DragOverlay` mantêm tamanho fixo via `minHeight` (prop `fill` ausente). Trade-off assumido: muitos
+   botões → tiles pequenos, mas sempre contidos — também serve de feedback de que o quadro está cheio
+   para aquele dispositivo.
+2. **Foco da pesquisa.** Causa-raiz: `LibDrop` estava **definido dentro** de `TabelaEditor`. Cada
+   `setBusca` criava uma **nova identidade de componente** → o React desmontava/remontava a subárvore
+   (incluindo o `<input>`) → perda de foco no DOM. Movido para o **nível do módulo** (identidade
+   estável entre renders). `LibraryTile`/`GridCell`/`Segment` já estavam fora — só o `LibDrop` falhava.
+3. **Zona de lixo.** Novo componente `TrashZone` (droppable `id:"trash"`), barra flutuante `fixed` no
+   fundo, visível só durante o arrasto (`visible={!!activeId}`, via opacity/translate). O `onDragEnd`
+   trata `o.tipo === "trash"` em conjunto com o `lib` já existente (largar = `null` no slot). Mantém-se
+   também a remoção ao largar na biblioteca (inofensivo) e o `x` no hover.
+
+### Alterações — `Client/src/Components/tabela/`
+- **`constants.js`** — `DISPOSITIVOS` em paisagem (smartphone `16/9` `cols 4`/`rows 3`/`maxW 640`;
+  tablet `4/3` `cols 5`/`rows 4`/`maxW 760`; pc `16/10` `cols 6`/`rows 4`/`maxW 1000`).
+- **`ButtonTile.jsx`** — prop `fill`: quando ligada, `h-full min-h-0` + imagem `flex-1 object-contain`
+  com `maxHeight: t.icon` (escala para caber); quando ausente, comportamento antigo (`minHeight: t.min`).
+- **`TabelaEditor.jsx`** — grelha com `gridTemplateRows` `1fr` + moldura `overflow-hidden`; wrapper
+  `items-center` + cadeia `min-h-0`; `GridCell` sem `minHeight` (`h-full min-h-0` + `fill`, `z-10` no
+  botão remover); `LibDrop` e novo `TrashZone` ao nível do módulo; `onDragEnd` apaga também no lixo;
+  import de `TAMANHOS` removido (deixou de ser usado aqui).
+
+### Estado
+- `npm run build` (Client) ✓ — sem erros novos (mantém-se o aviso pré-existente `#ff8080; !important`).
+- Falta **verificação visual** no browser: arrastar/colocar/trocar, encolhimento dos tiles em cada
+  dispositivo, pesquisa a escrever continuamente, e eliminar via zona de lixo.

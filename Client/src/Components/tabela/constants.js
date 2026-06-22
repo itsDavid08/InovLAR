@@ -1,7 +1,7 @@
 export const DISPOSITIVOS = {
-    smartphone: { label: "Telemóvel", icon: "smartphone", colsDefault: 3, rowsDefault: 6, maxW: 380, aspect: "9 / 16" },
-    tablet:     { label: "Tablet",    icon: "tablet",     colsDefault: 4, rowsDefault: 5, maxW: 640, aspect: "4 / 3" },
-    pc:         { label: "PC",        icon: "computer",   colsDefault: 6, rowsDefault: 5, maxW: 980, aspect: "16 / 10" },
+    smartphone: { label: "Telemóvel", icon: "smartphone", colsDefault: 4, rowsDefault: 3, maxW: 640, aspect: "16 / 9" },
+    tablet:     { label: "Tablet",    icon: "tablet",     colsDefault: 5, rowsDefault: 4, maxW: 760, aspect: "4 / 3" },
+    pc:         { label: "PC",        icon: "computer",   colsDefault: 6, rowsDefault: 4, maxW: 1000, aspect: "16 / 10" },
 };
 
 // Tamanho do tile: altura mínima, tamanho do ícone e do texto.
