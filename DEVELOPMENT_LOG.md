@@ -1479,3 +1479,29 @@ Três problemas reportados no editor (`Client/src/Components/tabela/`):
 - `npm run build` (Client) ✓ — sem erros novos (mantém-se o aviso pré-existente `#ff8080; !important`).
 - Falta **verificação visual** no browser: arrastar/colocar/trocar, encolhimento dos tiles em cada
   dispositivo, pesquisa a escrever continuamente, e eliminar via zona de lixo.
+
+---
+
+## 2026-06-22 — Editor de tabelas: biblioteca com scroll interno (página não cresce)
+
+### Contexto
+A coluna da biblioteca de botões (`LibDrop`) fazia a **página crescer** quando tinha muitos botões. A
+lista interna já tinha `flex-1 overflow-y-auto`, mas **nada limitava a altura**: a raiz era
+`min-h-screen` (pode crescer) e nenhum antepassado fixava a altura, por isso o `overflow-y-auto` nunca
+engatava e a biblioteca empurrava a página para baixo.
+
+### Decisão
+Fixar a altura do editor ao ecrã **só no desktop** (`lg:`) e fechar a cadeia flex com `min-h-0`, para o
+scroll passar a ser **interno à biblioteca**. No mobile (`< lg`) mantém-se o comportamento atual (a
+página rola normalmente, biblioteca empilhada por baixo do canvas).
+
+### Alterações — `Client/src/Components/tabela/TabelaEditor.jsx`
+- **Raiz** — `min-h-screen` → `min-h-screen lg:h-screen lg:overflow-hidden` (fixa a 100vh no desktop).
+- **Corpo** — adiciona `min-h-0` e `lg:overflow-hidden` (mantém `overflow-auto` para o mobile).
+- **`LibDrop`** — adiciona `min-h-0` (deixa a coluna encolher para a lista interna rolar).
+- **Lista de botões** — `flex-1 overflow-y-auto` → `flex-1 min-h-0 overflow-y-auto`.
+
+### Estado
+- `npm run build` (Client) ✓ — sem erros novos (mantém-se o aviso pré-existente `#ff8080; !important`).
+- Desktop: barra superior fixa, biblioteca com scroll interno, página não cresce. Mobile inalterado.
+  Falta **verificação visual** no browser (desktop com muitos botões + mobile).

@@ -55,7 +55,7 @@ const Segment = ({ ativo, onClick, children }) => (
 // ---- biblioteca (droppable para remover) — fora do componente para não perder o foco da pesquisa ----
 const LibDrop = ({ children }) => {
     const { setNodeRef } = useDroppable({ id: "lib", data: { tipo: "lib" } });
-    return <div ref={setNodeRef} className="w-full lg:w-[430px] shrink-0 bg-surface-container rounded-[24px] p-5 flex flex-col">{children}</div>;
+    return <div ref={setNodeRef} className="w-full lg:w-[430px] shrink-0 bg-surface-container rounded-[24px] p-5 flex flex-col min-h-0">{children}</div>;
 };
 
 // ---- zona de lixo (só visível durante o arrasto) ----
@@ -137,7 +137,7 @@ const TabelaEditor = ({
 
     return (
         <DndContext sensors={sensors} onDragStart={({ active }) => setActiveId(active.id)} onDragEnd={onDragEnd} onDragCancel={() => setActiveId(null)}>
-            <div className="min-h-screen flex flex-col bg-background text-on-background font-body-md">
+            <div className="min-h-screen lg:h-screen lg:overflow-hidden flex flex-col bg-background text-on-background font-body-md">
                 {/* ===== Barra superior (M3) ===== */}
                 <div className="h-16 shrink-0 bg-surface-container-lowest border-b border-surface-variant flex items-center justify-between px-4 sm:px-6 gap-3">
                     <div className="flex items-center gap-3 min-w-0">
@@ -190,7 +190,7 @@ const TabelaEditor = ({
                 </div>
 
                 {/* ===== Corpo ===== */}
-                <div className="flex-1 flex flex-col lg:flex-row gap-5 p-4 sm:p-6 overflow-auto">
+                <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-5 p-4 sm:p-6 overflow-auto lg:overflow-hidden">
                     {/* Canvas */}
                     <div className="flex-1 bg-surface-container-lowest rounded-[24px] shadow-sm p-5 sm:p-6 flex flex-col min-w-0 min-h-0">
                         <div className="flex items-end justify-between gap-3 mb-4">
@@ -230,7 +230,7 @@ const TabelaEditor = ({
                             <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Procurar botão…"
                                 className="w-full pl-10 pr-4 py-2.5 rounded-full bg-surface-container-lowest border-none focus:ring-2 focus:ring-primary text-body-md text-on-surface" />
                         </div>
-                        <div className="flex-1 overflow-y-auto -mr-2 pr-2">
+                        <div className="flex-1 min-h-0 overflow-y-auto -mr-2 pr-2">
                             {grupos.map(([cat, lista]) => (
                                 <div key={cat} className="mb-4">
                                     <div className="flex items-center gap-2 mb-2">
