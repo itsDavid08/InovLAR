@@ -4,7 +4,7 @@ import {
     useDraggable, useDroppable,
 } from "@dnd-kit/core";
 import ButtonTile from "./ButtonTile";
-import { DISPOSITIVOS, COR_CATEGORIA, COLS_MIN, COLS_MAX, escalaPorColunas } from "./constants";
+import { DISPOSITIVOS, COR_CATEGORIA, escalaPorColunas } from "./constants";
 
 // remove nulls finais (mantém o array compacto)
 const trim = (arr) => { let e = arr.length; while (e > 0 && arr[e - 1] == null) e--; return arr.slice(0, e); };
@@ -27,7 +27,7 @@ const GridCell = ({ pos, botao, apiUrl, size, onRemove }) => {
     const { setNodeRef: dropRef, isOver } = useDroppable({ id: `cell:${pos}`, data: { tipo: "cell", pos } });
     const drag = useDraggable({ id: `slot:${pos}`, data: { tipo: "slot", pos }, disabled: !botao });
     return (
-        <div ref={dropRef} className="relative aspect-square">
+        <div ref={dropRef} className="relative h-full min-h-0">
             {botao ? (
                 <div ref={drag.setNodeRef} {...drag.listeners} {...drag.attributes}
                     className={`group relative h-full cursor-grab active:cursor-grabbing ${drag.isDragging ? "opacity-40" : ""}`}>
@@ -86,8 +86,10 @@ const TabelaEditor = ({
     const botaoPorId = useMemo(() => Object.fromEntries(botoes.map((b) => [b.id, b])), [botoes]);
 
     const dev = DISPOSITIVOS[dispositivo];
+    const [aspW, aspH] = dev.aspect.split("/").map((n) => parseFloat(n));
     const lastFilled = cells.reduce((m, v, i) => (v != null ? i : m), -1);
-    const rows = Math.max(dev.rowsDefault, Math.ceil((lastFilled + 1) / cols) + 1);
+    // linhas que enchem a moldura mantendo as células ~quadradas (sem scroll nem espaço em branco)
+    const rows = Math.max(Math.round((cols * aspH) / aspW), Math.ceil((lastFilled + 1) / cols), 1);
     const slots = rows * cols;
 
     const escala = escalaPorColunas(cols);
@@ -195,9 +197,9 @@ const TabelaEditor = ({
                             <div className="flex items-center gap-3">
                                 <span className="material-symbols-outlined text-on-surface-variant text-[18px]" title="Mais pequenos">apps</span>
                                 <input
-                                    type="range" min={COLS_MIN} max={COLS_MAX}
-                                    value={COLS_MIN + COLS_MAX - cols}
-                                    onChange={(e) => handleCols(COLS_MIN + COLS_MAX - Number(e.target.value))}
+                                    type="range" min={dev.colsMin} max={dev.colsMax}
+                                    value={dev.colsMin + dev.colsMax - cols}
+                                    onChange={(e) => handleCols(dev.colsMin + dev.colsMax - Number(e.target.value))}
                                     className="w-32 sm:w-44 accent-primary cursor-pointer"
                                     aria-label="Tamanho dos botões"
                                 />
@@ -206,11 +208,11 @@ const TabelaEditor = ({
                         </div>
 
                         {/* Borda a simular o dispositivo */}
-                        <div className="flex-1 flex items-start justify-center overflow-hidden min-h-0">
-                            <div className="w-full rounded-[20px] border-2 border-outline-variant bg-surface p-3 sm:p-4 overflow-y-auto overflow-x-hidden"
+                        <div className="flex-1 flex items-center justify-center overflow-hidden min-h-0">
+                            <div className="w-full rounded-[20px] border-2 border-outline-variant bg-surface p-3 sm:p-4 overflow-hidden"
                                 style={{ maxWidth: dev.maxW, aspectRatio: dev.aspect, maxHeight: "100%" }}>
-                                <div className="grid gap-3 content-start"
-                                    style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+                                <div className="grid gap-3 h-full"
+                                    style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))` }}>
                                     {Array.from({ length: slots }).map((_, pos) => (
                                         <GridCell key={pos} pos={pos} botao={botaoPorId[cells[pos]]} apiUrl={apiUrl} size={escala}
                                             onRemove={(p) => setCells((prev) => trim(prev.map((v, i) => (i === p ? null : v))))} />

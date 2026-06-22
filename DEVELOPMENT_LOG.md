@@ -1547,3 +1547,40 @@ mais pequeno = cabem mais; (c) **valores intermédios** (entre "muito grande" e 
 - `npm run build` (Client) ✓ — sem erros novos (mantém-se o aviso pré-existente `#ff8080; !important`).
 - Falta **verificação visual**: arrastar/largar com tiles quadrados, o slider a mudar tamanho/densidade
   em cada dispositivo, e o scroll interno quando há muitos botões.
+
+---
+
+## 2026-06-22 — Editor de tabelas: grelha enche a moldura (sem scroll nem espaço em branco)
+
+### Contexto
+A versão anterior (tiles `aspect-square` de tamanho fixo + scroll interno) deixava **espaço em branco**
+por baixo da grelha (os quadrados fixos não enchiam a altura da moldura) e o utilizador **não quer
+scroll** — o objetivo dos tamanhos variáveis é caber tudo num ecrã. Além disso, no PC os botões ficavam
+**demasiado grandes** mesmo no extremo "pequeno" (máx. 8 colunas: `1000/8 ≈ 125px`).
+
+### Decisão
+- **A grelha enche sempre a moldura** com `h-full` + `grid-template-rows: repeat(rows, 1fr)` e a moldura
+  a `overflow-hidden` → **sem scroll e sem espaço em branco**, para qualquer `rows`.
+- **`rows` calculado geometricamente** a partir das colunas e do rácio da moldura
+  (`round(cols * aspH / aspW)`), para as células ficarem **~quadradas** ao encher (ex.: PC 16/10 a 8
+  colunas → 5 linhas → células `125×125` exatas). Garante-se também `>= ceil((lastFilled+1)/cols)` para
+  nunca esconder botões já colocados (se exceder a capacidade, as células comprimem em vez de fazer
+  scroll). Removido o `aspect-square` e o `rowsDefault`.
+- **Limites de colunas por dispositivo** (`colsMin`/`colsMax` em `DISPOSITIVOS`), com **PC até 14
+  colunas** (`1000/14 ≈ 71px`) para permitir botões bem mais pequenos. O slider passa a usar
+  `dev.colsMin`/`dev.colsMax` (substitui as constantes globais `COLS_MIN`/`COLS_MAX`, removidas).
+- **Compromisso assumido:** encher a moldura tem **prioridade** sobre o quadrado perfeito — as células
+  ficam *quase* quadradas em algumas combinações de colunas/rácio. Foi o pedido explícito ("não quero
+  scroll nem espaço em branco").
+
+### Alterações
+- **`constants.js`** — `DISPOSITIVOS` com `colsMin`/`colsMax` (PC 2–14, tablet 2–10, telemóvel 2–8);
+  `rowsDefault` e as constantes `COLS_MIN`/`COLS_MAX` removidas.
+- **`TabelaEditor.jsx`** — import sem `COLS_MIN`/`COLS_MAX`; `rows` geométrico (parse do `aspect` para
+  `aspW`/`aspH`); `GridCell` volta a `h-full min-h-0` (sai `aspect-square`); slider usa `dev.colsMin/
+  colsMax`; moldura `overflow-hidden` + grelha `h-full` com `gridTemplateRows` `1fr`.
+
+### Estado
+- `npm run build` (Client) ✓ — sem erros novos (mantém-se o aviso pré-existente `#ff8080; !important`).
+- Falta **verificação visual**: confirmar que não há vazio nem scroll em cada dispositivo, e que no PC
+  o slider no extremo pequeno dá botões suficientemente pequenos.
