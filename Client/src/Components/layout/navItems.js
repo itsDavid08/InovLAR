@@ -8,6 +8,7 @@
 export const NAV_ITEMS = [
     { label: "Utentes", short: "Utentes", icon: "groups", path: "/staff" },
     { label: "Botões", short: "Botões", icon: "tune", path: "/editBotoes" },
+    { label: "Tabelas", short: "Tabelas", icon: "grid_view", path: "/staff/tabelas" },
     { label: "Pedidos Pendentes", short: "Pedidos", icon: "pending_actions", path: "/staff/pedidos" },
     { label: "Alterar Password", short: "Password", icon: "lock", path: "/staff/alterar-password" },
 ];

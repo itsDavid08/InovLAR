@@ -17,6 +17,16 @@ const tabelaController = {
         }
     },
 
+    // GET /tabelas — todos os layouts (leitura pública, como os outros GET)
+    listarTabelas: async (req, res) => {
+        try {
+            const linhas = await TabelaLayout.findAll({ attributes: ["utenteId", "dispositivo", "config"] });
+            res.json(linhas);
+        } catch (erro) {
+            res.status(500).json({ mensagem: erro.message });
+        }
+    },
+
     // PUT /utentes/:id/tabela/:dispositivo  — só staff
     saveTabela: async (req, res) => {
         try {

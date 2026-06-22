@@ -9,6 +9,7 @@ const pedidoController = require('../controller/pedidoController');
 const viewController = require('../controller/viewController');
 const authController = require('../controller/authController');
 const tabelaController = require('../controller/tabelaController');
+const tabelaPadraoController = require('../controller/tabelaPadraoController');
 const { requireStaff } = require('../middleware/auth');
 const { notificarAlteracaoBD } = require('../Util/socketIO');
 
@@ -77,8 +78,16 @@ router.post('/utentes/:utenteId/botoes/:botaoId', requireStaff, utenteController
 router.delete('/utentes/:utenteId/botoes/:botaoId', requireStaff, utenteController.desassociarBotao);
 
 // Layout da tabela por dispositivo
+router.get('/tabelas', tabelaController.listarTabelas);
 router.get('/utentes/:id/tabela/:dispositivo', tabelaController.getTabela);
 router.put('/utentes/:id/tabela/:dispositivo', requireStaff, tabelaController.saveTabela);
+
+// Templates de tabela ("defaults")
+router.get('/tabelas-padrao', tabelaPadraoController.listar);
+router.post('/tabelas-padrao', requireStaff, tabelaPadraoController.criar);
+router.put('/tabelas-padrao/:id', requireStaff, tabelaPadraoController.atualizar);
+router.delete('/tabelas-padrao/:id', requireStaff, tabelaPadraoController.eliminar);
+router.post('/tabelas-padrao/:id/aplicar', requireStaff, tabelaPadraoController.aplicar);
 
 // Upload e eliminação de imagens de botões
 router.post('/imagesBotoes/upload', requireStaff, uploadImagemBotao.single('imagem'), (req, res) => {

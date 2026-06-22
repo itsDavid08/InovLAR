@@ -5,7 +5,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const {setIO} = require('./Util/socketIO.js');
 const { COOKIE_SECRET } = require('./config/auth');
-const { StaffAuth, TabelaLayout } = require('./models');
+const { StaffAuth, TabelaLayout, TabelaPadrao } = require('./models');
 const app = express();
 const port = 3000;
 const router = require('./routes/route.js');
@@ -17,6 +17,7 @@ const DIST = path.join(__dirname, '../Client/dist');
 // Garante que as tabelas existem (cria só se não existirem, não mexe nas outras).
 StaffAuth.sync();
 TabelaLayout.sync();
+TabelaPadrao.sync();
 
 // Configuração do armazenamento
 const storage = multer.diskStorage({

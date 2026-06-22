@@ -73,6 +73,7 @@ const TrashZone = ({ visible }) => {
 };
 
 const TabelaEditor = ({
+    titulo = "Gerir Tabela",
     utenteNome, botoes, apiUrl,
     dispositivo, setDispositivo,
     cols, setCols, size, setSize,
@@ -152,7 +153,7 @@ const TabelaEditor = ({
                         <span className="w-9 h-9 rounded-xl bg-primary text-on-primary hidden sm:flex items-center justify-center">
                             <span className="material-symbols-outlined text-[22px]">grid_view</span>
                         </span>
-                        <h1 className="font-display-lg text-xl font-bold text-on-surface truncate">Gerir Tabela</h1>
+                        <h1 className="font-display-lg text-xl font-bold text-on-surface truncate">{titulo}</h1>
                         <span className="text-on-surface-variant truncate hidden sm:inline">— {utenteNome}</span>
                     </div>
                     <div className="flex items-center gap-2 sm:gap-4">

@@ -21,6 +21,13 @@ const GerirTabela = () => {
     });
     const [dirty, setDirty] = useState({});
     const [saving, setSaving] = useState(false);
+    const [feedback, setFeedback] = useState(null); // { tipo: "ok" | "erro", texto }
+
+    useEffect(() => {
+        if (!feedback) return;
+        const t = setTimeout(() => setFeedback(null), 3000);
+        return () => clearTimeout(t);
+    }, [feedback]);
 
     // Carrega os três layouts ao abrir.
     useEffect(() => {
@@ -55,6 +62,9 @@ const GerirTabela = () => {
             const alterados = Object.keys(dirty).filter((d) => dirty[d]);
             await Promise.all(alterados.map((d) => saveTabela(id, d, configs[d])));
             setDirty({});
+            setFeedback({ tipo: "ok", texto: alterados.length > 1 ? "Tabelas guardadas" : "Tabela guardada" });
+        } catch {
+            setFeedback({ tipo: "erro", texto: "Erro ao guardar. Tenta novamente." });
         } finally {
             setSaving(false);
         }
@@ -65,23 +75,32 @@ const GerirTabela = () => {
     }
 
     return (
-        <TabelaEditor
-            utenteNome={utente.nome}
-            botoes={botoes}
-            apiUrl={apiUrl}
-            dispositivo={dispositivo}
-            setDispositivo={setDispositivo}
-            cols={cfg.cols}
-            setCols={(v) => patch({ cols: v })}
-            size={cfg.size}
-            setSize={(v) => patch({ size: v })}
-            cells={cfg.cells}
-            setCells={(fn) => patch({ cells: typeof fn === "function" ? fn(cfg.cells) : fn })}
-            dirty={Object.values(dirty).some(Boolean)}
-            saving={saving}
-            onSave={onSave}
-            onVoltar={() => navigate("/staff")}
-        />
+        <>
+            <TabelaEditor
+                utenteNome={utente.nome}
+                botoes={botoes}
+                apiUrl={apiUrl}
+                dispositivo={dispositivo}
+                setDispositivo={setDispositivo}
+                cols={cfg.cols}
+                setCols={(v) => patch({ cols: v })}
+                size={cfg.size}
+                setSize={(v) => patch({ size: v })}
+                cells={cfg.cells}
+                setCells={(fn) => patch({ cells: typeof fn === "function" ? fn(cfg.cells) : fn })}
+                dirty={Object.values(dirty).some(Boolean)}
+                saving={saving}
+                onSave={onSave}
+                onVoltar={() => navigate("/staff")}
+            />
+            {feedback && (
+                <div role="status"
+                    className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-5 py-3 rounded-full shadow-lg text-staff-mono font-semibold ${feedback.tipo === "ok" ? "bg-primary text-on-primary" : "bg-error text-on-error"}`}>
+                    <span className="material-symbols-outlined text-[20px]">{feedback.tipo === "ok" ? "check_circle" : "error"}</span>
+                    {feedback.texto}
+                </div>
+            )}
+        </>
     );
 };
 

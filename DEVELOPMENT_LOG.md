@@ -1614,3 +1614,110 @@ precisar de saber as colunas nem de unidades de container.
 ### Estado
 - `npm run build` (Client) ✓ — sem erros novos (mantém-se o aviso pré-existente `#ff8080; !important`).
 - Valores `4%`/`6%` facilmente afináveis. Falta **verificação visual** (botões pequenos vs grandes).
+
+---
+
+## 2026-06-22 — Gerir Tabela: feedback do "Guardar" (Fase 1 da view de Tabelas)
+
+### Contexto
+O "Guardar" gravava na tabela **`TabelaLayouts`** (modelo `TabelaLayout`; uma linha por
+`(utenteId, dispositivo)`, `config` JSON `{cols,size,cells}`) via `PUT /utentes/:id/tabela/:dispositivo`,
+mas no front-end **não havia feedback**: o `onSave` só fazia `setDirty({})`/`setSaving(false)` e **não
+tratava erros** (se o `PUT` falhasse, parecia guardado). Primeira fase do plano maior (view "Tabelas" +
+templates `TabelaPadrao` — ainda por fazer).
+
+### Decisão
+Snackbar M3 leve (sem componente novo), renderizado no `GerirTabela` ao lado do `<TabelaEditor>` (é
+`position: fixed`, não precisa de estar dentro do layout do editor). Sucesso = `primary`, erro =
+`error`, auto-dismiss em 3s. **No erro mantém-se o `dirty`** (botão "Guardar" continua ativo para repetir).
+`mutate` já lança em `!res.ok` ([client.js:26]), por isso o `catch` apanha.
+
+### Alterações — `Client/src/Pages/GerirTabela.jsx`
+- Estado `feedback` + `useEffect` de auto-dismiss (3s).
+- `onSave` com `try/catch`: sucesso → `{tipo:"ok"}` ("Tabela(s) guardada(s)"); erro → `{tipo:"erro"}`
+  sem limpar `dirty`.
+- Return embrulhado em fragmento com o snackbar (`fixed bottom-6`).
+
+### Estado
+- `npm run build` (Client) ✓ — sem erros novos (aviso CSS `#ff8080; !important` pré-existente).
+- Próximas fases (planeadas, não feitas): **Fase 2** — `GET /tabelas` bulk + `TabelaPreview` +
+  view de leitura; **Fase 3** — modelo `TabelaPadrao` + editor em modo template + "Aplicar a utente".
+  Caveat: `Utente` não tem foto de perfil (usar avatar de inicial por agora).
+
+---
+
+## 2026-06-22 — View "Tabelas" (Fase 2): lista com preview + mini-seletor de dispositivo
+
+### Contexto
+Segunda fase do plano da view de Tabelas: uma página de leitura (estilo "Utentes"/"Botões") que mostra,
+por utente, uma **pré-visualização** da tabela e permite abrir o editor. Decisões fechadas com o
+utilizador: **avatar de inicial** (o `Utente` não tem foto de perfil) e **mini-seletor por card**
+(telemóvel/tablet/PC trocam a preview no próprio card).
+
+### Decisão
+- **Endpoint bulk `GET /tabelas`** (público, como os outros GET) devolve **todas** as linhas de
+  `TabelaLayouts` (`utenteId`, `dispositivo`, `config`). O cliente junta com `utentes`/`botoes` que já
+  vêm do `Context` → evita N×3 pedidos e não duplica dados.
+- **`TabelaPreview`** reaproveita a lógica de linhas do editor (`round(cols*aspH/aspW)`), read-only,
+  espaçamentos em % (escala com o tamanho). Estado vazio = "Sem botões".
+- **Mini-seletor por card**: mostra os 3 dispositivos; os sem layout ficam esbatidos mas clicáveis
+  (preview "Sem botões"). Default = primeiro com layout. `stopPropagation` para o clique nos ícones não
+  navegar.
+- Clicar no card → `/gerir-tabela/:id` (abre no dispositivo **default `pc`** do editor; abrir já no
+  selecionado fica como follow-up opcional — exigiria passar o device ao `GerirTabela`).
+- Sem botão "Novo" aqui — a criação de **templates** é a Fase 3.
+
+### Alterações
+- **Backend:** `tabelaController.listarTabelas` (`findAll`); `route.js` → `GET /tabelas` (antes da rota
+  `/utentes/:id/tabela/:dispositivo`, sem conflito).
+- **Frontend (novos):** `Client/src/Components/tabela/TabelaPreview.jsx`; `Client/src/Pages/TabelasView.jsx`.
+- **Frontend (editados):** `api/tabela.js` (`fetchTabelas`); `layout/navItems.js` (item "Tabelas",
+  ícone `grid_view`, a seguir a "Botões" → barra inferior mobile passa a 5 itens); `App.jsx` (import +
+  rota `/staff/tabelas` protegida por `RequireStaff`).
+
+### Estado
+- `npm run build` (Client) ✓ e `node --check` (controller + route) ✓ — sem erros.
+- Falta **verificação visual**: a lista, o mini-seletor a trocar o dispositivo, e o clique a abrir o
+  editor. Confirmar também que a barra inferior mobile aguenta os 5 itens.
+
+---
+
+## 2026-06-22 — Templates de tabela (Fase 3): modelo `TabelaPadrao`, editor de template e "Aplicar"
+
+### Contexto
+Terceira e última fase: criar **tabelas default (templates)** reutilizáveis e aplicá-las a utentes.
+Decisões fechadas com o utilizador: **template cobre os 3 dispositivos** (não um por dispositivo) e
+**Aplicar substitui** os layouts existentes (com confirmação). Feita em 3 sub-passos.
+
+### Decisão
+- **Modelo `TabelaPadrao`** (`{ nome, configs }`, `configs` = `{ smartphone, tablet, pc }`, cada um no
+  formato do `TabelaLayout`). Independente do utente (sem `utenteId`) — em vez de reaproveitar
+  `TabelaLayout` com sentinela.
+- **Editor reutilizado:** `TabelaEditor` ganha só uma prop `titulo` (default "Gerir Tabela"). Novo
+  `GerirTemplate` espelha o `GerirTabela`, mas carrega/guarda um template (1 linha com os 3 configs);
+  o **nome** define-se na criação/renomear (na view), não dentro do editor.
+- **Aplicar = snapshot:** copia o `configs` do template para os `TabelaLayout` do utente (upsert por
+  dispositivo), **não** liga — editar o template depois não mexe nas tabelas já aplicadas. Notifica por
+  socket (`notificarAlteracaoBD`).
+- **UI:** secção "Modelos" na view de Tabelas com `Novo Template` (`window.prompt` → cria vazio → abre
+  editor), cards com preview + mini-seletor + Editar/Aplicar/Renomear/Eliminar, e **modal** para escolher
+  o utente ao aplicar (confirmação de substituição). `window.prompt`/`confirm` para nomes — sem mais
+  componentes.
+
+### Alterações
+- **Backend (novos):** `models/TabelaPadrao.js`, `controller/tabelaPadraoController.js`
+  (listar/criar/atualizar/eliminar/aplicar).
+- **Backend (editados):** `models/index.js` (regista o modelo), `main.js` (`TabelaPadrao.sync()`),
+  `routes/route.js` (5 rotas `/tabelas-padrao*`; GET público, escritas com `requireStaff`).
+- **Frontend (novos):** `api/tabelasPadrao.js`; `Pages/GerirTemplate.jsx`.
+- **Frontend (editados):** `Components/tabela/TabelaEditor.jsx` (prop `titulo`); `App.jsx` (rota
+  `/gerir-template/:id`); `Pages/TabelasView.jsx` (secção "Modelos" + modal de aplicar + snackbar;
+  `devsComLayout` passou a receber o objeto de configs para servir utentes e templates).
+
+### Estado
+- `npm run build` (Client) ✓ e `node --check` (5 ficheiros backend) ✓ — sem erros.
+- Falta **verificação visual end-to-end**: criar template → editar layout dos 3 dispositivos → guardar →
+  aplicar a um utente → confirmar que a tabela do utente passou a ser a do template. (Tabela
+  `TabelaPadroes` criada por `sync()` no 1º arranque do servidor.)
+- **Fase 4 (ainda por fazer):** `MainContent` (tabuleiro do utente) ler o `config` guardado em vez do
+  layout hardcoded.
