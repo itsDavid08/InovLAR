@@ -27,7 +27,7 @@ const GridCell = ({ pos, botao, apiUrl, size, onRemove }) => {
     const { setNodeRef: dropRef, isOver } = useDroppable({ id: `cell:${pos}`, data: { tipo: "cell", pos } });
     const drag = useDraggable({ id: `slot:${pos}`, data: { tipo: "slot", pos }, disabled: !botao });
     return (
-        <div ref={dropRef} className="relative h-full min-h-0">
+        <div ref={dropRef} className="relative h-full min-h-0" style={{ padding: "4%" }}>
             {botao ? (
                 <div ref={drag.setNodeRef} {...drag.listeners} {...drag.attributes}
                     className={`group relative h-full cursor-grab active:cursor-grabbing ${drag.isDragging ? "opacity-40" : ""}`}>
@@ -209,9 +209,9 @@ const TabelaEditor = ({
 
                         {/* Borda a simular o dispositivo */}
                         <div className="flex-1 flex items-center justify-center overflow-hidden min-h-0">
-                            <div className="w-full rounded-[20px] border-2 border-outline-variant bg-surface p-3 sm:p-4 overflow-hidden"
+                            <div className="w-full rounded-[20px] border-2 border-outline-variant bg-surface p-2 sm:p-3 overflow-hidden"
                                 style={{ maxWidth: dev.maxW, aspectRatio: dev.aspect, maxHeight: "100%" }}>
-                                <div className="grid gap-3 h-full"
+                                <div className="grid h-full"
                                     style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))` }}>
                                     {Array.from({ length: slots }).map((_, pos) => (
                                         <GridCell key={pos} pos={pos} botao={botaoPorId[cells[pos]]} apiUrl={apiUrl} size={escala}

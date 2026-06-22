@@ -1584,3 +1584,33 @@ scroll** — o objetivo dos tamanhos variáveis é caber tudo num ecrã. Além d
 - `npm run build` (Client) ✓ — sem erros novos (mantém-se o aviso pré-existente `#ff8080; !important`).
 - Falta **verificação visual**: confirmar que não há vazio nem scroll em cada dispositivo, e que no PC
   o slider no extremo pequeno dá botões suficientemente pequenos.
+
+---
+
+## 2026-06-22 — Editor de tabelas: espaçamento proporcional (padding/gap em %)
+
+### Contexto
+Com botões grandes o espaçamento parecia bem, mas com botões pequenos (slider no extremo) o `gap-3`
+(12px) e o `p-1` internos — **fixos em px** — ficavam enormes em proporção (parecia "3/4 padding") numa
+célula de ~70px.
+
+### Decisão
+Tornar o espaçamento **proporcional ao tamanho da célula**, usando **percentagens** (que o CSS resolve
+sempre relativamente à largura do bloco), em vez de px fixos. Assim escala sozinho com o slider, sem
+precisar de saber as colunas nem de unidades de container.
+- **Espaço entre botões** deixa de ser o `gap` da grelha e passa a vir do **inset da célula**
+  (`GridCell` com `padding: 4%`) → gap visível = `2 × 4%` da largura da célula.
+- **Padding interno do tile** (`fill`) passa de `p-1` para `padding: 6%`, e o espaço ícone/texto para
+  `gap: 4%`.
+- **Bezel do dispositivo** passa a constante e menor (`p-3 sm:p-4` → `p-2 sm:p-3`) — é a "borda" física,
+  não deve escalar com os botões.
+
+### Alterações
+- **`ButtonTile.jsx`** — modo `fill`: remove `gap-1 p-1`, usa `style={{ padding: "6%", gap: "4%" }}`
+  (o modo não-`fill` mantém `gap-1 p-1` + `minHeight`).
+- **`TabelaEditor.jsx`** — `GridCell` com `style={{ padding: "4%" }}`; grelha sem `gap-3` (`grid h-full`);
+  bezel `p-2 sm:p-3`.
+
+### Estado
+- `npm run build` (Client) ✓ — sem erros novos (mantém-se o aviso pré-existente `#ff8080; !important`).
+- Valores `4%`/`6%` facilmente afináveis. Falta **verificação visual** (botões pequenos vs grandes).
