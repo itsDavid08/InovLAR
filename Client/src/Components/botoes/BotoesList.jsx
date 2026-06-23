@@ -53,7 +53,7 @@ const BotoesList = ({
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
                 {botoesFiltrados.map((botao) => (
                     <div
                         key={botao.id}
@@ -77,14 +77,14 @@ const BotoesList = ({
                             />
                         </div>
                         <div className="flex items-center flex-col text-center mt-2 sm:mt-4">
-                            <div className="w-20 h-20 sm:w-24 sm:h-24 lg:w-28 lg:h-28 mb-2 sm:mb-3 rounded-2xl bg-secondary-container text-on-secondary-container flex items-center justify-center overflow-hidden border-2 border-surface-container shadow-sm transform group-hover:scale-105 transition-transform duration-300">
+                            <div className="w-16 h-16 sm:w-20 sm:h-20 lg:w-24 lg:h-24 mb-2 rounded-2xl bg-secondary-container text-on-secondary-container flex items-center justify-center overflow-hidden border-2 border-surface-container shadow-sm transform group-hover:scale-105 transition-transform duration-300">
                                 <img
                                     src={apiUrl + (botao.imagem || '/imagesBotoes/default.png')}
                                     alt={botao.nome}
                                     className="w-full h-full object-cover"
                                 />
                             </div>
-                            <h3 className="font-headline-md text-base sm:text-lg lg:text-xl font-bold text-on-surface mb-1 truncate w-full" title={botao.nome}>
+                            <h3 className="font-headline-md text-sm sm:text-base lg:text-lg font-bold text-on-surface mb-1 truncate w-full" title={botao.nome}>
                                 {botao.nome}
                             </h3>
                             <span className="mt-2 bg-surface-container text-on-surface-variant px-2 py-1 rounded text-xs font-staff-mono font-bold truncate max-w-full">

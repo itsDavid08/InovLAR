@@ -86,7 +86,7 @@ const RequestListDrawer = ({ visible, onClose }) => {
                     </div>
                 </div>
             </div>
-            {isOpen && <div className="drawer-overlay" onClick={handleClose} />}
+            <div className={`drawer-overlay ${isOpen ? "open" : ""}`} onClick={handleClose} />
         </>
     );
 };

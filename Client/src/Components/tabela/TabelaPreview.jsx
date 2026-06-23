@@ -12,14 +12,14 @@ const TabelaPreview = ({ config, dispositivo, botaoPorId, apiUrl }) => {
 
     if (lastFilled < 0) {
         return (
-            <div className="w-full rounded-xl border border-dashed border-outline-variant bg-surface-container-low flex items-center justify-center text-on-surface-variant"
+            <div className="w-full rounded-md border border-dashed border-outline-variant bg-surface-container-low flex items-center justify-center text-on-surface-variant"
                 style={{ aspectRatio: dev.aspect }}>
                 <span className="font-staff-mono text-staff-mono">Sem botões</span>
             </div>
         );
     }
     return (
-        <div className="w-full rounded-xl border border-outline-variant bg-surface overflow-hidden" style={{ aspectRatio: dev.aspect }}>
+        <div className="w-full rounded-md border border-outline-variant bg-surface overflow-hidden" style={{ aspectRatio: dev.aspect }}>
             <div className="grid h-full p-[3%]"
                 style={{ gridTemplateColumns: `repeat(${cols}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)` }}>
                 {Array.from({ length: slots }).map((_, i) => {

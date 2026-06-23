@@ -1,7 +1,9 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { useContext, useEffect, useState, useRef } from "react";
+import { useContext, useEffect, useState, useRef, useMemo } from "react";
 import { Context } from "../ContextProvider";
 import { staffLogout } from "../api/auth";
+import { fetchTabela } from "../api/tabela";
+import { DISPOSITIVOS } from "../Components/tabela/constants";
 import RequestListDrawer from "../Components/RequestListDrawer.jsx";
 import SuccessModal from "../Components/SuccessModal.jsx";
 import PinPrompt from "../Components/PinPrompt.jsx";
@@ -21,6 +23,33 @@ const MainContent = () => {
     const [isModalVisible, setModalVisible] = useState(false);
     const [isPinVisible, setPinVisible] = useState(false);
     const navigate = useNavigate();
+
+    const botaoPorId = useMemo(() => Object.fromEntries(botoes.map((b) => [b.id, b])), [botoes]);
+
+    // Dispositivo pelo tamanho do ecrã (responsivo)
+    const tipoDispositivo = () => { const w = window.innerWidth; return w < 600 ? "smartphone" : w < 1024 ? "tablet" : "pc"; };
+    const [dispositivo, setDispositivo] = useState(tipoDispositivo);
+    useEffect(() => {
+        const onResize = () => setDispositivo(tipoDispositivo());
+        window.addEventListener("resize", onResize);
+        return () => window.removeEventListener("resize", onResize);
+    }, []);
+
+    // Layouts guardados deste utente, por dispositivo
+    const [configs, setConfigs] = useState({});
+    useEffect(() => {
+        let vivo = true;
+        Promise.all(Object.keys(DISPOSITIVOS).map(async (d) => [d, await fetchTabela(id, d).catch(() => null)]))
+            .then((entradas) => { if (vivo) setConfigs(Object.fromEntries(entradas)); });
+        return () => { vivo = false; };
+    }, [id]);
+
+    const temCells = (c) => c && Array.isArray(c.cells) && c.cells.some((v) => v != null);
+    // dispositivo do ecrã detetado; se vazio, o primeiro configurado; senão null (→ fallback)
+    const dispositivoAtivo = temCells(configs[dispositivo])
+        ? dispositivo
+        : (Object.keys(DISPOSITIVOS).find((k) => temCells(configs[k])) || null);
+    const configAtiva = dispositivoAtivo ? configs[dispositivoAtivo] : null;
 
     // Saída da gaiola: o PIN correto reabre o console de staff; cancelar/errar
     // mantém o utente no seu tabuleiro.
@@ -133,6 +162,68 @@ const MainContent = () => {
             </div>
         </div>
     );
+
+    const overlays = (
+        <>
+            <SuccessModal visible={isModalVisible} onClose={hideModal} />
+            <RequestListDrawer visible={isDrawerVisible} onClose={hideDrawer} utente={utente} />
+            {isPinVisible && (<PinPrompt onSuccess={handleSairGaiola} onCancel={() => setPinVisible(false)} />)}
+        </>
+    );
+
+    const renderTabela = (config, disp) => {
+        const cols = config.cols || 4;
+        const cells = config.cells || [];
+        const [aspW, aspH] = (DISPOSITIVOS[disp]?.aspect || "16 / 10").split("/").map((n) => parseFloat(n));
+        const lastFilled = cells.reduce((m, v, i) => (v != null ? i : m), -1);
+        // mesmas linhas que o editor (geométrico) → reproduz o desenho, não estica os botões
+        const rows = Math.max(Math.round((cols * aspH) / aspW), Math.ceil((lastFilled + 1) / cols), 1);
+        const slots = rows * cols;
+        return (
+            <div className="flex-grow-1"
+                style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)`, gap: "1%", minHeight: 0 }}>
+                {Array.from({ length: slots }).map((_, i) => {
+                    const b = botaoPorId[cells[i]];
+                    if (!b) return <div key={i} className="rounded-2xl border-2 border-dashed border-outline-variant bg-surface-container-low" />;
+                    const isSOS = b.categoria === "SOS" || b.nome === "SOS";
+                    return (
+                        <button key={i}
+                            onClick={() => (isSOS ? handleButtonSOS() : handleButtonClick(b))}
+                            aria-label={b.nome}
+                            className={`btn d-flex flex-column align-items-center justify-content-center rounded overflow-hidden ${isSOS ? "btn-danger" : "btn-light border border-secondary"}`}
+                            style={{ minHeight: 0, padding: "2%" }}>
+                            <img src={apiUrl + (b.imagem || "/imagesBotoes/default.png")} alt={b.nome}
+                                style={{ flex: "1 1 0", minHeight: 0, maxWidth: "100%", objectFit: "contain" }} />
+                            <span className="fw-bold text-center text-truncate w-100" style={{ fontSize: "min(2.5vw, 16px)" }}>{b.nome}</span>
+                        </button>
+                    );
+                })}
+            </div>
+        );
+    };
+
+    if (configAtiva) {
+        return (
+            <div className="container-fluid p-2 d-flex flex-column" style={{ height: "100vh" }}>
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                    <div className="d-flex align-items-center gap-2">
+                        {utente?.pedidos?.length > 0 && (
+                            <button className="btn btn-success fw-bold" onClick={cancelarTodosPedidos}>Estou Bem</button>
+                        )}
+                        <div style={{ position: "relative", display: "inline-block" }}>
+                            <button className="btn btn-outline-dark" onClick={showDrawer}>☰</button>
+                            {utente?.pedidos?.length > 0 && (
+                                <span style={{ position: "absolute", top: 2, right: 2, width: 12, height: 12, background: "red", borderRadius: "50%", border: "2px solid white" }} />
+                            )}
+                        </div>
+                    </div>
+                    <button className="btn btn-outline-light text-muted border-0" style={{ opacity: 0.4 }} onClick={() => setPinVisible(true)} aria-label="Acesso staff">🛠</button>
+                </div>
+                {renderTabela(configAtiva, dispositivoAtivo)}
+                {overlays}
+            </div>
+        );
+    }
 
     return (
         <div className="container-fluid p-2 d-flex flex-column justify-content-center" style={{ minHeight: "100vh" }}>

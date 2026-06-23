@@ -18,7 +18,7 @@ import { useState, useRef, useEffect } from "react";
 //    a ser o cartão, por isso clicar no corpo do cartão alterna o menu sem piscar.
 //
 // Conteúdo do cabeçalho do sheet (mobile): `title`, `subtitle`, `thumbnail` (opcionais).
-const ItemMenu = ({ onEdit, onDelete, onManage, open: openProp, onOpenChange, boundaryRef, title, subtitle, thumbnail }) => {
+const ItemMenu = ({ onEdit, onDelete, onManage, onAplicar, onRenomear, open: openProp, onOpenChange, boundaryRef, title, subtitle, thumbnail }) => {
     const [openLocal, setOpenLocal] = useState(false);
     const controlado = openProp !== undefined;
     const open = controlado ? openProp : openLocal;
@@ -67,6 +67,24 @@ const ItemMenu = ({ onEdit, onDelete, onManage, open: openProp, onOpenChange, bo
                 <span className={`material-symbols-outlined ${compact ? "text-[18px]" : "text-[22px]"}`}>edit</span>
                 <span className={`font-staff-mono ${compact ? "text-staff-mono" : "text-base"}`}>Editar</span>
             </button>
+            {onAplicar && (
+                <button
+                    onClick={(e) => escolher(e, onAplicar)}
+                    className={`w-full flex items-center gap-3 px-4 text-left text-on-surface hover:bg-surface-container transition-colors ${compact ? "py-2.5" : "py-3"}`}
+                >
+                    <span className={`material-symbols-outlined ${compact ? "text-[18px]" : "text-[22px]"}`}>person_add</span>
+                    <span className={`font-staff-mono ${compact ? "text-staff-mono" : "text-base"}`}>Aplicar</span>
+                </button>
+            )}
+            {onRenomear && (
+                <button
+                    onClick={(e) => escolher(e, onRenomear)}
+                    className={`w-full flex items-center gap-3 px-4 text-left text-on-surface hover:bg-surface-container transition-colors ${compact ? "py-2.5" : "py-3"}`}
+                >
+                    <span className={`material-symbols-outlined ${compact ? "text-[18px]" : "text-[22px]"}`}>drive_file_rename_outline</span>
+                    <span className={`font-staff-mono ${compact ? "text-staff-mono" : "text-base"}`}>Renomear</span>
+                </button>
+            )}
             <button
                 onClick={(e) => escolher(e, onDelete)}
                 className={`w-full flex items-center gap-3 px-4 text-left text-error hover:bg-error-container hover:text-on-error-container transition-colors ${compact ? "py-2.5" : "py-3"}`}

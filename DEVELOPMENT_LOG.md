@@ -1721,3 +1721,139 @@ Decisões fechadas com o utilizador: **template cobre os 3 dispositivos** (não 
   `TabelaPadroes` criada por `sync()` no 1º arranque do servidor.)
 - **Fase 4 (ainda por fazer):** `MainContent` (tabuleiro do utente) ler o `config` guardado em vez do
   layout hardcoded.
+
+---
+
+## 2026-06-22 — Tabuleiro do utente usa a tabela personalizada (Fase 4)
+
+### Contexto
+Última fase: o tabuleiro do utente (`MainContent`) passa a renderizar a **tabela personalizada** guardada
+(`TabelaLayout`), em vez do layout fixo por categorias. Requisito forte do utilizador: **não partir** a
+criação de pedidos, que já funciona. Decisões fechadas: **responsivo** (o layout segue o tamanho do ecrã)
+e **SOS dentro da grelha** (sem botão SOS fixo).
+
+### Contexto técnico encontrado
+- O tabuleiro antigo mostrava **todos** os `botoes` (globais) agrupados por categoria; o pedido nasce em
+  `handleButtonClick` → `postPedido({ emergencia:false, utenteId, botaoId })`. O **SOS** é `id=1`,
+  `nome:"SOS"`, `categoria:"SOS"`, com `handleButtonSOS` (toggle de emergência). `Botao` **não** tem campo
+  `emergencia` — o SOS identifica-se por nome/categoria.
+
+### Decisão
+- **Fallback seguro:** o ramo de render antigo fica **intacto**. Só quando existe layout com células
+  (`configAtiva`) é que se renderiza a grelha nova. Sem layout → tabuleiro por categorias como antes.
+- **Responsivo:** `tipoDispositivo()` mapeia `window.innerWidth` (<600 telemóvel, <1024 tablet, senão PC),
+  com listener de `resize`. Usa o layout do dispositivo detetado; se vazio, o **primeiro** configurado;
+  senão `null` → fallback.
+- **Carregamento:** `MainContent` busca os 3 layouts do utente (`fetchTabela(id, d)`) no arranque/`id`.
+  Enquanto não carrega, `configAtiva` é `null` → mostra o tabuleiro antigo (sem flash de erro, sem partir).
+- **Grelha-pedido:** reaproveita o mesmo modelo (`cols` + `cells` row-major); `rows = ceil(filled/cols)`
+  a encher o ecrã com `1fr` (sem scroll). Célula com botão → `handleButtonClick`; se for o SOS
+  (`categoria==="SOS"||nome==="SOS"`) → `handleButtonSOS` (vermelho). Célula vazia → div em branco.
+- **Pedidos inalterados:** mesmos `handleButtonClick`/`handleButtonSOS`/`cancelarTodosPedidos`; controlos
+  "Estou Bem"/gaveta/🛠 mantidos num cabeçalho compacto. Modais extraídos para `overlays` (reutilizados no
+  ramo novo; o ramo antigo mantém os seus inline).
+
+### Alterações — `Client/src/Pages/MainContent.jsx`
+- Imports: `useMemo`, `fetchTabela`, `DISPOSITIVOS`.
+- `botaoPorId`; deteção responsiva de `dispositivo` (+resize); fetch dos `configs`; `temCells`/`configAtiva`.
+- `overlays` + `renderTabela(config)`; novo ramo de `return` (grelha) **antes** do return existente
+  (que fica como fallback, sem alterações).
+
+### Estado
+- `npm run build` (Client) ✓ — sem erros novos (aviso CSS `#ff8080; !important` pré-existente).
+- Falta **verificação visual end-to-end**: utente com tabela → vê a grelha e cria pedidos (normal + SOS);
+  utente sem tabela → mantém o tabuleiro antigo. Confirmar a deteção responsiva no dispositivo real.
+- **Follow-up opcional:** atualização **ao vivo** do tabuleiro quando o staff edita/aplica com o utente já
+  no ecrã (ligar ao socket / re-fetch); por agora só carrega no arranque/troca de utente.
+
+### Correção (mesmo dia) — linhas do tabuleiro não batiam certo com o editor
+Sintoma: um layout 6×4 com 2 botões na 1ª linha aparecia no tabuleiro como **2 células esticadas a toda a
+altura** do ecrã. Causa: `renderTabela` calculava `rows = ceil(célulasPreenchidas/cols)` = 1 (só a 1ª linha
+tinha conteúdo), enquanto o **editor** usa linhas **geométricas** (`round(cols*aspH/aspW)` = 4 no PC 16/10).
+Fix: o tabuleiro passa a usar a **mesma fórmula geométrica** (com o `aspect` do `dispositivoAtivo`), por isso
+reproduz o desenho (botões no topo-direito, células vazias em branco) em vez de esticar. Acrescentado
+`dispositivoAtivo` (qual dos 3 layouts está a ser mostrado) para ir buscar o `aspect` correto.
+
+### Ajuste (mesmo dia) — células vazias mostram a grelha a tracejado
+A pedido do utilizador, as células vazias do tabuleiro do utente deixam de ficar em branco e passam a
+mostrar o **recuadro a tracejado**, igual ao editor. Em `MainContent.renderTabela`, a célula vazia
+(`if (!b)`) passou de `<div key={i} />` para
+`<div className="rounded-2xl border-2 border-dashed border-outline-variant bg-surface-container-low" />`
+— reutiliza os mesmos tokens M3 do editor, para o aspeto coincidir. `npm run build` (Client) ✓.
+
+---
+
+## 2026-06-22 — Drawer de pedidos: animação de abrir/fechar (a anterior estava partida)
+
+### Contexto
+O `RequestListDrawer` (lista de pedidos do utente, aberta pelo ☰) não animava: "saltava" para o ecrã.
+
+### Decisão
+A causa era CSS inconsistente: estado fechado em `right: -100%` mas aberto em `left: 0`, e a `transition`
+era em `left` indo de `auto → 0` (**não animável**). Trocado para animar por **`transform`** (desliza da
+**esquerda**, onde está o ☰) e overlay com **fade** por `opacity`/`pointer-events`. O componente já está
+sempre montado e só alterna a classe `open` (do `isOpen`), por isso anima a **abrir e a fechar**.
+
+### Alterações
+- **`index.css`** — `.custom-drawer`: `left: 0` + `transform: translateX(-100%)` → `.open { translateX(0) }`,
+  `transition: transform 0.3s ease`. `.drawer-overlay`: `opacity: 0` + `pointer-events: none` +
+  `transition: opacity 0.3s`; nova regra `.drawer-overlay.open { opacity: 1; pointer-events: auto }`
+  (substitui o seletor de irmão `.custom-drawer.open + .drawer-overlay`).
+- **`RequestListDrawer.jsx`** — overlay passa a estar **sempre montado** com classe condicional
+  (`drawer-overlay ${isOpen ? "open" : ""}`) em vez de `{isOpen && …}`, para o fade poder animar.
+
+### Estado
+- `npm run build` (Client) ✓. Falta confirmação visual (abrir/fechar a deslizar + fade do overlay).
+
+---
+
+## 2026-06-22 — Densidade das views de staff (cards mais pequenos, cabem mais)
+
+### Contexto
+Os cards das views de staff (Utentes, Botões, Tabelas) estavam grandes e desperdiçavam espaço em ecrãs
+largos. Pedido: itens menores para caberem mais por página.
+
+### Decisão
+Primeira passagem de densidade (afinável): **mais colunas** nos breakpoints grandes + **menos padding** +
+**elemento dominante menor** (avatar/imagem). Em ecrãs grandes: Utentes até **5** col, Botões até **6**,
+Tabelas até **4**. As previews das Tabelas encolhem sozinhas com a largura da coluna.
+
+### Alterações
+- **`StaffHome.jsx`** — grelha `…xl:grid-cols-4 2xl:grid-cols-5 gap-3`; card `p-4`→`p-3`; avatar
+  `w-14 h-14 text-[20px]`→`w-11 h-11 text-[16px]`.
+- **`BotoesList.jsx`** — grelha `grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6
+  gap-3`; imagem `…lg:w-28`→`…lg:w-24` (e `mb-3`→`mb-2`); nome `…lg:text-xl`→`…lg:text-lg`.
+- **`TabelasView.jsx`** — ambas as grelhas (Modelos e Utentes) ganham `xl:grid-cols-4` e `gap-3`.
+
+### Estado
+- `npm run build` (Client) ✓ (aviso CSS `#ff8080; !important` pré-existente). Valores (colunas/tamanhos)
+  fáceis de subir/baixar conforme o gosto após verificação visual.
+
+---
+
+## 2026-06-22 — Cards de template com o fluxo do `ItemMenu` (popover/bottom-sheet)
+
+### Contexto
+Os cards de **template** (secção "Modelos" da view de Tabelas) tinham as ações num rodapé (Editar/Aplicar
++ ícones renomear/eliminar). Pedido: mesmo fluxo dos botões — clicar no card abre um **popover** (desktop)
+ou **bottom sheet** (telemóvel) com as opções (Editar, Aplicar, Renomear, Eliminar).
+
+### Decisão
+- **`ItemMenu` ganhou 2 ações opcionais:** `onAplicar` (ícone `person_add`) e `onRenomear`
+  (`drive_file_rename_outline`), entre o "Editar" e o "Eliminar". As já existentes (`onManage`/`onEdit`/
+  `onDelete`) ficam iguais; o popover/sheet responsivo é reutilizado tal e qual.
+- **Card de template** passou a seguir o padrão da `StaffHome`/`BotoesList`: card clicável que alterna
+  `openMenuTpl` (estado no pai) + `ItemMenu` controlado com `boundaryRef`. Removido o rodapé de botões.
+  O mini-seletor de dispositivo mantém-se (com `stopPropagation` para não abrir o menu). Só os cards de
+  **template** mudaram — os dos utentes ficam como estavam.
+- O `overflow-hidden` do card não corta o popover (cabe na altura do card, que tem a preview) e o sheet é
+  `position: fixed` (escapa na mesma).
+
+### Alterações
+- **`ItemMenu.jsx`** — props `onAplicar`/`onRenomear` + 2 botões em `acoes`.
+- **`TabelasView.jsx`** — imports `useRef` + `ItemMenu`; estado `openMenuTpl`/`openTplRef`; card de
+  template reescrito (clicável + `ItemMenu`, sem rodapé).
+
+### Estado
+- `npm run build` (Client) ✓. Falta verificação visual (popover no desktop + bottom sheet no telemóvel,
+  e as 4 ações a funcionar).

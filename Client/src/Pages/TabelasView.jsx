@@ -1,8 +1,9 @@
-import { useContext, useEffect, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Context } from "../ContextProvider";
 import StaffShell from "../Components/layout/StaffShell";
 import StaffSidebar from "../Components/layout/StaffSidebar";
+import ItemMenu from "../Components/layout/ItemMenu";
 import TabelaPreview from "../Components/tabela/TabelaPreview";
 import { fetchTabelas } from "../api/tabela";
 import { fetchTabelasPadrao, criarTabelaPadrao, saveTabelaPadrao, deleteTabelaPadrao, aplicarTabelaPadrao } from "../api/tabelasPadrao";
@@ -24,6 +25,8 @@ const TabelasView = () => {
     const [dispSelTpl, setDispSelTpl] = useState({}); // por template
     const [aplicar, setAplicar] = useState(null);    // template a aplicar (abre modal)
     const [feedback, setFeedback] = useState(null);
+    const [openMenuTpl, setOpenMenuTpl] = useState(null); // template com o menu (⋮) aberto
+    const openTplRef = useRef(null);
 
     const recarregarLayouts = () => fetchTabelas().then((d) => { if (Array.isArray(d)) setLayouts(d); }).catch(() => {});
     const recarregarTemplates = () => fetchTabelasPadrao().then((d) => { if (Array.isArray(d)) setTemplates(d); }).catch(() => {});
@@ -85,33 +88,44 @@ const TabelasView = () => {
                     <span className="material-symbols-outlined">add</span> Novo Template
                 </button>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-10">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-10">
                 {templates.map((t) => {
                     const dispT = dispSelTpl[t.id] || devsComLayout(t.configs)[0] || "smartphone";
                     const comLayout = devsComLayout(t.configs);
                     return (
-                        <div key={t.id} className="bg-surface-container-lowest rounded-lg p-4 shadow-sm border border-surface-variant flex flex-col">
+                        <div key={t.id}
+                            ref={openMenuTpl === t.id ? openTplRef : null}
+                            onClick={() => setOpenMenuTpl((id) => (id === t.id ? null : t.id))}
+                            className={`bg-surface-container-lowest rounded-lg p-4 shadow-sm border border-surface-variant hover:shadow-md transition-all relative overflow-hidden cursor-pointer flex flex-col ${openMenuTpl === t.id ? "z-50" : ""}`}>
                             <div className="flex items-center justify-between mb-3 gap-2">
                                 <h3 className="font-body-xl text-body-xl font-semibold text-on-surface truncate min-w-0" title={t.nome}>{t.nome}</h3>
-                                <div className="flex bg-surface-container rounded-full p-0.5 shrink-0">
-                                    {Object.entries(DISPOSITIVOS).map(([k, d]) => {
-                                        const tem = comLayout.includes(k);
-                                        return (
-                                            <button key={k} onClick={() => setDispSelTpl((s) => ({ ...s, [t.id]: k }))} title={d.label}
-                                                className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${dispT === k ? "bg-primary text-on-primary" : tem ? "text-on-surface-variant hover:bg-surface-container-high" : "text-on-surface-variant/30"}`}>
-                                                <span className="material-symbols-outlined text-[16px]">{d.icon}</span>
-                                            </button>
-                                        );
-                                    })}
+                                <div className="flex items-center gap-1 shrink-0">
+                                    <div className="flex bg-surface-container rounded-full p-0.5" onClick={(e) => e.stopPropagation()}>
+                                        {Object.entries(DISPOSITIVOS).map(([k, d]) => {
+                                            const tem = comLayout.includes(k);
+                                            return (
+                                                <button key={k} onClick={() => setDispSelTpl((s) => ({ ...s, [t.id]: k }))} title={d.label}
+                                                    className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${dispT === k ? "bg-primary text-on-primary" : tem ? "text-on-surface-variant hover:bg-surface-container-high" : "text-on-surface-variant/30"}`}>
+                                                    <span className="material-symbols-outlined text-[16px]">{d.icon}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    <ItemMenu
+                                        open={openMenuTpl === t.id}
+                                        onOpenChange={(v) => setOpenMenuTpl(v ? t.id : null)}
+                                        boundaryRef={openTplRef}
+                                        title={t.nome}
+                                        subtitle="Template"
+                                        thumbnail={<span className="material-symbols-outlined text-[20px]">grid_view</span>}
+                                        onEdit={() => navigate(`/gerir-template/${t.id}`)}
+                                        onAplicar={() => setAplicar(t)}
+                                        onRenomear={() => onRenomear(t)}
+                                        onDelete={() => onEliminar(t)}
+                                    />
                                 </div>
                             </div>
                             <TabelaPreview config={t.configs?.[dispT]} dispositivo={dispT} botaoPorId={botaoPorId} apiUrl={apiUrl} />
-                            <div className="flex items-center gap-2 mt-3">
-                                <button onClick={() => navigate(`/gerir-template/${t.id}`)} className="flex-1 py-2 rounded-full font-staff-mono text-staff-mono bg-surface-container-high text-on-surface hover:bg-surface-variant transition-colors">Editar</button>
-                                <button onClick={() => setAplicar(t)} className="flex-1 py-2 rounded-full font-staff-mono text-staff-mono bg-primary text-on-primary hover:bg-primary-container hover:text-on-primary-container transition-colors">Aplicar</button>
-                                <button onClick={() => onRenomear(t)} title="Renomear" className="w-9 h-9 rounded-full text-on-surface-variant hover:bg-surface-container-high flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-[18px]">edit</span></button>
-                                <button onClick={() => onEliminar(t)} title="Eliminar" className="w-9 h-9 rounded-full text-error hover:bg-error/10 flex items-center justify-center shrink-0"><span className="material-symbols-outlined text-[18px]">delete</span></button>
-                            </div>
                         </div>
                     );
                 })}
@@ -131,7 +145,7 @@ const TabelasView = () => {
                         placeholder="Procurar utente..." type="text" />
                 </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {utentesFiltrados.map((u) => {
                     const disp = dispSel[u.id] || devsComLayout(porUtente[u.id])[0] || "smartphone";
                     const comLayout = devsComLayout(porUtente[u.id]);

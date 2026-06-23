@@ -74,19 +74,19 @@ const StaffHome = () => {
             </div>
 
             {/* Bento Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
                 {utentesFiltrados.map((utente) => (
                     <div
                         key={utente.id}
                         ref={openMenuId === utente.id ? openCardRef : null}
                         onClick={() => setOpenMenuId((id) => (id === utente.id ? null : utente.id))}
-                        className={`bg-surface-container-lowest rounded-lg p-4 shadow-sm border border-surface-variant hover:shadow-md transition-all relative overflow-hidden group cursor-pointer ${openMenuId === utente.id ? "z-50" : ""}`}
+                        className={`bg-surface-container-lowest rounded-lg p-3 shadow-sm border border-surface-variant hover:shadow-md transition-all relative overflow-hidden group cursor-pointer ${openMenuId === utente.id ? "z-50" : ""}`}
                     >
                         {/* z-50 quando aberto: eleva o cartão e o seu sheet/backdrop acima
                             dos vizinhos e da barra inferior. */}
                         <div className="absolute top-0 left-0 w-full h-1 bg-status-green"></div>
                         <div className="flex items-start justify-between mb-3">
-                            <div className="w-14 h-14 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center font-display-lg text-[20px] border-2 border-surface-container">
+                            <div className="w-11 h-11 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center font-display-lg text-[16px] border-2 border-surface-container">
                                 {utente.nome.split(' ').map(name => name[0]).slice(0, 2).join('')}
                             </div>
                             <div className="flex items-center gap-1">
