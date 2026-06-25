@@ -1,6 +1,7 @@
 // Layout "criar/editar botão" do editor de botões: formulário + pré-visualização.
 // Componente presentacional — todo o estado e a lógica vivem em EditBotoes.
 import { useRef } from "react";
+import CategoriaDropdown from "./CategoriaDropdown";
 
 const BotaoForm = ({
     mode,
@@ -15,6 +16,7 @@ const BotaoForm = ({
     onImageSelect,
     onUploadImagem,
     onDeleteImagem,
+    onAddCategoria,
     onCancel,
 }) => {
     const uploadInputRef = useRef(null);
@@ -70,20 +72,12 @@ const BotaoForm = ({
                         <label className="block text-on-surface-variant font-label-xl text-sm font-semibold mb-2">
                             Categoria
                         </label>
-                        <input
-                            type="text"
-                            list="categorias-lista"
+                        <CategoriaDropdown
                             value={formData.categoria}
-                            onChange={e => setFormData({ ...formData, categoria: e.target.value })}
-                            required
-                            className="w-full px-4 py-3 rounded-lg bg-surface-container border border-outline-variant focus:border-primary focus:ring-2 focus:ring-primary focus:outline-none transition-all text-on-surface"
-                            placeholder="Selecione ou escreva uma categoria"
+                            categorias={categoriasDisponiveis}
+                            onChange={(cat) => setFormData({ ...formData, categoria: cat })}
+                            onAddCategoria={onAddCategoria}
                         />
-                        <datalist id="categorias-lista">
-                            {categoriasDisponiveis.map((cat, index) => (
-                                <option key={index} value={cat} />
-                            ))}
-                        </datalist>
                     </div>
 
                     <div>

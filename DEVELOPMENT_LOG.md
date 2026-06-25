@@ -1857,3 +1857,243 @@ ou **bottom sheet** (telemóvel) com as opções (Editar, Aplicar, Renomear, Eli
 ### Estado
 - `npm run build` (Client) ✓. Falta verificação visual (popover no desktop + bottom sheet no telemóvel,
   e as 4 ações a funcionar).
+
+---
+
+## 2026-06-22 — Editor de tabelas: tap-to-place (Passo A; pinch-zoom é o Passo B)
+
+### Contexto
+Para facilitar a edição no telemóvel (o arrastar é mau no toque), introduzir **clicar-para-selecionar →
+clicar-para-colocar**, com a animação pedida (linha tracejada a mexer = "marching ants"). Decidido:
+**tap-to-place sempre ativo** (telemóvel + desktop, coexiste com o arrastar). O **pinch-zoom** fica para
+o Passo B.
+
+### Decisão
+- **Coexiste com o drag** sem trocar de sensor: o `PointerSensor` tem `distance: 6`, por isso um toque
+  sem movimento dispara `onClick` (selecionar/colocar) e só um movimento >6px inicia o arrastar.
+- **Seleção** num estado `selecionado` = `{tipo:"lib", botaoId}` ou `{tipo:"slot", pos}`. Clicar na
+  biblioteca seleciona o botão; clicar numa célula vazia coloca; numa célula cheia troca/substitui;
+  clicar num botão colocado (sem seleção) seleciona-o para mover; clicar no mesmo cancela. `onDragStart`
+  limpa a seleção. A lógica de `setCells` espelha a do `onDragEnd`.
+- **Marching ants:** overlay SVG (`<svg class="ants-svg"><rect/></svg>`) com a geometria/animação em CSS
+  (propriedades SVG via CSS: `x/y/width/height/rx` + `stroke-dashoffset` animado). Segue os cantos
+  arredondados (`rx:14px`) e a cor `primary` (via `currentColor`).
+
+### Alterações
+- **`index.css`** — `.ants-svg` + `.ants-svg rect` + `@keyframes marching-ants`.
+- **`TabelaEditor.jsx`** — componente `MarchingAnts`; `LibraryTile`/`GridCell` com `selecionado`+`onSelect`/
+  `onCellClick`; estado `selecionado` + `aoSelecionarLib`/`aoClicarCelula`; `onDragStart` limpa seleção;
+  props ligadas na grelha e na biblioteca.
+
+### Estado
+- `npm run build` (Client) ✓. Falta verificação visual (selecionar/colocar/mover + a animação).
+- **Passo B (a seguir):** pinch-zoom (dois dedos) — `MouseSensor`+`TouchSensor` (delay) para separar
+  tap/drag/pinch no toque, estado `zoom` + `transform: scale` na moldura com scroll.
+
+### Passo B — pinch-zoom (dois dedos)
+- **Separação de gestos:** trocado `PointerSensor` por **`MouseSensor`** (rato, `distance:6`) +
+  **`TouchSensor`** (`delay:200`, `tolerance:8`). No toque: tap rápido → colocar (tap-to-place);
+  manter premido → arrastar; dois dedos → zoom (o movimento do pinch excede a `tolerance` e **cancela** o
+  arrastar). No rato, o arrastar fica como antes.
+- **Zoom:** estado `zoom` (1–3) + `zoomRef` (para o handler não depender de re-render). Listeners de
+  `touchstart/move/end/cancel` **não-passivos** (via `addEventListener`, para poder `preventDefault`)
+  no wrapper da moldura (`frameWrapRef`); a distância entre os 2 dedos define o fator. Aplica-se com
+  `transform: scale(zoom)` na moldura.
+- **Scroll/pan:** wrapper com `overflow-auto` + `touch-action: pan-x pan-y` (pan com 1 dedo, sem zoom de
+  página). Camada intermédia `min-h-full flex justify-center` separa o centrar do scroll (evita o bug
+  flex-center+overflow que cortava o topo ao ampliar). Botão **"1:1"** flutuante repõe o zoom (cartão do
+  canvas passou a `relative`).
+
+### Estado (Passo B)
+- `npm run build` (Client) ✓. Falta **verificação no telemóvel real**: pinch a ampliar/reduzir, pan com
+  scroll, e confirmar que tap/long-press/pinch não se atrapalham (sobretudo o tap-to-place após tocar).
+
+---
+
+## 2026-06-22 — Todos os utentes com tabela: template predefinido + backfill (Fase A de 4)
+
+### Contexto
+Objetivo (do utilizador): garantir que **todos** os utentes têm tabela ao entrar no tabuleiro, para poder
+**remover o tabuleiro antigo por categorias**. Plano em 4 fases: **A** seeder do template "Predefinida"
+(converte o tabuleiro antigo para o novo formato) + backfill; **B** criar utente com template obrigatório
+(+ corrigir `createUtente` que não devolvia resposta); **C** remover o fallback por categorias no
+`MainContent`; **D** renomear para `TabuleiroComunicacao` + rota ofuscada `/t/:token` (fixa por utente).
+
+### Decisão (Fase A)
+- **Seeder no arranque** (não migração — o projeto usa `sync()`): `Server/Util/seedDefaults.js`
+  - `garantirTemplatePadrao()` — só se **não existir nenhum** `TabelaPadrao`: lê os `Botao` reais,
+    agrupa por categoria (ordem `SOS, Sinto-me, Necessidades, Tecnologias, Chamar`, cada secção numa nova
+    linha → sobram brancos, aceitável) e cria a "Predefinida" com `configs` para os 3 dispositivos.
+  - `backfillTabelas()` — aplica o **primeiro** template aos utentes com **zero** `TabelaLayout` (não
+    sobrescreve quem já tem). Idempotente; corre em todos os arranques.
+- `main.js` passa a **await** dos `sync()` e depois `seedDefaults()`.
+
+### Alterações
+- **Novo:** `Server/Util/seedDefaults.js`.
+- **`Server/main.js`** — IIFE async: `await sync()` (StaffAuth/TabelaLayout/TabelaPadrao) + `seedDefaults()`.
+
+### Estado
+- `node --check` ✓ nos dois ficheiros. Falta **arrancar o servidor** para confirmar que a "Predefinida" é
+  criada (instalação fresca) e que utentes sem tabela ficam com layout. (Na BD atual já há templates → o
+  seeder não cria; o backfill aplica o 1º template aos utentes sem tabela.)
+- Edge conhecido: instalação 100% nova sem botões semeados → template vazio (editar depois).
+
+---
+
+## 2026-06-22 — Criar utente com template + "Criar do zero" + popup de alterações por guardar (Fase B)
+
+### Contexto
+Fase B do plano: ao criar utente, escolher um **template** (dropdown) — ou um botão **"Criar do zero"**
+que cria o utente e abre logo o editor da tabela dele. E corrigir o `createUtente` (não devolvia resposta).
+O utilizador pediu ainda um **popup de "alterações por guardar"** no editor (Guardar / Descartar / Cancelar).
+
+### Decisão
+- **Backend `createUtente`:** lê `nome/quarto/templateId`; cria o utente; se houver `templateId`, copia
+  os `configs` do template para os `TabelaLayout` (upsert por dispositivo); **devolve `201` com o utente**
+  (antes não enviava resposta — a request ficava pendurada e só funcionava porque o cliente navegava logo).
+- **`postUtente`** passou a **devolver o utente criado** (`res.json()`), para o "Criar do zero" obter o id.
+- **`UtenteForm`** (partilhado): renderiza o dropdown de templates + botão "Criar do zero" **só** quando
+  recebe `templates`/`onCriarNovo` (i.e., no `NewUtente`; o `EditUtente` fica igual).
+- **"Criar do zero":** valida nome+quarto, cria o utente **sem** template (tabela vazia) e navega para
+  `/gerir-tabela/:id`. Se o staff sair sem guardar, o backfill (Fase A) apanha-o no próximo arranque.
+- **Popup de saída (`GerirTabela`):** o "Voltar" passa por `handleVoltar` — se `dirty`, abre modal com
+  **Guardar e sair / Descartar e sair / Cancelar**. `onSave` passou a devolver `true/false`; em "Guardar e
+  sair" só navega se gravou (em falha mantém-se na página com o snackbar de erro).
+
+### Alterações
+- **`Server/controller/utenteController.js`** — import `TabelaPadrao`/`TabelaLayout`; `createUtente` reescrito.
+- **`Client/src/ContextProvider.jsx`** — `postUtente` devolve o utente criado.
+- **`Client/src/Components/utentes/UtenteForm.jsx`** — props `templates`/`onCriarNovo` + campo do template.
+- **`Client/src/Components/utentes/NewUtente.jsx`** — carrega templates, pré-seleciona o 1º, `handleSubmit`
+  (com template) + `handleCriarDoZero` (sem template → editor da tabela).
+- **`Client/src/Pages/GerirTabela.jsx`** — estado `confirmarSaida` + `handleVoltar`/`guardarESair`/
+  `descartarESair`; `onSave` devolve boolean; modal de confirmação.
+
+### Estado
+- `node --check` (backend) ✓ e `npm run build` (Client) ✓. Falta verificação visual: criar com template,
+  "Criar do zero" → editor, e o popup ao sair com alterações.
+- **Falta a Fase C** (remover o tabuleiro antigo por categorias no `MainContent`) e a **Fase D** (renomear
+  `TabuleiroComunicacao` + rota ofuscada `/t/:token`).
+
+---
+
+## 2026-06-22 — MainContent só usa a tabela personalizada (Fase C)
+
+### Contexto
+Com todos os utentes a terem tabela (Fase A backfill + Fase B criação), o tabuleiro antigo por categorias
+ficou redundante. Removido.
+
+### Decisão
+- **Um só `return`:** removidos o ramo `if (configAtiva)` + o tabuleiro antigo (renderSection + secções
+  Sinto-me/Necessidades/Tecnologias/Chamar + SOS fixos). Agora: cabeçalho (Estou Bem/gaveta/🛠) + conteúdo
+  condicional + `overlays`.
+- **Conteúdo:** `!carregado` → "A carregar…"; senão `configAtiva` → grelha (`renderTabela`); senão
+  **estado "Sem tabela configurada"** (rede de segurança para o caso raro de um utente sem layout).
+- Adicionado `carregado` (set após o fetch dos 3 layouts) para **não piscar** o estado "sem tabela"
+  durante o carregamento.
+- Removidos os consts de categoria (`botoesSintoMe/...Chamar`); **mantido** `SOS_BUTTON` (usado por
+  `handleButtonSOS`). Os pedidos (`handleButtonClick`/`handleButtonSOS`) ficam intactos.
+
+### Alterações — `Client/src/Pages/MainContent.jsx`
+- Removidos os 4 filtros de categoria e o `renderSection`; estado `carregado`; `return` único com
+  carregar/grelha/sem-tabela.
+
+### Estado
+- `npm run build` (Client) ✓. Falta verificação visual (utente com tabela → grelha; sem tabela → mensagem).
+- **Falta a Fase D:** renomear `MainContent` → `TabuleiroComunicacao` + rota ofuscada `/t/:token` (fixa por
+  utente) — a tratar à parte, com o detalhe da ofuscação e o impacto na navegação/PIN/gaiola.
+
+---
+
+## 2026-06-22 — TabuleiroComunicacao + rota ofuscada `/:token` (Fase D — fim do plano)
+
+### Contexto
+Renomear o `MainContent` (nome inicial, pouco descritivo) para `TabuleiroComunicacao` e mudar a URL de
+`/main/:id` para um `/<número>` fixo e ofuscado por utente — para um curioso com acesso à web não entrar
+facilmente, mas o utente não precisar de autenticar (tab fixada que abre direto na sua tabela).
+
+### Decisão
+- **Ofuscação (`Client/src/utils/utenteToken.js`):** cifra de **Feistel de 32 bits** (bijeção, reversível
+  no cliente). `tokenDoUtente(id)` → string numérica dispersa; `idDoToken(token)` → id. **Não é segurança**
+  (a chave está no bundle) — é só dissuasão: o espaço é ~4,3 mil milhões, por isso um número ao acaso quase
+  nunca cai num utente real. Token inválido → `NaN` → `setUtenteId(NaN)` ignorado (`if (utenteId)` é falsy)
+  → estado "Sem tabela". Confirmado que `setUtenteId` dispara `fetchUtente`+`fetchPedidosUtilizador`, logo
+  o **acesso direto por URL** (tab fixada) carrega tudo só com o token.
+- **Rota na raiz `/:token`** (colocada no fim): o React Router v6 ordena por especificidade, por isso as
+  estáticas (`/login`, `/staff`, `/new-utente`, `/editBotoes`, `/`) ganham; `/:token` só apanha um segmento
+  único que não seja nenhuma delas. Alternativa `/t/:token` se houver conflito futuro.
+- **Backend inalterado** (continua a usar o id real). Fluxo gaiola/PIN igual; só muda o caminho.
+
+### Alterações
+- **Novo:** `Client/src/utils/utenteToken.js`.
+- **Renomeado:** `Pages/MainContent.jsx` → `Pages/TabuleiroComunicacao.jsx` (`git mv`); componente e
+  `export` renomeados; lê `token` do `useParams` e decodifica (`idDoToken`).
+- **`App.jsx`** — import `TabuleiroComunicacao`; rota `/main/:id` → `/:token` (no fim).
+- **`StaffHome.jsx`** — `handleOpen` navega para `/" + tokenDoUtente(utente.id)`.
+- Órfãos (`AbrirUtente`/`BindUtente`/`UtenteHome`) não tocados (fora do router; ainda referem `/main/`).
+
+### Estado
+- `npm run build` (Client) ✓ (sem erros de import → rename ok). **Plano de 4 fases concluído.**
+- Falta **verificação visual/funcional**: abrir um utente pela `StaffHome` (URL passa a `/<número>`),
+  recarregar nessa URL (carrega o utente direto), token inválido → "Sem tabela", e o PIN/gaiola na nova rota.
+
+---
+
+## 2026-06-22 — Editor de tabelas: eliminar botão por toque (zona de lixo)
+
+### Contexto
+Já havia tap-to-place (tocar para selecionar → tocar para colocar). Faltava **eliminar** da mesma forma
+(por toque), em vez de só pelo `x` no hover ou arrastar para o lixo.
+
+### Decisão
+A `TrashZone` (que só aparecia ao arrastar) passa a aparecer também quando há um **botão colocado
+selecionado** (`selecionado.tipo === "slot"`) e fica **clicável**: tocar nela elimina o selecionado.
+Continua a ser *droppable* para o arrasto. Estado vazio/lib não mostra o lixo (não há nada a eliminar).
+
+### Alterações — `Client/src/Components/tabela/TabelaEditor.jsx`
+- `TrashZone` ganha props `tap` + `onClick` (texto "Toque para eliminar" e estilo `error-container` no
+  modo toque; mantém "Arraste/Solte para eliminar" no arrasto).
+- Novo `aoEliminarSelecionado` (remove o slot selecionado + limpa a seleção).
+- Render: `visible = arrasto || slot selecionado`; `tap = slot selecionado && !arrasto`; `onClick`.
+
+### Estado
+- `npm run build` (Client) ✓. Falta verificação visual (selecionar um botão → zona de lixo aparece →
+  tocar elimina; o arrasto para o lixo continua a funcionar).
+
+---
+
+## 2026-06-24 — Campo "Categoria" do formulário de botão como dropdown (+ "Nova categoria")
+
+### Contexto
+No formulário criar/editar botão (`BotaoForm`), a "Categoria" era um `<input type="text">` com
+`<datalist>` — texto livre com sugestões. Pretendia-se um **dropdown** a sério e, dentro dele, um
+botão **"Nova categoria"** para acrescentar categorias.
+
+### Decisão
+- **Dropdown custom** (`CategoriaDropdown`), não `<select>` nativo: o nativo não permite um botão
+  "Nova categoria" no interior nem casa com o tema M3/Tailwind. Fecha ao clicar fora (mesmo padrão do
+  `ItemMenu`); reutiliza `animate-pop-in` e o ponto de cor por categoria (`COR_CATEGORIA`, fallback
+  cinza para categorias sem cor definida).
+- **"Nova categoria"** abre um campo inline (Enter confirma, Esc cancela). Em caso de duplicado
+  (case-insensitive) seleciona a existente em vez de criar outra.
+- **Lista de categorias deixa de ser fixa.** Em `EditBotoes` passa a ser derivada (`useMemo`):
+  conjunto base ∪ categorias **já usadas pelos botões** ∪ as **criadas nesta sessão**
+  (`categoriasNovas`). Assim uma categoria nova **reaparece após guardar** o botão (as categorias não
+  têm tabela própria — vivem em `botao.categoria`, coerente com o modelo existente).
+
+### Alterações — `Client/src/Components/botoes/`
+- **`CategoriaDropdown.jsx`** (novo) — dropdown + criação inline; props `value`/`categorias`/
+  `onChange`/`onAddCategoria`.
+- **`BotaoForm.jsx`** — substitui o `input`+`datalist` por `<CategoriaDropdown>`; nova prop
+  `onAddCategoria`.
+- **`EditBotoes.jsx`** — `categoriasDisponiveis` via `useMemo` (base ∪ usadas ∪ novas) em vez de
+  `useState` fixo; estado `categoriasNovas` + `handleAddCategoria` (dedup case-insensitive); passa
+  `onAddCategoria` ao `BotaoForm`. Import de `useMemo`.
+
+### Notas
+- Categoria nova fica cinza na biblioteca até se acrescentar uma cor em `COR_CATEGORIA` (`constants.js`).
+
+### Estado
+- `npm run build` (Client) ✓ (mantém só o aviso CSS pré-existente `#ff8080; !important;`).
+- Falta verificação visual (abrir dropdown, escolher categoria, criar "Nova categoria" → fica
+  selecionada e na lista; editar um botão mostra a categoria atual selecionada).

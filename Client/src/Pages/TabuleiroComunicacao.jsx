@@ -3,20 +3,18 @@ import { useContext, useEffect, useState, useRef, useMemo } from "react";
 import { Context } from "../ContextProvider";
 import { staffLogout } from "../api/auth";
 import { fetchTabela } from "../api/tabela";
+import { idDoToken } from "../utils/utenteToken";
 import { DISPOSITIVOS } from "../Components/tabela/constants";
 import RequestListDrawer from "../Components/RequestListDrawer.jsx";
 import SuccessModal from "../Components/SuccessModal.jsx";
 import PinPrompt from "../Components/PinPrompt.jsx";
 
-const MainContent = () => {
-    const { id } = useParams();
+const TabuleiroComunicacao = () => {
+    const { token } = useParams();
+    const id = idDoToken(token);
     const { utente, botoes, postPedido, updatePedido, setUtenteId, setStaffUnlocked, apiUrl } = useContext(Context);
     const audioRef = useRef(null);
 
-    const botoesSintoMe = botoes.filter(b => b.categoria === "Sinto-me");
-    const botoesNecessidades = botoes.filter(b => b.categoria === "Necessidades");
-    const botoesTecnologias = botoes.filter(b => b.categoria === "Tecnologias");
-    const botoesChamar = botoes.filter(b => b.categoria === "Chamar");
     const SOS_BUTTON = botoes.find(b => b.nome === "SOS");
 
     const [isDrawerVisible, setDrawerVisible] = useState(false);
@@ -37,15 +35,16 @@ const MainContent = () => {
 
     // Layouts guardados deste utente, por dispositivo
     const [configs, setConfigs] = useState({});
+    const [carregado, setCarregado] = useState(false);
     useEffect(() => {
         let vivo = true;
         Promise.all(Object.keys(DISPOSITIVOS).map(async (d) => [d, await fetchTabela(id, d).catch(() => null)]))
-            .then((entradas) => { if (vivo) setConfigs(Object.fromEntries(entradas)); });
+            .then((entradas) => { if (vivo) { setConfigs(Object.fromEntries(entradas)); setCarregado(true); } });
         return () => { vivo = false; };
     }, [id]);
 
     const temCells = (c) => c && Array.isArray(c.cells) && c.cells.some((v) => v != null);
-    // dispositivo do ecrã detetado; se vazio, o primeiro configurado; senão null (→ fallback)
+    // dispositivo do ecrã detetado; se vazio, o primeiro configurado; senão null (→ estado "sem tabela")
     const dispositivoAtivo = temCells(configs[dispositivo])
         ? dispositivo
         : (Object.keys(DISPOSITIVOS).find((k) => temCells(configs[k])) || null);
@@ -139,30 +138,6 @@ const MainContent = () => {
     const showModal = () => setModalVisible(true);
     const hideModal = () => setModalVisible(false);
 
-    // fixedHeight controla se a seção terá altura fixa ou não
-    const renderSection = (title, buttons, bgColor, borderColor, fixedHeight = false) => (
-        <div className="card mb-3 h-100" style={{ backgroundColor: bgColor, borderColor: borderColor, borderWidth: "2px" }}>
-            <div className="card-header text-center fw-bold" style={{ borderColor }}>{title}</div>
-            <div
-                className="card-body p-2 d-flex flex-row flex-wrap gap-2 justify-content-center align-items-stretch"
-                style={{ height: "auto" }}
-            >
-                {buttons.map((button) => (
-                    <button
-                        key={button.id}
-                        className="btn btn-light d-flex flex-column align-items-center justify-content-center border border-secondary rounded"
-                        onClick={() => handleButtonClick(button)}
-                        aria-label={button.nome}
-                        style={{ minWidth: 100, minHeight: 100, height: "16vh", maxHeight: 120, flex: "1 1 0" }}
-                    >
-                        <img src={apiUrl + (button.imagem || '/imagesBotoes/default.png')} alt={button.nome} style={{ maxWidth: "50px", maxHeight: "50px" }} />
-                        <span className="fw-bold mt-2 text-center">{button.nome}</span>
-                    </button>
-                ))}
-            </div>
-        </div>
-    );
-
     const overlays = (
         <>
             <SuccessModal visible={isModalVisible} onClose={hideModal} />
@@ -202,116 +177,38 @@ const MainContent = () => {
         );
     };
 
-    if (configAtiva) {
-        return (
-            <div className="container-fluid p-2 d-flex flex-column" style={{ height: "100vh" }}>
-                <div className="d-flex justify-content-between align-items-center mb-2">
-                    <div className="d-flex align-items-center gap-2">
-                        {utente?.pedidos?.length > 0 && (
-                            <button className="btn btn-success fw-bold" onClick={cancelarTodosPedidos}>Estou Bem</button>
-                        )}
-                        <div style={{ position: "relative", display: "inline-block" }}>
-                            <button className="btn btn-outline-dark" onClick={showDrawer}>☰</button>
-                            {utente?.pedidos?.length > 0 && (
-                                <span style={{ position: "absolute", top: 2, right: 2, width: 12, height: 12, background: "red", borderRadius: "50%", border: "2px solid white" }} />
-                            )}
-                        </div>
-                    </div>
-                    <button className="btn btn-outline-light text-muted border-0" style={{ opacity: 0.4 }} onClick={() => setPinVisible(true)} aria-label="Acesso staff">🛠</button>
-                </div>
-                {renderTabela(configAtiva, dispositivoAtivo)}
-                {overlays}
-            </div>
-        );
-    }
-
     return (
-        <div className="container-fluid p-2 d-flex flex-column justify-content-center" style={{ minHeight: "100vh" }}>
+        <div className="container-fluid p-2 d-flex flex-column" style={{ height: "100vh" }}>
             <div className="d-flex justify-content-between align-items-center mb-2">
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", position: "relative" }}>
+                <div className="d-flex align-items-center gap-2">
                     {utente?.pedidos?.length > 0 && (
-                        <button
-                            className="btn btn-success mb-1"
-                            style={{ fontWeight: "bold", minWidth: 90 }}
-                            onClick={cancelarTodosPedidos}
-                        >
-                            Estou Bem
-                        </button>
+                        <button className="btn btn-success fw-bold" onClick={cancelarTodosPedidos}>Estou Bem</button>
                     )}
                     <div style={{ position: "relative", display: "inline-block" }}>
                         <button className="btn btn-outline-dark" onClick={showDrawer}>☰</button>
                         {utente?.pedidos?.length > 0 && (
-                            <span
-                                style={{
-                                    position: "absolute",
-                                    top: 2,
-                                    right: 2,
-                                    width: 12,
-                                    height: 12,
-                                    background: "red",
-                                    borderRadius: "50%",
-                                    border: "2px solid white",
-                                    zIndex: 1,
-                                    display: "block"
-                                }}
-                            />
+                            <span style={{ position: "absolute", top: 2, right: 2, width: 12, height: 12, background: "red", borderRadius: "50%", border: "2px solid white" }} />
                         )}
                     </div>
-                </div>
-
-                <div className="flex-grow-1 mx-2">
-                    {renderSection("Sinto-me", botoesSintoMe, "#FFF9C4", "#FFD700")}
                 </div>
                 <button className="btn btn-outline-light text-muted border-0" style={{ opacity: 0.4 }} onClick={() => setPinVisible(true)} aria-label="Acesso staff">🛠</button>
             </div>
 
-            <div className="d-flex gap-2 align-items-stretch">
-                <div
-                    className="d-flex flex-column h-100"
-                    style={{ flexGrow: botoesNecessidades.length, minWidth: 0 }}
-                >
-                    {renderSection("Necessidades", botoesNecessidades, "#EFEBE9", "#D7CCC8", false)}
+            {!carregado ? (
+                <div className="flex-grow-1 d-flex align-items-center justify-content-center text-muted">A carregar…</div>
+            ) : configAtiva ? (
+                renderTabela(configAtiva, dispositivoAtivo)
+            ) : (
+                <div className="flex-grow-1 d-flex flex-column align-items-center justify-content-center text-center text-muted">
+                    <span className="material-symbols-outlined" style={{ fontSize: 48 }}>grid_off</span>
+                    <p className="mt-3 mb-1 fw-bold">Sem tabela configurada</p>
+                    <p className="small">Peça ao staff para configurar a tabela deste utente.</p>
                 </div>
-                <div
-                    className="d-flex flex-column h-100"
-                    style={{ flexGrow: botoesTecnologias.length, minWidth: 0 }}
-                >
-                    {renderSection("Tecnologias", botoesTecnologias, "#E1F5FE", "#B3E5FC", false)}
-                </div>
-            </div>
-
-            <div className="d-flex justify-content-between align-items-center mt-1">
-                <button
-                    className="btn btn-danger fw-bold"
-                    style={{ width: "100px", height: "100px", fontSize: "20px" }}
-                    onClick={() => handleButtonSOS()}
-                >
-                    SOS
-                </button>
-
-                <div className="flex-grow-1 mx-2">
-                    {renderSection("Quero chamar...", botoesChamar, "#FFE0B2", "#FFCC80")}
-                </div>
-
-                <button
-                    className="btn btn-danger fw-bold"
-                    style={{ width: "100px", height: "100px", fontSize: "20px" }}
-                    onClick={() => handleButtonSOS()}
-                >
-                    SOS
-                </button>
-            </div>
-
-            <SuccessModal visible={isModalVisible} onClose={hideModal} />
-            <RequestListDrawer visible={isDrawerVisible} onClose={hideDrawer} utente={utente} />
-            {isPinVisible && (
-                <PinPrompt
-                    onSuccess={handleSairGaiola}
-                    onCancel={() => setPinVisible(false)}
-                />
             )}
+
+            {overlays}
         </div>
     );
 };
 
-export default MainContent;
+export default TabuleiroComunicacao;

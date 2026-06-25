@@ -15,9 +15,13 @@ const path = require('path');
 const DIST = path.join(__dirname, '../Client/dist');
 
 // Garante que as tabelas existem (cria só se não existirem, não mexe nas outras).
-StaffAuth.sync();
-TabelaLayout.sync();
-TabelaPadrao.sync();
+const { seedDefaults } = require('./Util/seedDefaults');
+(async () => {
+    await StaffAuth.sync();
+    await TabelaLayout.sync();
+    await TabelaPadrao.sync();
+    await seedDefaults();            // cria a "Predefinida" (1ª vez) + aplica a utentes sem tabela
+})().catch((e) => console.error('Erro no arranque/seed:', e));
 
 // Configuração do armazenamento
 const storage = multer.diskStorage({

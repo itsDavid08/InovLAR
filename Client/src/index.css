@@ -390,6 +390,23 @@ textarea {
 }
 
 /* ==================== */
+/* EDITOR DE TABELAS — item selecionado (linha tracejada a mexer) */
+/* ==================== */
+.ants-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
+.ants-svg rect {
+  x: 1px; y: 1px;
+  width: calc(100% - 2px);
+  height: calc(100% - 2px);
+  rx: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-dasharray: 9 7;
+  animation: marching-ants 0.5s linear infinite;
+}
+@keyframes marching-ants { to { stroke-dashoffset: -32; } }
+
+/* ==================== */
 /* REQUEST LIST DRAWER STYLES */
 /* ==================== */
 .custom-drawer {

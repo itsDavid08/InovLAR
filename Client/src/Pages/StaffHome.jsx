@@ -4,6 +4,7 @@ import { Context } from "../ContextProvider";
 import StaffShell from "../Components/layout/StaffShell";
 import StaffSidebar from "../Components/layout/StaffSidebar";
 import ItemMenu from "../Components/layout/ItemMenu";
+import { tokenDoUtente } from "../utils/utenteToken";
 
 const StaffHome = () => {
     const { utentes, setUtente, deleteUtente } = useContext(Context);
@@ -19,7 +20,7 @@ const StaffHome = () => {
     // montado em /staff) redirecionaria para o bloqueio durante a navegação.
     const handleOpen = (utente) => {
         setUtente(utente);
-        navigate("/main/" + utente.id);
+        navigate("/" + tokenDoUtente(utente.id));
     };
 
     const handleEdit = (utente) => {

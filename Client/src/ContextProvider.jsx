@@ -85,7 +85,8 @@ export const ContextProvider = ({ children }) => {
 
     const postUtente = async (utente) => {
         try {
-            await utentesApi.createUtente(utente);
+            const res = await utentesApi.createUtente(utente);
+            return await res.json();   // devolve o utente criado (para o "Criar do zero")
         } catch (error) {
             console.error("Error creating utente:", error);
         }

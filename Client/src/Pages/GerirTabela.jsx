@@ -22,6 +22,7 @@ const GerirTabela = () => {
     const [dirty, setDirty] = useState({});
     const [saving, setSaving] = useState(false);
     const [feedback, setFeedback] = useState(null); // { tipo: "ok" | "erro", texto }
+    const [confirmarSaida, setConfirmarSaida] = useState(false);
 
     useEffect(() => {
         if (!feedback) return;
@@ -63,12 +64,19 @@ const GerirTabela = () => {
             await Promise.all(alterados.map((d) => saveTabela(id, d, configs[d])));
             setDirty({});
             setFeedback({ tipo: "ok", texto: alterados.length > 1 ? "Tabelas guardadas" : "Tabela guardada" });
+            return true;
         } catch {
             setFeedback({ tipo: "erro", texto: "Erro ao guardar. Tenta novamente." });
+            return false;
         } finally {
             setSaving(false);
         }
     };
+
+    const dirtyAtivo = Object.values(dirty).some(Boolean);
+    const handleVoltar = () => { if (dirtyAtivo) setConfirmarSaida(true); else navigate("/staff"); };
+    const guardarESair = async () => { if (await onSave()) navigate("/staff"); else setConfirmarSaida(false); };
+    const descartarESair = () => { setConfirmarSaida(false); navigate("/staff"); };
 
     if (!utente) {
         return <div className="min-h-screen flex items-center justify-center text-on-surface-variant font-body-md">A carregar utente…</div>;
@@ -88,11 +96,33 @@ const GerirTabela = () => {
                 setSize={(v) => patch({ size: v })}
                 cells={cfg.cells}
                 setCells={(fn) => patch({ cells: typeof fn === "function" ? fn(cfg.cells) : fn })}
-                dirty={Object.values(dirty).some(Boolean)}
+                dirty={dirtyAtivo}
                 saving={saving}
                 onSave={onSave}
-                onVoltar={() => navigate("/staff")}
+                onVoltar={handleVoltar}
             />
+            {confirmarSaida && (
+                <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4" onClick={() => setConfirmarSaida(false)}>
+                    <div className="bg-surface-container rounded-2xl shadow-xl w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
+                        <h3 className="font-display-lg text-lg font-bold text-on-surface mb-1">Alterações por guardar</h3>
+                        <p className="text-staff-mono text-on-surface-variant mb-4">Tens alterações que ainda não foram guardadas. O que queres fazer?</p>
+                        <div className="flex flex-col gap-2">
+                            <button onClick={guardarESair} disabled={saving}
+                                className="w-full py-2.5 rounded-full bg-primary text-on-primary font-staff-mono font-semibold hover:bg-primary-container hover:text-on-primary-container transition-colors disabled:opacity-40">
+                                {saving ? "A guardar…" : "Guardar e sair"}
+                            </button>
+                            <button onClick={descartarESair}
+                                className="w-full py-2.5 rounded-full bg-error-container text-on-error-container font-staff-mono font-semibold hover:bg-error hover:text-on-error transition-colors">
+                                Descartar e sair
+                            </button>
+                            <button onClick={() => setConfirmarSaida(false)}
+                                className="w-full py-2.5 rounded-full text-on-surface-variant font-staff-mono hover:bg-surface-container-high transition-colors">
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
             {feedback && (
                 <div role="status"
                     className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-5 py-3 rounded-full shadow-lg text-staff-mono font-semibold ${feedback.tipo === "ok" ? "bg-primary text-on-primary" : "bg-error text-on-error"}`}>

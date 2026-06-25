@@ -12,6 +12,8 @@ const UtenteForm = ({
     submitLabel,
     quartoRequired = false,
     hiddenId,
+    templates,
+    onCriarNovo,
 }) => {
     // Iniciais para o avatar do cartão (igual ao cartão do StaffHome).
     const iniciais = (formData.nome || "")
@@ -69,6 +71,32 @@ const UtenteForm = ({
                             placeholder="Ex.: A112"
                         />
                     </div>
+
+                    {templates && (
+                        <div>
+                            <label className="block text-on-surface-variant font-label-xl text-sm font-semibold mb-2">
+                                Tabela (template)
+                            </label>
+                            <div className="flex gap-2">
+                                <select
+                                    value={formData.templateId || ''}
+                                    onChange={(e) => setFormData({ ...formData, templateId: e.target.value })}
+                                    required
+                                    className="flex-1 px-4 py-3 rounded-lg bg-surface-container border border-outline-variant focus:border-primary focus:ring-2 focus:ring-primary focus:outline-none transition-all text-on-surface"
+                                >
+                                    <option value="" disabled>Escolhe um template…</option>
+                                    {templates.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
+                                </select>
+                                {onCriarNovo && (
+                                    <button type="button" onClick={onCriarNovo}
+                                        className="px-4 py-3 rounded-lg bg-surface-container-high text-on-surface font-staff-mono whitespace-nowrap hover:bg-surface-variant transition-colors flex items-center gap-1">
+                                        <span className="material-symbols-outlined text-[18px]">add</span> Criar do zero
+                                    </button>
+                                )}
+                            </div>
+                            <p className="text-xs text-on-surface-variant mt-1">Ou cria uma tabela personalizada para este utente, desde o zero.</p>
+                        </div>
+                    )}
 
                     <div className="flex gap-4 pt-4 border-t border-surface-variant">
                         <button

@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
 import { Context } from "../../ContextProvider";
 import { fetchImagensBotoes, uploadImagemBotao, deleteImagemBotao } from "../../api/botoes";
 import BotoesList from "./BotoesList";
@@ -21,13 +21,21 @@ const EditBotoes = () => {
     const [imagensDisponiveis, setImagensDisponiveis] = useState([]);
     const [conflito, setConflito] = useState(null); // ficheiro à espera de decisão (nome já existe)
     const [versoes, setVersoes] = useState(new Map()); // path → timestamp p/ cache-busting de imagens substituídas
-    const [categoriasDisponiveis] = useState([
-        "Sinto-me",
-        "Medicamentos",
-        "Necessidades",
-        "Tecnologias",
-        "Chamar"
-    ]);
+    const [categoriasNovas, setCategoriasNovas] = useState([]); // adicionadas nesta sessão
+
+    // Categorias do dropdown: conjunto base ∪ as já usadas pelos botões ∪ as
+    // criadas nesta sessão. Assim uma categoria nova reaparece após guardar o botão.
+    const categoriasDisponiveis = useMemo(() => {
+        const base = ["Sinto-me", "Medicamentos", "Necessidades", "Tecnologias", "Chamar"];
+        const usadas = botoes.map((b) => b.categoria).filter(Boolean);
+        return [...new Set([...base, ...usadas, ...categoriasNovas])];
+    }, [botoes, categoriasNovas]);
+
+    const handleAddCategoria = (nome) => {
+        setCategoriasNovas((prev) =>
+            prev.some((c) => c.toLowerCase() === nome.toLowerCase()) ? prev : [...prev, nome]
+        );
+    };
 
     useEffect(() => {
         fetchImagensBotoes()
@@ -147,6 +155,7 @@ const EditBotoes = () => {
                     onImageSelect={handleImageSelect}
                     onUploadImagem={handleUploadImagem}
                     onDeleteImagem={handleDeleteImagem}
+                    onAddCategoria={handleAddCategoria}
                     onCancel={handleCancel}
                 />
                 {conflito && (

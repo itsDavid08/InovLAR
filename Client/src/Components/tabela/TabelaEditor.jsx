@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import {
-    DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
+    DndContext, DragOverlay, MouseSensor, TouchSensor, useSensor, useSensors,
     useDraggable, useDroppable,
 } from "@dnd-kit/core";
 import ButtonTile from "./ButtonTile";
@@ -9,29 +9,34 @@ import { DISPOSITIVOS, COR_CATEGORIA, escalaPorColunas } from "./constants";
 // remove nulls finais (mantém o array compacto)
 const trim = (arr) => { let e = arr.length; while (e > 0 && arr[e - 1] == null) e--; return arr.slice(0, e); };
 
+// contorno animado (linha tracejada a mexer) do item selecionado
+const MarchingAnts = () => (<svg className="ants-svg text-primary"><rect /></svg>);
+
 // ---- peça arrastável da biblioteca ----
-const LibraryTile = ({ botao, apiUrl }) => {
+const LibraryTile = ({ botao, apiUrl, selecionado, onSelect }) => {
     const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
         id: `lib:${botao.id}`, data: { tipo: "lib", botaoId: botao.id },
     });
     return (
-        <div ref={setNodeRef} {...listeners} {...attributes}
-            className={`cursor-grab active:cursor-grabbing ${isDragging ? "opacity-40" : ""}`}>
+        <div ref={setNodeRef} {...listeners} {...attributes} onClick={(e) => { e.stopPropagation(); onSelect(); }}
+            className={`relative cursor-pointer active:cursor-grabbing ${isDragging ? "opacity-40" : ""}`}>
             <ButtonTile botao={botao} apiUrl={apiUrl} size="P" />
+            {selecionado && <MarchingAnts />}
         </div>
     );
 };
 
 // ---- célula da grelha (droppable; arrastável quando preenchida) ----
-const GridCell = ({ pos, botao, apiUrl, size, onRemove }) => {
+const GridCell = ({ pos, botao, apiUrl, size, onRemove, selecionado, onCellClick }) => {
     const { setNodeRef: dropRef, isOver } = useDroppable({ id: `cell:${pos}`, data: { tipo: "cell", pos } });
     const drag = useDraggable({ id: `slot:${pos}`, data: { tipo: "slot", pos }, disabled: !botao });
     return (
-        <div ref={dropRef} className="relative h-full min-h-0" style={{ padding: "4%" }}>
+        <div ref={dropRef} className="relative h-full min-h-0" style={{ padding: "4%" }} onClick={(e) => { e.stopPropagation(); onCellClick(pos); }}>
             {botao ? (
                 <div ref={drag.setNodeRef} {...drag.listeners} {...drag.attributes}
-                    className={`group relative h-full cursor-grab active:cursor-grabbing ${drag.isDragging ? "opacity-40" : ""}`}>
+                    className={`group relative h-full cursor-pointer active:cursor-grabbing ${drag.isDragging ? "opacity-40" : ""}`}>
                     <ButtonTile botao={botao} apiUrl={apiUrl} size={size} fill />
+                    {selecionado && <MarchingAnts />}
                     <button onClick={(e) => { e.stopPropagation(); onRemove(pos); }}
                         className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-error text-on-error flex items-center justify-center shadow opacity-0 group-hover:opacity-100 transition-opacity z-10"
                         aria-label="Remover">
@@ -58,16 +63,16 @@ const LibDrop = ({ children }) => {
     return <div ref={setNodeRef} className="w-full lg:w-[430px] shrink-0 bg-surface-container rounded-[24px] p-5 flex flex-col min-h-0">{children}</div>;
 };
 
-// ---- zona de lixo (só visível durante o arrasto) ----
-const TrashZone = ({ visible }) => {
+// ---- zona de lixo: aparece ao arrastar OU com um botão selecionado (toque para eliminar) ----
+const TrashZone = ({ visible, tap, onClick }) => {
     const { setNodeRef, isOver } = useDroppable({ id: "trash", data: { tipo: "trash" } });
     return (
-        <div ref={setNodeRef}
+        <div ref={setNodeRef} onClick={onClick}
             className={`fixed left-1/2 -translate-x-1/2 bottom-6 z-50 flex items-center gap-2 px-6 py-3 rounded-full border-2 border-dashed shadow-lg transition-all duration-200
                 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"}
-                ${isOver ? "bg-error text-on-error border-error scale-105" : "bg-surface-container-high text-on-surface-variant border-outline-variant"}`}>
+                ${isOver ? "bg-error text-on-error border-error scale-105" : "bg-error-container text-on-error-container border-error cursor-pointer"}`}>
             <span className="material-symbols-outlined">delete</span>
-            <span className="text-staff-mono font-semibold">{isOver ? "Solte para eliminar" : "Arraste aqui para eliminar"}</span>
+            <span className="text-staff-mono font-semibold">{isOver ? "Solte para eliminar" : tap ? "Toque para eliminar" : "Arraste aqui para eliminar"}</span>
         </div>
     );
 };
@@ -82,7 +87,67 @@ const TabelaEditor = ({
 }) => {
     const [activeId, setActiveId] = useState(null);
     const [busca, setBusca] = useState("");
-    const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+    const [selecionado, setSelecionado] = useState(null); // { tipo:"lib", botaoId } | { tipo:"slot", pos }
+    const sensors = useSensors(
+        useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+        useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
+    );
+
+    const [zoom, setZoom] = useState(1);
+    const zoomRef = useRef(1);
+    const frameWrapRef = useRef(null);
+    const pinch = useRef({ dist: 0, zoom: 1 });
+    const aplicarZoom = (z) => { const c = Math.min(3, Math.max(1, z)); zoomRef.current = c; setZoom(c); };
+
+    useEffect(() => {
+        const el = frameWrapRef.current;
+        if (!el) return;
+        const d = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+        const onStart = (e) => { if (e.touches.length === 2) pinch.current = { dist: d(e.touches), zoom: zoomRef.current }; };
+        const onMove = (e) => {
+            if (e.touches.length === 2 && pinch.current.dist) {
+                e.preventDefault();
+                aplicarZoom(pinch.current.zoom * (d(e.touches) / pinch.current.dist));
+            }
+        };
+        const onEnd = (e) => { if (e.touches.length < 2) pinch.current.dist = 0; };
+        el.addEventListener("touchstart", onStart, { passive: false });
+        el.addEventListener("touchmove", onMove, { passive: false });
+        el.addEventListener("touchend", onEnd);
+        el.addEventListener("touchcancel", onEnd);
+        return () => {
+            el.removeEventListener("touchstart", onStart);
+            el.removeEventListener("touchmove", onMove);
+            el.removeEventListener("touchend", onEnd);
+            el.removeEventListener("touchcancel", onEnd);
+        };
+    }, []);
+
+    const aoSelecionarLib = (botaoId) =>
+        setSelecionado((s) => (s?.tipo === "lib" && s.botaoId === botaoId ? null : { tipo: "lib", botaoId }));
+
+    const aoClicarCelula = (pos) => {
+        if (selecionado?.tipo === "slot" && selecionado.pos === pos) { setSelecionado(null); return; }
+        if (!selecionado) { if (cells[pos] != null) setSelecionado({ tipo: "slot", pos }); return; }
+        setCells((prev) => {
+            const next = prev.slice();
+            const need = (i) => { while (next.length <= i) next.push(null); };
+            need(pos);
+            if (selecionado.tipo === "lib") next[pos] = selecionado.botaoId;            // colocar
+            else if (selecionado.tipo === "slot") {                                      // mover/trocar
+                need(selecionado.pos);
+                const tmp = next[pos]; next[pos] = next[selecionado.pos]; next[selecionado.pos] = tmp;
+            }
+            return trim(next);
+        });
+        setSelecionado(null);
+    };
+
+    const aoEliminarSelecionado = () => {
+        if (selecionado?.tipo !== "slot") return;
+        setCells((prev) => trim(prev.map((v, i) => (i === selecionado.pos ? null : v))));
+        setSelecionado(null);
+    };
 
     const botaoPorId = useMemo(() => Object.fromEntries(botoes.map((b) => [b.id, b])), [botoes]);
 
@@ -142,8 +207,9 @@ const TabelaEditor = ({
     })();
 
     return (
-        <DndContext sensors={sensors} onDragStart={({ active }) => setActiveId(active.id)} onDragEnd={onDragEnd} onDragCancel={() => setActiveId(null)}>
-            <div className="min-h-screen lg:h-screen lg:overflow-hidden flex flex-col bg-background text-on-background font-body-md">
+        <DndContext sensors={sensors} onDragStart={({ active }) => { setActiveId(active.id); setSelecionado(null); }} onDragEnd={onDragEnd} onDragCancel={() => setActiveId(null)}>
+            <div onClick={() => setSelecionado(null)}
+                className="min-h-screen lg:h-screen lg:overflow-hidden flex flex-col bg-background text-on-background font-body-md">
                 {/* ===== Barra superior (M3) ===== */}
                 <div className="h-16 shrink-0 bg-surface-container-lowest border-b border-surface-variant flex items-center justify-between px-4 sm:px-6 gap-3">
                     <div className="flex items-center gap-3 min-w-0">
@@ -189,7 +255,7 @@ const TabelaEditor = ({
                 {/* ===== Corpo ===== */}
                 <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-5 p-4 sm:p-6 overflow-auto lg:overflow-hidden">
                     {/* Canvas */}
-                    <div className="flex-1 bg-surface-container-lowest rounded-[24px] shadow-sm p-5 sm:p-6 flex flex-col min-w-0 min-h-0">
+                    <div className="flex-1 bg-surface-container-lowest rounded-[24px] shadow-sm p-5 sm:p-6 flex flex-col min-w-0 min-h-0 relative">
                         <div className="flex items-end justify-between gap-3 mb-4">
                             <div>
                                 <h2 className="font-display-lg text-xl font-bold text-on-surface">Quadro Atual</h2>
@@ -208,19 +274,29 @@ const TabelaEditor = ({
                             </div>
                         </div>
 
-                        {/* Borda a simular o dispositivo */}
-                        <div className="flex-1 flex items-center justify-center overflow-hidden min-h-0">
-                            <div className="w-full rounded-[20px] border-2 border-outline-variant bg-surface p-2 sm:p-3 overflow-hidden"
-                                style={{ maxWidth: dev.maxW, aspectRatio: dev.aspect, maxHeight: "100%" }}>
-                                <div className="grid h-full"
-                                    style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))` }}>
-                                    {Array.from({ length: slots }).map((_, pos) => (
-                                        <GridCell key={pos} pos={pos} botao={botaoPorId[cells[pos]]} apiUrl={apiUrl} size={escala}
-                                            onRemove={(p) => setCells((prev) => trim(prev.map((v, i) => (i === p ? null : v))))} />
-                                    ))}
+                        {/* Borda a simular o dispositivo (dois dedos = zoom) */}
+                        <div ref={frameWrapRef} className="flex-1 overflow-auto min-h-0" style={{ touchAction: "pan-x pan-y" }}>
+                            <div className="min-h-full w-full flex items-center justify-center">
+                                <div className="w-full rounded-[20px] border-2 border-outline-variant bg-surface p-2 sm:p-3 overflow-hidden"
+                                    style={{ maxWidth: dev.maxW, aspectRatio: dev.aspect, maxHeight: "100%", transform: `scale(${zoom})`, transformOrigin: "center" }}>
+                                    <div className="grid h-full"
+                                        style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))` }}>
+                                        {Array.from({ length: slots }).map((_, pos) => (
+                                            <GridCell key={pos} pos={pos} botao={botaoPorId[cells[pos]]} apiUrl={apiUrl} size={escala}
+                                                selecionado={selecionado?.tipo === "slot" && selecionado.pos === pos}
+                                                onCellClick={aoClicarCelula}
+                                                onRemove={(p) => setCells((prev) => trim(prev.map((v, i) => (i === p ? null : v))))} />
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
                         </div>
+                        {zoom > 1.02 && (
+                            <button onClick={() => aplicarZoom(1)}
+                                className="absolute bottom-4 right-4 z-20 flex items-center gap-1 px-3 py-1.5 rounded-full bg-surface-container-high text-on-surface shadow-md text-staff-mono">
+                                <span className="material-symbols-outlined text-[18px]">zoom_out_map</span> 1:1
+                            </button>
+                        )}
                     </div>
 
                     {/* Biblioteca (droppable para remover) */}
@@ -239,7 +315,11 @@ const TabelaEditor = ({
                                         <span className="font-display-lg text-staff-mono font-bold text-on-surface">{cat}</span>
                                     </div>
                                     <div className="grid grid-cols-4 gap-2">
-                                        {lista.map((b) => <LibraryTile key={b.id} botao={b} apiUrl={apiUrl} />)}
+                                        {lista.map((b) => (
+                                            <LibraryTile key={b.id} botao={b} apiUrl={apiUrl}
+                                                selecionado={selecionado?.tipo === "lib" && selecionado.botaoId === b.id}
+                                                onSelect={() => aoSelecionarLib(b.id)} />
+                                        ))}
                                     </div>
                                 </div>
                             ))}
@@ -249,7 +329,10 @@ const TabelaEditor = ({
                 </div>
             </div>
 
-            <TrashZone visible={!!activeId} />
+            <TrashZone
+                visible={!!activeId || selecionado?.tipo === "slot"}
+                tap={!activeId && selecionado?.tipo === "slot"}
+                onClick={aoEliminarSelecionado} />
 
             <DragOverlay dropAnimation={null}>
                 {activeBotao ? <div style={{ width: 96 }}><ButtonTile botao={activeBotao} apiUrl={apiUrl} size="P" /></div> : null}

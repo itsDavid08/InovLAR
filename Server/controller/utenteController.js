@@ -1,4 +1,4 @@
-const { Utente, Pedido, Botao } = require("../models");
+const { Utente, Pedido, Botao, TabelaPadrao, TabelaLayout } = require("../models");
 const { notificarAlteracaoBD } = require("../Util/socketIO");
 
 // Corrigir a sintaxe dos métodos do objeto: usar propriedades, não atribuições
@@ -42,15 +42,22 @@ const utenteController = {
         }
     },
 
-    // Criar um novo utente
+    // Criar um novo utente (template opcional → aplica a tabela já na criação)
     createUtente: async (req, res) => {
         try {
-            console.log(req.body);
-             await Utente.create(req.body);
+            const { nome, quarto, templateId } = req.body;
+            const utente = await Utente.create({ nome, quarto });
+            if (templateId) {
+                const template = await TabelaPadrao.findByPk(templateId);
+                if (template) {
+                    for (const [dispositivo, config] of Object.entries(template.configs || {}))
+                        await TabelaLayout.findOrCreate({ where: { utenteId: utente.id, dispositivo }, defaults: { config } });
+                }
+            }
             notificarAlteracaoBD();
+            res.status(201).json(utente);   // antes não devolvia nada (a request ficava pendurada)
         } catch (erro) {
             console.error("Erro ao criar utente:", erro);
-            console.log()
             res.status(400).json({ mensagem: erro.message });
         }
     },

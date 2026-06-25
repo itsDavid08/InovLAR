@@ -1,7 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { ContextProvider } from "./ContextProvider";
 
-import MainContent from "./Pages/MainContent";
+import TabuleiroComunicacao from "./Pages/TabuleiroComunicacao.jsx";
 import StaffHome from "./Pages/StaffHome.jsx";
 import PedidosPendentes from "./Pages/PedidosPendentes.jsx";
 
@@ -31,9 +31,6 @@ function App() {
                         {/* Ecrã de bloqueio: define a password na 1ª vez, ou pede o PIN. */}
                         <Route path="/login" element={<StaffLogin />} />
 
-                        {/* Tabuleiro do utente — a "gaiola". Sem saída livre: só se sai com PIN. */}
-                        <Route path="/main/:id" element={<MainContent />} />
-
                         {/* Rotas só-staff: protegidas pelo gate de kiosk (RequireStaff). */}
                         <Route path="/edit-utente/:id" element={<RequireStaff><EditUtente /></RequireStaff>} />
                         <Route path="/gerir-tabela/:id" element={<RequireStaff><GerirTabela /></RequireStaff>} />
@@ -44,6 +41,10 @@ function App() {
                         <Route path="/staff/alterar-password" element={<RequireStaff><ChangePassword /></RequireStaff>} />
                         <Route path="/staff/pedidos" element={<RequireStaff><PedidosPendentes /></RequireStaff>} />
                         <Route path="/editBotoes" element={<RequireStaff><EditBotoes /></RequireStaff>} />
+
+                        {/* Tabuleiro do utente — a "gaiola" (só se sai com PIN). URL ofuscada e fixa
+                            por utente (token). No fim: as rotas estáticas têm prioridade. */}
+                        <Route path="/:token" element={<TabuleiroComunicacao />} />
                     </Routes>
                 </div>
 
