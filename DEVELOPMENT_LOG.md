@@ -2097,3 +2097,194 @@ botão **"Nova categoria"** para acrescentar categorias.
 - `npm run build` (Client) ✓ (mantém só o aviso CSS pré-existente `#ff8080; !important;`).
 - Falta verificação visual (abrir dropdown, escolher categoria, criar "Nova categoria" → fica
   selecionada e na lista; editar um botão mostra a categoria atual selecionada).
+
+---
+
+## 2026-06-25 — Redesign do board "Pedidos Pendentes" (3 layouts responsivos: TV / Tablet / Telemóvel)
+
+### Contexto
+A `PedidosPendentes.jsx` era um board único a 2 colunas (emergências à esquerda, fila paginada por
+setas à direita) com estilo nas classes `.pedidos-*` do `index.css`. Com o Claude Design fizeram-se
+mockups novos (`Pedidos Pendentes.dc.html`) com 3 variantes para TV + versões Tablet/Telemóvel. Decisão
+do utilizador: **Opção B para PC/TV**, **Opção A para tablet**, **lista de cartões para telemóvel**.
+
+### Decisões
+- **Container "burro + layouts" :** `PedidosPendentes.jsx` mantém o que é transversal (estado do
+  Context, áudio, teclado) e **escolhe o layout por largura de ecrã**; cada layout é um componente
+  presentacional sem lógica. Ficheiros em `Client/src/Components/pedidos/`.
+- **Breakpoints** (`useViewportMode`): `<640px` telemóvel · `640–1279px` tablet (Opção A) · `≥1280px`
+  TV/PC (Opção B). Um laptop conta como "TV" (board), o que é aceitável.
+- **TV/Tablet fluidos (vh/vw/clamp/fr)**, não escala fixa 1920×1080 — escolha do utilizador. Preenchem
+  qualquer proporção de ecrã sem scroll; tipografia escala com `clamp(min, vw, max)`.
+- **Overflow → rotação automática de páginas** (escolha do utilizador), não setas nem scroll. Hook
+  `usePagedRotation(list, pageSize, intervalMs)`: fila/grelha mostram `pageSize` itens e avançam de
+  página sozinhas (fila TV 6/8s; grelha tablet 6/8s; emergências 2/7s). Badge "N a aguardar" mostra o
+  total e o indicador `página/total`. Com ≤1 página não roda.
+- **Ícone = imagem real**, não emoji: o mockup usa emojis, mas a app tem `botao.imagem`
+  (fallback `/imagesBotoes/default.png`). Os layouts usam `<img>`.
+- **Cores por tempo de espera** (`decorate.js`, paleta do mockup, fiel ao aprovado): emergência
+  vermelho; `<5min` verde; `5–11min` âmbar; `>11min` vermelho. `decorate` aproveita a ordem do servidor
+  (`emergencia DESC, hora ASC`) — não reordena; `split()` só separa emergências/normais.
+- **Navegação:** telemóvel mantém a `StaffBottomNav` (com `paddingBottom` na lista); tablet/TV são
+  "boards" full-bleed sem barra (igual ao desktop anterior), com `Esc → /staff`.
+
+### Alterações
+**Novos — `Client/src/Components/pedidos/`**
+- `decorate.js` — `decorate(pedido, now)` (props visuais + cores) e `split(pedidos, now)`.
+- `useViewportMode.js` — `'phone' | 'tablet' | 'tv'` por `window.innerWidth` (listener de resize).
+- `usePagedRotation.js` — paginação auto-rotativa (reinicia se a lista encolher; pausa com ≤1 página).
+- `PedidosTV.jsx` — Opção B (coluna de emergências 34% + fila), fluido.
+- `PedidosTablet.jsx` — Opção A (banner(s) de emergência + grelha `auto-fill minmax`), fluido.
+- `PedidosPhone.jsx` — lista de cartões com scroll.
+
+**Reescrito** — `Client/src/Pages/PedidosPendentes.jsx`: container que consome o Context, faz `split`,
+mantém áudio/teclado e despacha para o layout consoante `useViewportMode()`.
+
+**`Client/src/index.css`** — removidas as classes `.pedidos-*`/`.pedido-*` (só esta página as usava) e
+os 3 retalhos correspondentes na media query `max-width:768px`; ficam só as `@keyframes`
+`emgFlash`/`emgBorder`/`bell` (usadas inline pelos layouts). Removeu também a linha com o aviso CSS
+pré-existente `#ff8080; !important;` (vivia no `.Pedido-Emergencia`).
+
+### Nota de comportamento — áudio
+O `useEffect` do alarme passou a depender de `[pedidosPendentes]` (antes corria a **cada render**, o que
+fazia o sino tocar repetidamente). Agora: `warning` em loop enquanto houver emergência; senão o sino toca
+quando a lista muda (chega pedido novo). É uma melhoria, não uma regressão.
+
+### Estado
+- [x] `decorate`/`split`, `useViewportMode`, `usePagedRotation`
+- [x] Layouts TV (Opção B) / Tablet (Opção A) / Telemóvel
+- [x] Container reescrito (áudio + `Esc` preservados; `StaffBottomNav` só no telemóvel)
+- [x] `index.css` limpo (classes antigas removidas; keyframes mantidas) — sem o aviso `#ff8080`
+- [x] `npm run build` (Client) ✓
+- [ ] Verificação visual em runtime nos 3 tamanhos (emergência a piscar + som; rotação de páginas com
+  muitos pedidos; fallback de imagem; redimensionar a janela troca de layout)
+
+### Update (mesmo dia) — tablet passa a usar o layout do telemóvel (Opção A descartada)
+A pedido do utilizador, o **tablet** deixa de ter layout próprio e passa a usar **a mesma lista de
+cartões do telemóvel**. Agora só há **dois** layouts efetivos: o board (Opção B) na TV/PC (`≥1280px`)
+e a lista de cartões em tudo abaixo disso.
+- **`PedidosPendentes.jsx`** — `mode === "tv"` → `PedidosTV`; caso contrário (tablet **e** telemóvel)
+  → `PedidosPhone` + `StaffBottomNav`.
+- **`PedidosTablet.jsx`** — **removido** (sem uso).
+- **`useViewportMode.js`** — mantém os 3 valores (descreve a viewport), mas o comentário nota que
+  'phone' e 'tablet' são tratados igual; fica reutilizável caso se queira voltar a diferenciar.
+- `npm run build` (Client) ✓.
+- Nota: a `StaffBottomNav` é `md:hidden` (Tailwind, <768px) → em tablets 768–1279px a lista mostra-se
+  mas sem a barra inferior (o `paddingBottom:88` da lista deixa um espaço em baixo). Se se quiser a barra
+  também aí, é preciso mexer no breakpoint da `StaffBottomNav` (partilhada com as outras páginas).
+
+### Update (mesmo dia) — ícones maiores nos cartões/board
+A imagem dentro da caixa do ícone ocupava ~62–64% (muita margem). Subiu para **85%** mantendo
+`objectFit: contain` (sem distorção): `PedidosTV.jsx` (emergência + fila) e `PedidosPhone.jsx` (cartões).
+Só mudou a imagem — o tamanho da caixa/cartão é o mesmo. `npm run build` ✓.
+
+---
+
+## 2026-06-25 — PIN do staff também pelo teclado físico (não só pelo rato)
+
+### Contexto
+O PIN do staff só se podia introduzir **clicando** nos botões do `Keypad` (rato/toque). Num PC com
+teclado isso é lento; pretendia-se poder **digitar** o PIN diretamente no teclado.
+
+### Decisão
+Adicionar o suporte de teclado **dentro do próprio `Keypad`** (componente partilhado), não em cada
+ecrã. Assim os **três** consumidores ganham de uma vez e sem duplicação: `StaffLogin` (definir/login),
+`ChangePassword` (alterar) e `PinPrompt` (sair da gaiola). O teclado físico chama **os mesmos handlers**
+dos botões (`onDigit`/`onDelete`/`onConfirm`), por isso herda automaticamente o limite de 8 dígitos e a
+lógica de cada pai — clicar e digitar ficam 100% equivalentes.
+
+### Alterações — `Client/src/Components/Keypad.jsx`
+- `useEffect` com listener global de `keydown`:
+  - `0-9` (teclado normal **e** numpad chegam como `e.key` "0".."9") → `onDigit(Number(e.key))`.
+  - `Backspace` → `onDelete` (com `preventDefault` para não disparar o "voltar" do browser).
+  - `Enter` → `onConfirm`.
+- Guardas: ignora se `Ctrl/Alt/Meta` estiverem premidos e se houver um `input`/`textarea`/
+  `contenteditable` focado (defensivo — estes ecrãs não têm campos, mas evita surpresas).
+- Os handlers mais recentes são lidos via `useRef` (atualizado a cada render) para o listener ficar
+  estável (anexado uma só vez), apesar de as props mudarem de identidade.
+
+### Notas
+- Só há **um** `Keypad` montado de cada vez (ecrã de bloqueio / alterar password / modal de PIN), logo
+  o listener global não colide entre instâncias.
+- Os botões do rato continuam exatamente iguais (apresentação inalterada).
+
+### Estado
+- [x] Teclado físico (0-9 / Backspace / Enter) no `Keypad` → cobre login, alterar password e `PinPrompt`
+- [x] `npm run build` (Client) ✓
+- [ ] Verificação visual: digitar o PIN no teclado nos 3 ecrãs (definir, login, modal de saída)
+
+---
+
+## 2026-06-25 — Tabuleiro do utente: usável em retrato e paisagem (força paisagem por rotação)
+
+### Contexto
+A tabela do utente (`TabuleiroComunicacao`) é desenhada **em paisagem** (uma config por dispositivo).
+Em **retrato** num telemóvel (S25 Ultra), a grelha mantinha as colunas da paisagem espremidas na largura
+→ botões **altos e finos** (esticados). Além disso, a deteção de dispositivo era **só por largura**
+(`w<600 / <1024`), por isso **rodar** o ecrã mudava de modelo (e carregava outra config, muitas vezes
+vazia → "Sem tabela").
+
+### Decisão (escolha do utilizador)
+"Manter o layout e rodar os botões" → **rodar o quadro INTEIRO 90°** em retrato para o utente usar o
+aparelho **deitado** (paisagem). Mantém o desenho exato e botões grandes; o conteúdo fica de lado (é o
+objetivo: aparelho montado/usado virado). Entre as variantes oferecidas, o utilizador escolheu rodar
+tudo (conteúdo incluído), não só o arranjo.
+
+### Alterações — `Client/src/Pages/TabuleiroComunicacao.jsx`
+- **Deteção estável à rotação:** `dispositivo` passa a derivar do **lado mais curto**
+  (`Math.min(w,h)`) com os mesmos limiares (600/1024) → um telemóvel é sempre "smartphone" e um tablet
+  sempre "tablet", em pé ou deitado. Novo estado `vp` ({w,h}) atualizado em `resize` **e**
+  `orientationchange` (substitui o `tipoDispositivo`/`setDispositivo` antigos).
+- **Rotação:** `portrait = vp.h > vp.w && dispositivo !== "pc"`. Quando `portrait`, o componente é
+  envolvido numa moldura `position: fixed` de tamanho **trocado** (`width:100vh; height:100vw`) com
+  `transform: rotate(90deg) translateY(-100vw)` e `transform-origin: top left` → enche o ecrã como
+  paisagem. O container interno passou de `height:100vh` para `height:100%` (segue a moldura). Em
+  paisagem/PC a moldura é normal (`100vw×100vh`).
+- O cálculo de linhas (`renderTabela`, geométrico pelo `aspect` do dispositivo) **não mudou** — a
+  moldura rodada já é paisagem, por isso reproduz o desenho do editor.
+
+### Overlays (acompanham a rotação)
+Dentro de um ancestral com `transform`, os `position: fixed` passam a ser relativos à **moldura rodada**,
+mas `vh/vw` continuam a apontar para o viewport não rodado. Por isso:
+- **`SuccessModal.jsx`** — deixou de ser `Modal` do Ant (que faz **portal para o `body`** e escaparia à
+  rotação) e passou a um overlay simples in-tree (`position: fixed; inset:0`) → roda com o quadro.
+  (Só era usado no tabuleiro.)
+- **`index.css`** — overrides scoped à moldura: `.tab-rot .custom-drawer { height:100% }` e
+  `.tab-rot .login-screen { min-height:100% }` (trocam o `100vh` por `100%` só quando rodado; fora da
+  moldura, StaffLogin/ChangePassword mantêm `100vh`). A gaveta e o PIN usam `inset:0`/translate → já
+  ficam corretos na moldura.
+
+### Notas
+- **Sentido da rotação:** está `rotate(90deg)`. Se o utente tiver de virar o aparelho para o lado
+  "errado", troca-se trivialmente para `rotate(-90deg)` (com o translate ajustado).
+- A rotação **não** se aplica a "pc" (um monitor em janela alta não roda).
+- Quando o aparelho é fisicamente rodado para paisagem (auto-rotate do SO), `portrait` fica `false` e o
+  quadro mostra paisagem **nativa** — ou seja, o quadro está **sempre** em paisagem.
+
+### Estado
+- [x] Deteção de dispositivo estável à rotação (lado mais curto)
+- [x] Rotação do quadro inteiro 90° em retrato (tablet/telemóvel)
+- [x] Overlays acompanham a rotação (`SuccessModal` in-tree + overrides `.tab-rot`)
+- [x] `npm run build` (Client) ✓
+- [ ] Verificação visual no telemóvel/tablet: retrato roda para paisagem com botões grandes; gaveta de
+  pedidos, modal de sucesso e PIN corretos; confirmar o **sentido** da rotação
+
+### Update (mesmo dia) — trocar rotação da página inteira por remapeamento da grelha (controlos no topo, botões a prumo)
+A rotação de **toda** a página punha os controlos (☰ / "Estou Bem" / 🛠) de lado e os botões deitados.
+Pedido do utilizador: **controlos no topo** (a direito), **mesmo arranjo** que enche o ecrã, mas **botões
+legíveis na vertical**. Solução mais limpa: deixar de rodar a página e, em retrato, **rodar só o
+ARRANJO** da grelha (remapear as células 90° no sentido horário) mantendo os botões a prumo.
+- **`TabuleiroComunicacao.jsx`** — removida a moldura `transform: rotate(90deg)`; volta a um único
+  container `height:100vh` (controlos no topo, overlays normais). Em `renderTabela`, quando `portrait`,
+  a grelha passa a `gCols = rowsL` (linhas da paisagem) × `gRows = cols` e as células são remapeadas
+  `gCells[i*gCols+j] = cells[(rowsL-1-j)*cols + i]` (rotação 90° CW das posições) — mesmo arranjo que se
+  via, mas com tiles direitos. Em paisagem/PC nada muda. `portrait`/`vp`/deteção pelo lado mais curto
+  mantêm-se.
+- **`SuccessModal.jsx`** — revertido para o `Modal` do Ant (já não é preciso o overlay in-tree, porque
+  a página deixou de rodar).
+- **`index.css`** — removidos os overrides `.tab-rot` (já não há moldura rodada).
+- `npm run build` (Client) ✓.
+- Nota: assumi "percetíveis verticalmente" = **botões a prumo/legíveis** (não conteúdo deitado). Se a
+  intenção era o conteúdo de cada botão rodado de lado, é uma linha a acrescentar (rotate ao tile).
+- Nota: o **sentido** do remap é 90° CW (igual ao que se via). Se ficar ao contrário do desejado,
+  troca-se a fórmula para `cells[j*cols + (cols-1-i)]` (CCW).

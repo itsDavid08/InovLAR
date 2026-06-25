@@ -526,153 +526,22 @@ textarea {
 }
 
 /* ==================== */
-/* PENDING REQUESTS PAGE STYLES */
+/* PENDING REQUESTS PAGE — animações da emergência (board TV/Tablet/Telemóvel) */
+/* Layout/estilo vivem inline nos componentes Components/pedidos/*. Aqui só as  */
+/* keyframes, que não podem ser inline.                                         */
 /* ==================== */
-.pedidos-container {
-  padding: 20px;
-  background-color: #f0f4f8;
-  min-height: 100vh;
+@keyframes emgFlash {
+  0%, 100% { background: #fee2e2; box-shadow: 0 0 0 0 rgba(220,38,38,0); }
+  50%      { background: #fecaca; box-shadow: 0 0 0 10px rgba(220,38,38,.22); }
 }
-
-.pedidos-titulo {
-  text-align: center;
-  font-size: 2.5rem;
-  color: #2c3e50;
-  margin-bottom: 30px;
+@keyframes emgBorder {
+  0%, 100% { border-color: #ef4444; }
+  50%      { border-color: #7f1d1d; }
 }
-
-.pedidos-columnas {
-  display: flex;
-  gap: 20px;
-  max-width: 95vw;
-  margin: 0 auto;
-  height: 90vh;
-}
-
-/* Emergency column */
-.coluna-emergencia {
-  background-color: #ffffff;
-  flex: 1;
-  padding: 20px;
-  border-radius: 15px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  color: Black;
-  font-weight: bold;
-
-}
-
-.Pedido-Emergencia {
-  background-color: #ff8080; !important;
-  color: black;
-  border-radius: 12px;
-  padding: 15px;
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  font-size: 1rem;
-}
-
-.Item-Pequeno{
-  height: 18%;
-}
-
-.Item-Grande{
-    height: 40%;
-}
-
-.pedido-icono{
-  border-radius: 50%;
-  background-color: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 2rem;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.iconoGrande{
-  width: 120px;
-  height: 120px;
-  min-width: 120px;
-  min-height: 120px;
-}
-.iconoPequeno{
-    width: 80px;
-    height: 80px;
-    min-width: 80px;
-    min-height: 80px;
-}
-
-/* Normal column */
-.coluna-normal {
-  flex: 1;
-  background-color: #ffffff;
-  padding: 20px;
-  border-radius: 15px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  display: flex;
-}
-
-.Item-Pedido {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-
-  border-radius: 12px;
-  padding: 15px;
-  margin-bottom: 15px;
-  font-size: 1rem;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-
-}
-
-.pedido-mensagem {
-  font-weight: bold;
-  font-size: 1.2rem;
-  color: #34495e;
-  margin: 0;
-  margin-bottom: 5px;
-}
-
-.pedido-info-container {
-  display: flex;
-  gap: 10px;
-  font-size: 0.9rem;
-  color: #7f8c8d;
-}
-
-/* Pagination */
-.paginacao {
-  margin-top: auto;
-  display: flex;
-  justify-content: center;
-  gap: 20px;
-  padding: 20px 0;
-}
-
-.paginacao button {
-  background-color: #50D1D1;
-  color: white;
-  border: none;
-  border-radius: 10px;
-  padding: 10px 20px;
-  font-weight: bold;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: background-color 0.3s;
-}
-
-.paginacao button:hover {
-  background-color: #3aa8a8;
-}
-
-.paginacao button:disabled {
-  background-color: #cccccc;
-  cursor: not-allowed;
+@keyframes bell {
+  0%, 100% { transform: rotate(0); }
+  25%      { transform: rotate(14deg); }
+  75%      { transform: rotate(-14deg); }
 }
 
 /* ==================== */
@@ -727,22 +596,6 @@ textarea {
     height: 60px;
   }
 
-  /* Pending requests */
-  .pedidos-columnas {
-    flex-direction: column;
-    height: auto;
-  }
-
-  .pedido-emergencia, .pedido-normal {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .pedido-icono {
-    width: 50px;
-    height: 50px;
-    font-size: 1.5rem;
-  }
 }
 
 @media (max-width: 480px) {
