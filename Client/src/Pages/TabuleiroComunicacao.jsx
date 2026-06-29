@@ -194,6 +194,26 @@ const TabuleiroComunicacao = () => {
                 <button className="btn btn-outline-light text-muted border-0" style={{ opacity: 0.4 }} onClick={() => setPinVisible(true)} aria-label="Acesso staff">🛠</button>
             </div>
 
+            {/* Botões de ação rápida - explicam para que servem os botões */}
+            <div className="d-flex gap-2 mb-2" style={{ flexWrap: "wrap" }}>
+                <button
+                    onClick={showDrawer}
+                    className="btn btn-primary fw-bold d-flex align-items-center gap-2"
+                    style={{ fontSize: "14px", padding: "8px 16px" }}
+                >
+                    <span className="material-symbols-outlined" style={{ fontSize: "20px" }}>list_alt</span>
+                    Lista de Pedidos
+                </button>
+                <button
+                    className="btn btn-outline-secondary fw-bold d-flex align-items-center gap-2"
+                    style={{ fontSize: "14px", padding: "8px 16px" }}
+                    onClick={() => alert("Área da Equipa - Clique num botão para fazer um pedido à equipa")}
+                >
+                    <span className="material-symbols-outlined" style={{ fontSize: "20px" }}>handshake</span>
+                    Área da Equipa
+                </button>
+            </div>
+
             {!carregado ? (
                 <div className="flex-grow-1 d-flex align-items-center justify-content-center text-muted">A carregar…</div>
             ) : configAtiva ? (
