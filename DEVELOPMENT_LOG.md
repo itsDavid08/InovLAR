@@ -2288,3 +2288,129 @@ ARRANJO** da grelha (remapear as células 90° no sentido horário) mantendo os 
   intenção era o conteúdo de cada botão rodado de lado, é uma linha a acrescentar (rotate ao tile).
 - Nota: o **sentido** do remap é 90° CW (igual ao que se via). Se ficar ao contrário do desejado,
   troca-se a fórmula para `cells[j*cols + (cols-1-i)]` (CCW).
+
+---
+
+## 2026-06-29 — Som das notificações só ao adicionar + foco visual no nome do utente
+
+### Contexto
+Duas afinações na vista de **Pedidos Pendentes** (TV/PC, tablet e telemóvel), pedidas para reduzir
+confusão do staff:
+1. **Som.** O sino tocava a **cada** atualização da lista — tanto ao **adicionar** como ao
+   **retirar/cancelar** um pedido. Como a lista é re-obtida por completo a cada evento `bd_alterado`
+   (socket), qualquer mudança fazia `pedidosPendentes.length > 0` continuar verdadeiro e o sino tocava
+   outra vez. Resultado: campainha a tocar quando o staff **conclui** um pedido — ruído enganador.
+2. **Foco visual.** O destaque principal de cada cartão era o **quarto** (tipografia grande) e o **nome**
+   ficava em legenda. O staff reconhece os utentes pelo **nome**, não pelo número do quarto → inverter a
+   hierarquia.
+
+### Decisão
+**1. Som — detetar pedido novo por IDs, não por comprimento.**
+Em vez de comparar `length` (a abordagem do plano), guarda-se o **conjunto de ids** da renderização
+anterior num `useRef` e toca-se o sino só quando aparece **um id que ainda não existia**.
+- *Porquê ids e não comprimento:* se num mesmo refetch **sai um** pedido e **entra outro**, o comprimento
+  não muda — a comparação por comprimento **não tocaria** para o pedido genuinamente novo. A comparação
+  por ids deteta sempre a entrada, e nunca toca em remoções (o conjunto só perde ids). É estritamente
+  mais correto para o requisito "tocar **apenas** ao adicionar".
+- *Emergência inalterada:* o `Warning-alarm-tone.mp3` continua em **loop** enquanto existir emergência;
+  tem prioridade sobre o sino, exatamente como antes.
+- *No primeiro carregamento* (ref a vazio), se já houver pedidos em espera ao abrir a vista, todos contam
+  como novos → o sino toca uma vez. Comportamento equivalente ao anterior (que tocava com `length > 0`).
+
+**2. Foco — nome em destaque, quarto como legenda.**
+Inversão da hierarquia tipográfica nos **3 layouts** (consistência). O quarto passa a legenda com prefixo
+`🚪` por baixo do nome; a mensagem do botão (`label`) mantém-se a seguir. O nome leva
+`title={r.nome}` + `text-overflow: ellipsis` para nomes longos (ver risco de truncamento no plano).
+
+### Alterações
+**`Client/src/Pages/PedidosPendentes.jsx`** (correção do som)
+- Novo ref `prevIdsRef = useRef(new Set())` (junto a `bellRef`/`warningRef`).
+- No `useEffect([pedidosPendentes])`: calcula `idsAtuais` + `houvePedidoNovo` (algum id atual que não
+  estava no `prevIdsRef`); o sino só toca se `houvePedidoNovo` (no ramo sem emergência). No fim,
+  `prevIdsRef.current = new Set(idsAtuais)` para a próxima comparação. Cleanup do warning inalterado.
+
+**`Client/src/Components/pedidos/PedidosTV.jsx`** (foco no nome — vista PC/TV)
+- *Fila normal:* removido o bloco de largura fixa que mostrava `r.quarto` em grande. O bloco flexível
+  passa a: **nome** `900 clamp(24px,2.4vw,44px)` (com `title` + ellipsis) → `🚪 quarto`
+  `700 clamp(13px,1.2vw,22px)` → `label` (mensagem). O selo de tempo (`r.ago`) mantém-se.
+- *Coluna de emergências:* a linha `{e.quarto} · {e.nome}` passou a duas linhas — **nome** em destaque
+  (`900 clamp(24px,2.3vw,44px)`, `#7f1d1d`) e `🚪 quarto` por baixo (`#991b1b`).
+
+**`Client/src/Components/pedidos/PedidosPhone.jsx`** (foco no nome — telemóvel/tablet)
+- O cartão passou a liderar com o **nome** (`800 18px`, `r.titleColor`, com `title` + ellipsis), depois
+  `🚪 quarto` (legenda), depois a `label` (mensagem) e por fim `r.ago`. Antes o título era a `label` e o
+  `quarto · nome` vinha numa linha só.
+
+> `decorate.js` **não** foi tocado — já expõe `nome` e `quarto` em separado; foi só reordenar a
+> apresentação nos layouts.
+
+### Teste
+- `cd Client && npm run build` → **OK** (`✓ built in 10.47s`). Mantém-se apenas o aviso pré-existente de
+  chunk > 500 kB (não relacionado).
+- Falta **verificação visual em runtime** (arrancar Server + Client):
+  - Som: adicionar pedido → sino toca **uma vez**; concluir/cancelar pedido → **silêncio**; emergência →
+    warning em loop; entrada simultânea de um e saída de outro → sino toca para o novo.
+  - Foco: confirmar nome em destaque e quarto em legenda nos 3 tamanhos de ecrã; nomes longos cortam com
+    reticências sem partir o layout.
+
+### Estado
+- [x] Som: deteção por ids (`prevIdsRef`) — toca só ao adicionar; remoções não tocam
+- [x] Emergência (warning em loop) preservada
+- [x] Foco no nome (quarto → legenda) em PedidosTV (fila + emergências)
+- [x] Foco no nome em PedidosPhone
+- [x] `npm run build` (Client) ✓
+- [ ] Verificação visual em runtime (som + 3 layouts)
+- [ ] (Adiado) Categorização por cores no editor — tarefa 3 do plano `plano-implementacao.html`
+
+---
+
+## 2026-06-29 — Resolver (concluir) pedidos a partir da própria vista de Pedidos Pendentes
+
+### Contexto
+A vista de Pedidos Pendentes (board TV/PC + telemóvel) era **só de leitura**: mostrava os pedidos mas o
+staff não os podia resolver ali — tinha de ir ao tabuleiro do utente / gaveta. Pedido: **concluir o
+pedido na própria vista**.
+
+### Decisão
+- **Resolver = marcar como `"concluido"`** (`updatePedido(pedido, "concluido")`), **não eliminar**.
+  - *Porquê concluir e não `DELETE`:* preserva o histórico e é exatamente o que o utente já faz no
+    `RequestListDrawer` (botão ✔️). O servidor lista pendentes com `where: { estado: 'pendente' }`
+    (`pedidoController.getPedidosAtivosPorEmergencia`), por isso ao concluir o pedido **sai da lista
+    sozinho**. Reutiliza a rota **aberta** `PUT /pedidos/:id` (a mesma do utente) → sem fricção de auth
+    (a vista já está atrás do `RequireStaff`, mas a ação não depende disso).
+- **Pedido ORIGINAL, não o decorado.** O handler procura o pedido em `pedidosPendentes` pelo `id` antes
+  de chamar `updatePedido`, porque `decorate.js` deita fora campos do pedido. `updatePedido` espalha o
+  objeto no body (`{ ...pedido, estado }`); o `Pedido.update` do Sequelize ignora as chaves que não são
+  colunas (ex. `botao`, `utente` do include) — é o mesmo padrão já em produção na gaveta.
+- **Confirmação** (`window.confirm`, idioma já usado no projeto) com o nome do utente, para evitar
+  cliques acidentais no board que **roda páginas sozinho** (7–8 s).
+- **Ambas as vistas** (board TV + telemóvel) e também os cartões de **emergência**.
+- **Sem update otimista** — depois de concluir, o servidor emite `bd_alterado` (socket) → todos os
+  clientes refazem o fetch e o pedido cai da lista. Mesmo fluxo dos restantes mutadores.
+- Interação com o **som** (entrada anterior): concluir **encolhe** a lista (id removido) e a nova lógica
+  do sino só toca em **ids novos** → resolver **não** dispara o sino. ✓
+
+### Alterações — `Client/src/`
+- **`Pages/PedidosPendentes.jsx`** — `updatePedido` do Context; novo `handleResolver(id)` (procura o
+  original → `window.confirm` → `updatePedido(pedido, "concluido")`); passa `onResolver={handleResolver}`
+  a `PedidosTV` e `PedidosPhone`.
+- **`Components/pedidos/PedidosTV.jsx`** — assinatura recebe `onResolver`; botão verde **✔ Concluir** no
+  cartão de emergência e **✔** no cartão da fila (a seguir ao selo de tempo).
+- **`Components/pedidos/PedidosPhone.jsx`** — assinatura recebe `onResolver`; botão **✔** (46×46) no fim
+  de cada cartão.
+
+> `api/pedidos.js`, `ContextProvider.updatePedido` e o servidor **não** foram tocados — a operação já
+> existia (usada pela gaveta do utente); só passou a estar disponível no board.
+
+### Teste
+- `cd Client && npm run build` → **OK** (mantém apenas o aviso pré-existente de chunk > 500 kB).
+- Falta **verificação visual em runtime**: clicar ✔ num pedido normal e numa emergência (board e
+  telemóvel) → confirma → o cartão desaparece da lista em todos os dispositivos; cancelar o `confirm` não
+  faz nada; o sino não toca ao concluir.
+
+### Estado
+- [x] `handleResolver` (concluir o pedido original, com confirmação) em `PedidosPendentes`
+- [x] Botão ✔ no board (fila + emergências) e no telemóvel
+- [x] Reutiliza `updatePedido`/`PUT /pedidos/:id` (sem mudanças no servidor)
+- [x] `npm run build` (Client) ✓
+- [ ] Verificação visual em runtime (concluir em board + telemóvel; confirmar/cancelar; som silencioso)
