@@ -66,7 +66,7 @@ const RequestListDrawer = ({ visible, onClose }) => {
                         {pedidosUtilizador.map((item) => (
                             <div key={item.id} className="request-item">
                                 <img
-                                    src={apiUrl+(item.botao.imagem || "imagesBotoes/default.png")}
+                                    src={apiUrl+(item.botao.imagem || '/imagesBotoes/default.png')}
                                     alt={item.botao.nome}
                                     className="request-icon"
                                 />
@@ -86,7 +86,7 @@ const RequestListDrawer = ({ visible, onClose }) => {
                     </div>
                 </div>
             </div>
-            {isOpen && <div className="drawer-overlay" onClick={handleClose} />}
+            <div className={`drawer-overlay ${isOpen ? "open" : ""}`} onClick={handleClose} />
         </>
     );
 };

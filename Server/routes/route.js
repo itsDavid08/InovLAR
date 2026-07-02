@@ -7,41 +7,41 @@ const utenteController = require('../controller/utenteController');
 const botaoController = require('../controller/botaoController');
 const pedidoController = require('../controller/pedidoController');
 const viewController = require('../controller/viewController');
+const authController = require('../controller/authController');
+const tabelaController = require('../controller/tabelaController');
+const tabelaPadraoController = require('../controller/tabelaPadraoController');
+const { requireStaff } = require('../middleware/auth');
+const { notificarAlteracaoBD } = require('../Util/socketIO');
 
 const router = express.Router();
+const { Botao } = require('../models');
 
-// Configuración mejorada de Multer con creación automática de directorio
-const storage = multer.diskStorage({
+const storageImagesBotoes = multer.diskStorage({
     destination: (req, file, cb) => {
-        const uploadDir = path.join(__dirname, '../public/uploads');
-
-        // Crear directorio si no existe (de forma recursiva)
-        fs.mkdir(uploadDir, { recursive: true }, (err) => {
-            if (err) {
-                console.error('Error al crear directorio de uploads:', err);
-                return cb(err);
-            }
-            cb(null, uploadDir);
-        });
+        const dir = path.join(__dirname, '../public/imagesBotoes');
+        fs.mkdir(dir, { recursive: true }, (err) => cb(err, dir));
     },
     filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+        const dir = path.join(__dirname, '../public/imagesBotoes');
+        const original = path.basename(file.originalname); // segurança: remove componentes de caminho (path traversal)
+        if (req.query.onConflict === 'rename') {
+            const ext = path.extname(original);
+            const base = path.basename(original, ext);
+            let nome = original, n = 1;
+            while (fs.existsSync(path.join(dir, nome))) nome = `${base}(${n++})${ext}`;
+            cb(null, nome);
+        } else {
+            cb(null, original); // substituir ou primeira vez
+        }
     }
 });
 
-// Configuración adicional de Multer para validación
-const upload = multer({
-    storage: storage,
+const uploadImagemBotao = multer({
+    storage: storageImagesBotoes,
     fileFilter: (req, file, cb) => {
-        const filetypes = /jpeg|jpg|png|gif/;
-        const mimetype = filetypes.test(file.mimetype);
-        const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
-
-        if (mimetype && extname) {
-            return cb(null, true);
-        }
-        cb(new Error('Error: Solo se permiten imágenes (JPEG, JPG, PNG, GIF)'));
+        const ok = /jpeg|jpg|png|gif/i.test(file.mimetype) &&
+                   /\.(jpeg|jpg|png|gif)$/i.test(file.originalname);
+        ok ? cb(null, true) : cb(new Error('Apenas imagens (JPEG, JPG, PNG, GIF)'));
     }
 });
 
@@ -61,21 +61,66 @@ router.get('/localIP', (req, res) => {
     res.json(localIP);
 });
 
+// Rotas de autenticação do staff (palavra-passe geral, definida por eles)
+router.get('/auth/staff/status', authController.status);
+router.post('/auth/staff/setup', authController.setup);
+router.post('/auth/staff/login', authController.login);
+router.post('/auth/staff/change', requireStaff, authController.change); // só autenticado
+router.post('/auth/staff/logout', authController.logout);
+
 // Rotas para Utentes
 router.get('/utentes', utenteController.getUtentes);
 router.get('/utentes/:id', utenteController.getUtenteById);
-router.post('/utentes/create', utenteController.createUtente);
-router.put('/utentes/:id', utenteController.updateUtente);
-router.delete('/utentes/:id', utenteController.deleteUtente);
-router.post('/utentes/:utenteId/botoes/:botaoId', utenteController.associarBotao);
-router.delete('/utentes/:utenteId/botoes/:botaoId', utenteController.desassociarBotao);
+router.post('/utentes/create', requireStaff, utenteController.createUtente);
+router.put('/utentes/:id', requireStaff, utenteController.updateUtente);
+router.delete('/utentes/:id', requireStaff, utenteController.deleteUtente);
+router.post('/utentes/:utenteId/botoes/:botaoId', requireStaff, utenteController.associarBotao);
+router.delete('/utentes/:utenteId/botoes/:botaoId', requireStaff, utenteController.desassociarBotao);
 
-// Rotas para Botões - Añadido manejo de errores para la subida de imágenes
+// Layout da tabela por dispositivo
+router.get('/tabelas', tabelaController.listarTabelas);
+router.get('/utentes/:id/tabela/:dispositivo', tabelaController.getTabela);
+router.put('/utentes/:id/tabela/:dispositivo', requireStaff, tabelaController.saveTabela);
+
+// Templates de tabela ("defaults")
+router.get('/tabelas-padrao', tabelaPadraoController.listar);
+router.post('/tabelas-padrao', requireStaff, tabelaPadraoController.criar);
+router.put('/tabelas-padrao/:id', requireStaff, tabelaPadraoController.atualizar);
+router.delete('/tabelas-padrao/:id', requireStaff, tabelaPadraoController.eliminar);
+router.post('/tabelas-padrao/:id/aplicar', requireStaff, tabelaPadraoController.aplicar);
+
+// Upload e eliminação de imagens de botões
+router.post('/imagesBotoes/upload', requireStaff, uploadImagemBotao.single('imagem'), (req, res) => {
+    if (!req.file) return res.status(400).json({ erro: 'Nenhuma imagem enviada' });
+    res.json({ path: `/imagesBotoes/${req.file.filename}` });
+});
+
+router.delete('/imagesBotoes', requireStaff, async (req, res) => {
+    const { path: imgPath } = req.body;
+    if (!imgPath || !imgPath.startsWith('/imagesBotoes/') || imgPath.includes('..')) {
+        return res.status(400).json({ erro: 'Operação não permitida' });
+    }
+    const filename = imgPath.replace('/imagesBotoes/', '');
+    if (filename.includes('/')) return res.status(400).json({ erro: 'Operação não permitida' });
+
+    const filePath = path.join(__dirname, '../public/imagesBotoes', filename);
+    try {
+        await fs.promises.unlink(filePath);
+        const [affectedCount] = await Botao.update({ imagem: null }, { where: { imagem: imgPath } });
+        if (affectedCount > 0) notificarAlteracaoBD();
+        res.json({ eliminado: imgPath, botoesAfetados: affectedCount });
+    } catch (err) {
+        if (err.code === 'ENOENT') return res.status(404).json({ erro: 'Imagem não encontrada' });
+        res.status(500).json({ erro: 'Erro ao eliminar imagem' });
+    }
+});
+
+// Rotas para Botões
 router.get('/botoes', botaoController.getAllBotoes);
 router.get('/botoes/utente/:utenteId', botaoController.getBotoesByUtenteId);
-router.post('/botoes', botaoController.createBotao);
-router.put('/botoes/:id', botaoController.updateBotao);
-router.delete('/botoes/:id', botaoController.deleteBotao);
+router.post('/botoes', requireStaff, botaoController.createBotao);
+router.put('/botoes/:id', requireStaff, botaoController.updateBotao);
+router.delete('/botoes/:id', requireStaff, botaoController.deleteBotao);
 
 // Rotas para Pedidos
 router.get('/pedidos', pedidoController.getTodosPedidos);
@@ -85,7 +130,7 @@ router.get('/pedidos/:id', pedidoController.getPedidoPorId);
 router.get('/pedidos/utente/:utenteId', pedidoController.getPedidosAtivosPorUtenteId);
 router.post('/pedidos', pedidoController.criarPedido);
 router.put('/pedidos/:id', pedidoController.atualizarPedido);
-router.delete('/pedidos/:id', pedidoController.eliminarPedido);
+router.delete('/pedidos/:id', requireStaff, pedidoController.eliminarPedido);
 
 router.get('/', (req,res) => viewController.renderIndexView(res));
 

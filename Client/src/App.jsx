@@ -1,17 +1,21 @@
-import { useState } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { ContextProvider } from "./ContextProvider";
 
-import UtenteHome from "./Pages/UtenteHome.jsx";
-import MainContent from "./Pages/MainContent";
+import TabuleiroComunicacao from "./Pages/TabuleiroComunicacao.jsx";
 import StaffHome from "./Pages/StaffHome.jsx";
 import PedidosPendentes from "./Pages/PedidosPendentes.jsx";
 
-import EditUtente from "./Components/EditUtente.jsx";
-import NewUtente from "./Components/NewUtente.jsx";
+import EditUtente from "./Components/utentes/EditUtente.jsx";
+import NewUtente from "./Components/utentes/NewUtente.jsx";
+import GerirTabela from "./Pages/GerirTabela.jsx";
+import TabelasView from "./Pages/TabelasView.jsx";
+import GerirTemplate from "./Pages/GerirTemplate.jsx";
 
-import EditBotoes from "./Components/EditBotoes.jsx";
-import Home from "./Pages/Home.jsx";
+import EditBotoes from "./Components/botoes/EditBotoes.jsx";
+import Welcome from "./Pages/Welcome.jsx";
+import StaffLogin from "./Pages/StaffLogin.jsx";
+import ChangePassword from "./Pages/ChangePassword.jsx";
+import RequireStaff from "./Components/RequireStaff.jsx";
 
 function App() {
 
@@ -21,14 +25,26 @@ function App() {
 
                 <div className="main-content-area">
                     <Routes>
-                        <Route path="/" element={<Home />} />
-                        <Route path="/utente" element={<UtenteHome />} />
-                        <Route path="/main/:id" element={<MainContent />} />
-                        <Route path="/edit-utente/:id" element={<EditUtente />} />
-                        <Route path="/new-utente" element={<NewUtente />} />
-                        <Route path="/staff" element={<StaffHome />} />
-                        <Route path="/staff/pedidos" element={<PedidosPendentes />} />
-                        <Route path="/editBotoes" element={<EditBotoes />} />
+                        {/* Boas-vindas (raiz): convida a iniciar sessão. */}
+                        <Route path="/" element={<Welcome />} />
+
+                        {/* Ecrã de bloqueio: define a password na 1ª vez, ou pede o PIN. */}
+                        <Route path="/login" element={<StaffLogin />} />
+
+                        {/* Rotas só-staff: protegidas pelo gate de kiosk (RequireStaff). */}
+                        <Route path="/edit-utente/:id" element={<RequireStaff><EditUtente /></RequireStaff>} />
+                        <Route path="/gerir-tabela/:id" element={<RequireStaff><GerirTabela /></RequireStaff>} />
+                        <Route path="/gerir-template/:id" element={<RequireStaff><GerirTemplate /></RequireStaff>} />
+                        <Route path="/new-utente" element={<RequireStaff><NewUtente /></RequireStaff>} />
+                        <Route path="/staff" element={<RequireStaff><StaffHome /></RequireStaff>} />
+                        <Route path="/staff/tabelas" element={<RequireStaff><TabelasView /></RequireStaff>} />
+                        <Route path="/staff/alterar-password" element={<RequireStaff><ChangePassword /></RequireStaff>} />
+                        <Route path="/staff/pedidos" element={<RequireStaff><PedidosPendentes /></RequireStaff>} />
+                        <Route path="/editBotoes" element={<RequireStaff><EditBotoes /></RequireStaff>} />
+
+                        {/* Tabuleiro do utente — a "gaiola" (só se sai com PIN). URL ofuscada e fixa
+                            por utente (token). No fim: as rotas estáticas têm prioridade. */}
+                        <Route path="/:token" element={<TabuleiroComunicacao />} />
                     </Routes>
                 </div>
 
@@ -39,10 +55,3 @@ function App() {
 }
 
 export default App;
-
-/*
-
-<RequestListDrawer visible={isDrawerVisible} onClose={hideDrawer} />
-<SuccessModal visible={isModalVisible} onClose={hideModal} />
-
-*/

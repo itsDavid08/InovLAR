@@ -1,6 +1,13 @@
 // ContextProvider.jsx
+// Estado global da app + orquestração. As chamadas HTTP vivem na camada `api/`;
+// aqui ficam o estado (useState) e as atualizações otimistas.
 import { createContext, useState, useEffect, useRef } from "react";
 import { io } from "socket.io-client";
+import { apiUrl } from "./api/client";
+import * as botoesApi from "./api/botoes";
+import * as utentesApi from "./api/utentes";
+import * as pedidosApi from "./api/pedidos";
+import { staffStatus } from "./api/auth";
 
 export const Context = createContext(); // Exportación nombrada
 
@@ -11,47 +18,38 @@ export const ContextProvider = ({ children }) => {
     const [botoes, setBotoes] = useState([]);
     const [pedidosUtilizador, setPedidosUtilizador] = useState([]);
     const [pedidosPendentes, setPedidosPendentes] = useState([]);
-    const [apiUrl, setApiUrl] = useState(`${window.location.protocol}//${window.location.hostname}:3000/`);
+    // Gate de "kiosk": true quando o staff tem acesso ao console. O acesso é
+    // restaurado do cookie do dispositivo ao arrancar (useEffect abaixo) — logo um
+    // reload mantém a sessão. Exceção: entrar na "gaiola" (/main) revoga o acesso
+    // (ver MainContent). O PIN é sempre validado no servidor (staffLogin); a
+    // segurança real é o `requireStaff` nas rotas de escrita.
+    const [staffUnlocked, setStaffUnlocked] = useState(false);
+    // `false` até a verificação do cookie ao arrancar terminar. Enquanto isso, o
+    // RequireStaff mostra um esqueleto (em vez de branco / piscar para o login).
+    const [staffChecked, setStaffChecked] = useState(false);
 
     const utenteIdRef = useRef(utenteId);
 
 
     const fetchUtentes = async () => {
         try {
-            const response = await fetch(apiUrl + "utentes");
-            const data = await response.json();
-            setUtentes(data);
+            setUtentes(await utentesApi.fetchUtentes());
         } catch (error) {
             console.error("Error fetching utentes:", error);
         }
     };
 
-
     const fetchBotoes = async () => {
-
         try {
-            const response = await fetch(apiUrl + "botoes");
-            const data = await response.json();
-            setBotoes(data);
+            setBotoes(await botoesApi.fetchBotoes());
         } catch (error) {
             console.error("Error fetching botoes:", error);
         }
-
     };
 
     const editBotao = async (botao) => {
         try {
-            const response = await fetch(`${apiUrl}botoes/${botao.id}`, {
-                method: "PUT",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(botao),
-            });
-            if (!response.ok) {
-                throw new Error("Failed to update botao");
-            }
-            const updatedBotao = await response.json();
+            const updatedBotao = await botoesApi.updateBotao(botao);
             setBotoes((prevBotoes) =>
                 prevBotoes.map((b) => (b.id === updatedBotao.id ? updatedBotao : b))
             );
@@ -62,17 +60,7 @@ export const ContextProvider = ({ children }) => {
 
     const postBotao = async (botao) => {
         try {
-            const response = await fetch(apiUrl + "botoes", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(botao),
-            });
-            if (!response.ok) {
-                throw new Error("Failed to create botao");
-            }
-            const newBotao = await response.json();
+            const newBotao = await botoesApi.createBotao(botao);
             setBotoes((prevBotoes) => [...prevBotoes, newBotao]);
         } catch (error) {
             console.error("Error creating botao:", error);
@@ -81,9 +69,7 @@ export const ContextProvider = ({ children }) => {
 
     const fetchPedidosUtilizador = async (id) => {
         try {
-            const response = await fetch(`${apiUrl}pedidos/utente/${id}`);
-            const data = await response.json();
-            setPedidosUtilizador(data);
+            setPedidosUtilizador(await pedidosApi.fetchPedidosUtente(id));
         } catch (error) {
             console.error("Error fetching pedidos:", error);
         }
@@ -91,14 +77,7 @@ export const ContextProvider = ({ children }) => {
 
     const fetchUtente = async (id) => {
         try {
-            console.log("entrou no fetchUtente com id:", id);
-            const response = await fetch(`${apiUrl}utentes/${id}`);
-            if (!response.ok) {
-
-                throw new Error("Utente not found");
-            }
-            const data = await response.json();
-            setUtente(data);
+            setUtente(await utentesApi.fetchUtente(id));
         } catch (error) {
             console.error("Error fetching utente:", error);
         }
@@ -106,16 +85,8 @@ export const ContextProvider = ({ children }) => {
 
     const postUtente = async (utente) => {
         try {
-            const response = await fetch(apiUrl + "utentes/create", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(utente),
-            });
-            if (!response.ok) {
-                throw new Error("Failed to create utente");
-            }
+            const res = await utentesApi.createUtente(utente);
+            return await res.json();   // devolve o utente criado (para o "Criar do zero")
         } catch (error) {
             console.error("Error creating utente:", error);
         }
@@ -123,17 +94,7 @@ export const ContextProvider = ({ children }) => {
 
     const editUtente = async (utente) => {
         try {
-            const response = await fetch(`${apiUrl}utentes/${utente.id}`, {
-                method: "PUT",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(utente),
-            });
-            if (!response.ok) {
-                throw new Error("Failed to update utente");
-            }
-            const data = await response.json();
+            const data = await utentesApi.updateUtente(utente);
             setUtentes((prevUtentes) =>
                 prevUtentes.map((u) => (u.id === data.id ? data : u))
             );
@@ -148,12 +109,7 @@ export const ContextProvider = ({ children }) => {
      */
     const fetchPedidosPendentesByEmergencia = async () => {
         try {
-            const response = await fetch(apiUrl + "pedidos/ativos/emergencia");
-            if (!response.ok) {
-                throw new Error("Failed to fetch pending requests");
-            }
-            const data = await response.json();
-            setPedidosPendentes(data);
+            setPedidosPendentes(await pedidosApi.fetchPedidosPendentesEmergencia());
         } catch (error) {
             console.error("Error fetching pending requests:", error);
         }
@@ -161,16 +117,7 @@ export const ContextProvider = ({ children }) => {
 
     const postPedido = async (pedido) => {
         try {
-            const response = await fetch(apiUrl + "pedidos", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(pedido),
-            });
-            if (!response.ok) {
-                throw new Error("Failed to create pedido");
-            }
+            await pedidosApi.createPedido(pedido);
         } catch (error) {
             console.error("Error creating pedido:", error);
         }
@@ -178,13 +125,7 @@ export const ContextProvider = ({ children }) => {
 
     const updatePedido = async (pedido, novoEstado) => {
         try {
-            console.log(`${apiUrl}pedidos/${pedido.id}`);
-            const response = await fetch(`${apiUrl}pedidos/${pedido.id}`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ ...pedido, estado: novoEstado }),
-            });
-            if (!response.ok) throw new Error("Erro ao atualizar pedido");
+            await pedidosApi.updatePedido(pedido, novoEstado);
         } catch (error) {
             console.error(error);
         }
@@ -192,12 +133,7 @@ export const ContextProvider = ({ children }) => {
 
     const deleteUtente = async (id) => {
         try {
-            const response = await fetch(`${apiUrl}utentes/${id}`, {
-                method: "DELETE",
-            });
-            if (!response.ok) {
-                throw new Error("Failed to delete utente");
-            }
+            await utentesApi.deleteUtente(id);
         } catch (error) {
             console.error("Error deleting utente:", error);
         }
@@ -205,12 +141,7 @@ export const ContextProvider = ({ children }) => {
 
     const deleteBotao = async (id) => {
         try {
-            const response = await fetch(`${apiUrl}botoes/${id}`, {
-                method: "DELETE",
-            });
-            if (!response.ok) {
-                throw new Error("Failed to delete botao");
-            }
+            await botoesApi.deleteBotao(id);
             setBotoes((prevBotoes) => prevBotoes.filter((b) => b.id !== id));
         } catch (error) {
             console.error("Error deleting botao:", error);
@@ -226,6 +157,20 @@ export const ContextProvider = ({ children }) => {
         fetchBotoes();
         fetchPedidosPendentesByEmergencia();
 
+    }, []);
+
+    // Restaura o acesso de staff a partir do cookie do dispositivo (sessão
+    // persistente). Exceção: na "gaiola" (/main) não restaura — entrar no
+    // tabuleiro do utente revoga o acesso (ver MainContent). No fim marca
+    // `staffChecked` para o RequireStaff deixar de mostrar o esqueleto.
+    useEffect(() => {
+        if (window.location.pathname.startsWith("/main")) {
+            setStaffChecked(true);
+            return;
+        }
+        staffStatus()
+            .then((s) => { if (s.autenticado) setStaffUnlocked(true); })
+            .finally(() => setStaffChecked(true));
     }, []);
 
     useEffect(() => {
@@ -272,6 +217,9 @@ export const ContextProvider = ({ children }) => {
                 setPedidosUtilizador,
                 pedidosPendentes,
                 setPedidosPendentes,
+                staffUnlocked,
+                setStaffUnlocked,
+                staffChecked,
                 deleteUtente,
                 postPedido,
                 postBotao,
@@ -290,4 +238,3 @@ export const ContextProvider = ({ children }) => {
         </Context.Provider>
     );
 };
-

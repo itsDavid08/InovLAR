@@ -1,148 +1,85 @@
 import { useState, useEffect, useContext, useRef } from "react";
 import { Context } from "../ContextProvider";
 import { useNavigate } from "react-router-dom";
+import StaffBottomNav from "../Components/layout/StaffBottomNav";
+import { split } from "../Components/pedidos/decorate";
+import { useViewportMode } from "../Components/pedidos/useViewportMode";
+import PedidosTV from "../Components/pedidos/PedidosTV";
+import PedidosPhone from "../Components/pedidos/PedidosPhone";
 import "../index.css";
 
+// Container: mantém o estado/áudio/teclado e escolhe o layout por tamanho de ecrã
+// (TV = Opção B, Tablet = Opção A, Telemóvel = lista). Os layouts são "burros".
 function PedidosPendentes() {
-    const { pedidosPendentes, apiUrl} = useContext(Context);
-    const [pedidosEsquerda, setPedidosEsquerda] = useState([]);
-    const [pedidosDireita, setPedidosDireita] = useState([]);
-    const [paginaAtual, setPaginaAtual] = useState(1);
-    const itensPorPagina = 5;
+    const { pedidosPendentes, updatePedido } = useContext(Context);
+    const [now, setNow] = useState(Date.now());
     const navigate = useNavigate();
+    const mode = useViewportMode();
     const bellRef = useRef(null);
     const warningRef = useRef(null);
+    const prevIdsRef = useRef(new Set());
 
-    const indexUltimoItem = paginaAtual * itensPorPagina;
-    const indexPrimeiroItem = indexUltimoItem - itensPorPagina;
-    const pedidosPagina = pedidosDireita.slice(indexPrimeiroItem, indexUltimoItem);
-    const totalPaginas = Math.ceil(pedidosDireita.length / itensPorPagina);
-
+    // Atualiza o "há X min" a cada 10s (não depende de novos dados do servidor).
     useEffect(() => {
-        const esquerda = pedidosPendentes.slice(0, 2);
-        const direita = pedidosPendentes.slice(2);
+        const t = setInterval(() => setNow(Date.now()), 10000);
+        return () => clearInterval(t);
+    }, []);
 
-        setPedidosEsquerda(esquerda);
-        setPedidosDireita(direita);
-
-        // console.log(pedidosPendentes);
-    }, [pedidosPendentes]);
-
+    // Esc → volta ao painel de staff (comportamento anterior preservado).
     useEffect(() => {
-        const handleEsc = (event) => {
-            if (event.key === "Escape") {
-                navigate("/staff");
-            }
-        };
+        const onKey = (e) => { if (e.key === "Escape") navigate("/staff"); };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [navigate]);
 
-        const handleArrows = (event) => {
-            if (event.key === "ArrowLeft" && paginaAtual > 1) {
-                setPaginaAtual(paginaAtual - 1);
-            } else if (event.key === "ArrowRight") {
-                if (paginaAtual < totalPaginas) {
-                    setPaginaAtual(paginaAtual + 1);
-                }
-            }
-        };
-
-        window.addEventListener("keydown", handleEsc);
-        window.addEventListener("keydown", handleArrows);
-
-        return () => {
-            window.removeEventListener("keydown", handleEsc);
-            window.removeEventListener("keydown", handleArrows);
-        };
-    }, [navigate, paginaAtual, totalPaginas]);
-
+    // Alarme: 'warning' em loop enquanto houver emergência; senão o sino toca
+    // APENAS quando entra um pedido NOVO (id que ainda não estava na lista).
+    // Cancelar/retirar pedidos já não dispara o sino (comparação por ids, não
+    // por comprimento — deteta o pedido novo mesmo se outro sair ao mesmo tempo).
     useEffect(() => {
-        if (!bellRef.current) {
-            bellRef.current = new window.Audio("/Hand-bell-rings-sound-effect.mp3");
-        }
+        if (!bellRef.current) bellRef.current = new window.Audio("/Hand-bell-rings-sound-effect.mp3");
         if (!warningRef.current) {
             warningRef.current = new window.Audio("/Warning-alarm-tone.mp3");
             warningRef.current.loop = true;
         }
-
-        const existeEmergencia = pedidosPendentes.some(p => p.emergencia);
-
-        if (!existeEmergencia) {
-            warningRef.current.pause();
-            warningRef.current.currentTime = 0;
-        }
+        const existeEmergencia = pedidosPendentes.some((p) => p.emergencia);
+        const idsAtuais = pedidosPendentes.map((p) => p.id);
+        const houvePedidoNovo = idsAtuais.some((id) => !prevIdsRef.current.has(id));
 
         if (existeEmergencia) {
             warningRef.current.play().catch(() => {});
-        } else if (pedidosPendentes.length > 0) {
-            bellRef.current.currentTime = 0;
-            bellRef.current.play().catch(() => {});
+        } else {
+            warningRef.current.pause();
+            warningRef.current.currentTime = 0;
+            if (houvePedidoNovo) {
+                bellRef.current.currentTime = 0;
+                bellRef.current.play().catch(() => {});
+            }
         }
+        // Guarda os ids atuais para a próxima comparação.
+        prevIdsRef.current = new Set(idsAtuais);
 
         return () => {
             warningRef.current?.pause();
-            warningRef.current.currentTime = 0;
+            if (warningRef.current) warningRef.current.currentTime = 0;
         };
-    });
+    }, [pedidosPendentes]);
 
-    const mudarPagina = (novaPagina) => {
-        setPaginaAtual(novaPagina);
+    // Resolve (conclui) um pedido a partir do board. Procura o pedido ORIGINAL
+    // (a versão decorada não tem todos os campos) e marca-o como concluído →
+    // sai da lista (o servidor filtra estado: 'pendente'). Mesmo padrão da gaveta.
+    const handleResolver = (id) => {
+        const pedido = pedidosPendentes.find((p) => p.id === id);
+        if (!pedido) return;
+        updatePedido(pedido, "concluido");
     };
 
-    return (
-        <div className="pedidos-container">
-            <div className="pedidos-columnas">
-                <div className="coluna-emergencia">
-                    <h1 className="pedidos-titulo">Lista de Pedidos Pendentes</h1>
-                    {pedidosEsquerda.map((pedido, index) => (
-                        <div key={index} className={`Item-Pedido Item-Grande ${pedido.emergencia ? "Pedido-Emergencia" : ""}`}>
-                            <div style={{ display: 'flex', alignItems: 'center',gap: "10px", width: '100%', justifyContent: 'space-between', height: '100%' }}>
-                                <div className="pedido-icono iconoGrande">
-                                    <img src={apiUrl + pedido.botao?.imagem || ""} alt="" style={{ width: '70%' }} />
-                                </div>
-                                <div style={{ display: 'flex',flexDirection: 'column', alignItems: 'center', gap: '10px', width: '100%', justifyContent: 'space-between' }}>
-                                    <h2 style={{ margin: 0, fontSize: 'clamp(32px, 4vw, 40px)', wordBreak: "break-word", textAlign: "center" }}>{pedido.botao?.mensagem || ""}</h2>
-                                    <p style={{fontSize: "clamp(18px, 3vw, 24px)"}}>
-                                        {pedido.utente?.nome} - <strong>{pedido.utente?.quarto}</strong> - {" "}
-                                        {new Date(pedido.hora).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
-                                        {" - "}
-                                        {new Date(pedido.hora).toLocaleDateString([], {day: '2-digit', month: '2-digit', year: 'numeric'})}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
+    const { all, emergencias, normais } = split(pedidosPendentes, now);
 
-                <div className="coluna-normal">
-                    {paginaAtual > 1 && ( <button style={{border : "none", borderRadius: "20%"}} onClick={() => mudarPagina(paginaAtual - 1)} >◀</button>)}
-
-                    <div style={{flexDirection: "column", width: "100%", marginLeft: "10px", marginRight: "10px"}}>
-                    {pedidosPagina.map((pedido, index) => (
-                        <div key={index} className={`Item-Pedido Item-Pequeno ${pedido.emergencia ? "Pedido-Emergencia" : ""}`}>
-                            <div style={{ display: 'flex', alignItems: 'center',gap: "10px", width: '100%', justifyContent: 'space-between', height: '100%' }}>
-                                <div className="pedido-icono iconoPequeno">
-                                    <img src={apiUrl + pedido.botao?.imagem || ""} alt="" style={{ width: '70%' }} />
-                                </div>
-                                <div style={{ display: 'flex',flexDirection: 'column', alignItems: 'center', gap: '10px', width: '100%', justifyContent: 'space-between' }}>
-                                    <h2 style={{ margin: 0, fontSize: 'clamp(16px, 2vw, 28px)', wordBreak: "break-word", textAlign: "center" }}>{pedido.botao?.mensagem || ""}</h2>
-                                    <p style={{fontSize: "clamp(14px, 2vw, 22px)"}}>
-                                        {pedido.utente?.nome}- <strong>{pedido.utente?.quarto}</strong> - {" "}
-                                        {new Date(pedido.hora).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
-                                        {" - "}
-                                        {new Date(pedido.hora).toLocaleDateString([], {day: '2-digit', month: '2-digit', year: 'numeric'})}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                    </div>
-
-                    {totalPaginas > 1 && paginaAtual != totalPaginas && (
-                            <button style={{border : "none"}} onClick={() => mudarPagina(paginaAtual + 1)} >▶</button>
-                    )}
-                </div>
-            </div>
-        </div>
-    );
+    // TV/PC (≥1280px) usa o board (Opção B). Tablet e telemóvel partilham a
+    // mesma lista de cartões.
+    if (mode === "tv") return <PedidosTV emergencias={emergencias} normais={normais} onResolver={handleResolver} />;
+    return (<><PedidosPhone all={all} onResolver={handleResolver} /><StaffBottomNav /></>);
 }
 
 export default PedidosPendentes;

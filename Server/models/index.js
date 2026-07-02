@@ -2,8 +2,11 @@ const sequelize = require('../config/database');
 const Botao = require('./Botao');
 const Utente = require('./Utente');
 const Pedido = require('./Pedido');
+const StaffAuth = require('./StaffAuth');
+const TabelaLayout = require('./TabelaLayout');
+const TabelaPadrao = require('./TabelaPadrao');
 
-const models = { Botao, Utente, Pedido };
+const models = { Botao, Utente, Pedido, StaffAuth, TabelaLayout, TabelaPadrao };
 
 const initDb = async () => {
     try {

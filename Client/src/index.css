@@ -1,9 +1,28 @@
 /* ==================== */
 /* GLOBAL STYLES */
 /* ==================== */
+html,
+body,
+#root {
+  /* Base opaca: impede que o "translucent" do Windhawk passe por trás do conteúdo */
+  background-color: #ffffff;
+}
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  /* Cor de letra preta por omissão — vale para tudo o que não define cor própria */
+  color: #000000;
+}
+
+/* Os controlos de formulário não herdam 'color' por omissão — usam a cor de
+   sistema 'ButtonText', que o Windhawk (SysColors) troca por cinza claro e torna
+   o texto ilegível (ex.: .sidebar-button). Forçar herança devolve-lhes o preto do body. */
+button,
+input,
+select,
+textarea {
+  color: inherit;
 }
 
 /* ==================== */
@@ -371,36 +390,54 @@ body {
 }
 
 /* ==================== */
+/* EDITOR DE TABELAS — item selecionado (linha tracejada a mexer) */
+/* ==================== */
+.ants-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
+.ants-svg rect {
+  x: 1px; y: 1px;
+  width: calc(100% - 2px);
+  height: calc(100% - 2px);
+  rx: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-dasharray: 9 7;
+  animation: marching-ants 0.5s linear infinite;
+}
+@keyframes marching-ants { to { stroke-dashoffset: -32; } }
+
+/* ==================== */
 /* REQUEST LIST DRAWER STYLES */
 /* ==================== */
 .custom-drawer {
   position: fixed;
   top: 0;
-  right: -100%;
+  left: 0;
   width: 80%;
   max-width: 400px;
   height: 100vh;
   z-index: 1000;
-  transition: left 0.3s ease;
+  transform: translateX(-100%);
+  transition: transform 0.3s ease;
 }
 
 .custom-drawer.open {
-  left: 0;
+  transform: translateX(0);
 }
 
 .drawer-overlay {
   position: fixed;
-  top: 0;
-  right: 0;
-  width: 100%;
-  height: 100%;
+  inset: 0;
   background-color: rgba(0, 0, 0, 0.5);
   z-index: 999;
-  display: none;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
 }
 
-.custom-drawer.open + .drawer-overlay {
-  display: block;
+.drawer-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .drawer-content {
@@ -489,153 +526,22 @@ body {
 }
 
 /* ==================== */
-/* PENDING REQUESTS PAGE STYLES */
+/* PENDING REQUESTS PAGE — animações da emergência (board TV/Tablet/Telemóvel) */
+/* Layout/estilo vivem inline nos componentes Components/pedidos/*. Aqui só as  */
+/* keyframes, que não podem ser inline.                                         */
 /* ==================== */
-.pedidos-container {
-  padding: 20px;
-  background-color: #f0f4f8;
-  min-height: 100vh;
+@keyframes emgFlash {
+  0%, 100% { background: #fee2e2; box-shadow: 0 0 0 0 rgba(220,38,38,0); }
+  50%      { background: #fecaca; box-shadow: 0 0 0 10px rgba(220,38,38,.22); }
 }
-
-.pedidos-titulo {
-  text-align: center;
-  font-size: 2.5rem;
-  color: #2c3e50;
-  margin-bottom: 30px;
+@keyframes emgBorder {
+  0%, 100% { border-color: #ef4444; }
+  50%      { border-color: #7f1d1d; }
 }
-
-.pedidos-columnas {
-  display: flex;
-  gap: 20px;
-  max-width: 95vw;
-  margin: 0 auto;
-  height: 90vh;
-}
-
-/* Emergency column */
-.coluna-emergencia {
-  background-color: #ffffff;
-  flex: 1;
-  padding: 20px;
-  border-radius: 15px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  color: Black;
-  font-weight: bold;
-
-}
-
-.Pedido-Emergencia {
-  background-color: #ff8080; !important;
-  color: black;
-  border-radius: 12px;
-  padding: 15px;
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  font-size: 1rem;
-}
-
-.Item-Pequeno{
-  height: 18%;
-}
-
-.Item-Grande{
-    height: 40%;
-}
-
-.pedido-icono{
-  border-radius: 50%;
-  background-color: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 2rem;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.iconoGrande{
-  width: 120px;
-  height: 120px;
-  min-width: 120px;
-  min-height: 120px;
-}
-.iconoPequeno{
-    width: 80px;
-    height: 80px;
-    min-width: 80px;
-    min-height: 80px;
-}
-
-/* Normal column */
-.coluna-normal {
-  flex: 1;
-  background-color: #ffffff;
-  padding: 20px;
-  border-radius: 15px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  display: flex;
-}
-
-.Item-Pedido {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-
-  border-radius: 12px;
-  padding: 15px;
-  margin-bottom: 15px;
-  font-size: 1rem;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-
-}
-
-.pedido-mensagem {
-  font-weight: bold;
-  font-size: 1.2rem;
-  color: #34495e;
-  margin: 0;
-  margin-bottom: 5px;
-}
-
-.pedido-info-container {
-  display: flex;
-  gap: 10px;
-  font-size: 0.9rem;
-  color: #7f8c8d;
-}
-
-/* Pagination */
-.paginacao {
-  margin-top: auto;
-  display: flex;
-  justify-content: center;
-  gap: 20px;
-  padding: 20px 0;
-}
-
-.paginacao button {
-  background-color: #50D1D1;
-  color: white;
-  border: none;
-  border-radius: 10px;
-  padding: 10px 20px;
-  font-weight: bold;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: background-color 0.3s;
-}
-
-.paginacao button:hover {
-  background-color: #3aa8a8;
-}
-
-.paginacao button:disabled {
-  background-color: #cccccc;
-  cursor: not-allowed;
+@keyframes bell {
+  0%, 100% { transform: rotate(0); }
+  25%      { transform: rotate(14deg); }
+  75%      { transform: rotate(-14deg); }
 }
 
 /* ==================== */
@@ -690,22 +596,6 @@ body {
     height: 60px;
   }
 
-  /* Pending requests */
-  .pedidos-columnas {
-    flex-direction: column;
-    height: auto;
-  }
-
-  .pedido-emergencia, .pedido-normal {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .pedido-icono {
-    width: 50px;
-    height: 50px;
-    font-size: 1.5rem;
-  }
 }
 
 @media (max-width: 480px) {
@@ -761,5 +651,176 @@ body {
   border-radius: 5px;
   cursor: pointer;
   font-size: 16px;
+}
+
+/* ==================== */
+/* STAFF LOGIN (PIN) STYLES */
+/* ==================== */
+
+/* Camada do modal de PIN (saída da gaiola): cobre o tabuleiro do utente. */
+.pin-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+}
+
+.login-screen {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background-color: #f5f5f5;
+  padding: 20px;
+  text-align: center;
+}
+
+.login-screen h1 {
+  color: #333;
+  margin-bottom: 8px;
+  font-size: 2rem;
+}
+
+.login-subtitulo {
+  color: #777;
+  margin: 0 0 20px;
+  font-size: 1rem;
+}
+
+.welcome-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.login-iniciar {
+  margin-top: 24px;
+  padding: 16px 48px;
+  border: none;
+  border-radius: 32px;
+  background-color: #1E90FF;
+  color: white;
+  font-size: 1.3rem;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(30, 144, 255, 0.3);
+  transition: transform 0.1s, background-color 0.2s;
+  touch-action: manipulation;
+}
+
+.login-iniciar:hover { background-color: #1873cc; }
+.login-iniciar:active { transform: scale(0.97); }
+
+.login-voltar {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  background: none;
+  border: none;
+  color: #1E90FF;
+  font-size: 1.1rem;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.pin-display {
+  height: 40px;
+  margin: 10px 0 20px;
+  font-size: 2.5rem;
+  letter-spacing: 12px;
+  color: #1E90FF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pin-placeholder {
+  color: #ccc;
+}
+
+.login-erro {
+  color: #FF5252;
+  font-weight: bold;
+  margin: 0 0 16px;
+  min-height: 1.2rem;
+}
+
+.keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  width: 100%;
+  max-width: 320px;
+}
+
+.keypad-btn {
+  height: 80px;
+  border: none;
+  border-radius: 50%;
+  background-color: white;
+  color: #333;
+  font-size: 1.8rem;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  transition: transform 0.1s, background-color 0.2s;
+  touch-action: manipulation;
+}
+
+.keypad-btn:hover {
+  background-color: #f0f0f0;
+}
+
+.keypad-btn:active {
+  transform: scale(0.95);
+}
+
+.keypad-ok {
+  background-color: #1E90FF;
+  color: white;
+}
+
+.keypad-ok:hover {
+  background-color: #1a7fe0;
+}
+
+.keypad-acao {
+  background-color: #E0E0E0;
+}
+
+.login-sucesso {
+  color: #4CAF50;
+  font-weight: bold;
+  font-size: 1.1rem;
+  margin: 0 0 24px;
+}
+
+.login-botao-grande {
+  background-color: #1E90FF;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  padding: 14px 40px;
+  font-size: 1.1rem;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.login-botao-grande:hover {
+  background-color: #1a7fe0;
+}
+
+/* Botão "Terminar sessão" na sidebar do staff (destaque vermelho suave) */
+.sidebar-button-logout {
+  background-color: #ffd6d6;
+  color: #c0392b;
+  font-weight: bold;
+}
+
+.sidebar-button-logout:hover {
+  background-color: #ffbdbd;
 }
 
