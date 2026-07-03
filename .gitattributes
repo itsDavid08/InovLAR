@@ -1,0 +1,3 @@
+# Garante line-endings LF em scripts shell — CRLF do Windows parte o shebang na Raspberry Pi.
+*.sh text eol=lf
+install.sh text eol=lf
