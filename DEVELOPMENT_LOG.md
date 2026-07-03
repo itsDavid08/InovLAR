@@ -2632,6 +2632,43 @@ chamar `$NPM_BIN`, garantindo que o `env node` do shebang resolve para o mesmo b
 - [x] App movida para `/opt/inov-lar` (local definitivo); instalação antiga preservada em
       `/opt/inov-lar.old` até se confirmar tudo, depois apagável.
 - [x] `npm install`/`npm run build` também usam o Node validado (correção do `$PATH` do shebord do npm).
+
+### Bug real na Pi (2026-07-03) — tabela `Pedidos` vs `pedidos`, mascarado pelo Windows
+
+Depois da mudança para `/opt/inov-lar`, o `journalctl` mostrou erros reais em produção ao abrir a
+página de um utente: `Table 'inovlar.pedidos' doesn't exist` (`ER_NO_SUCH_TABLE`), disparado pelo
+`getUtenteById` (join com `pedidos`).
+
+**Causa:** a migration original `20250506190829-create-pedidos.js` criava a tabela como `'Pedidos'`
+(maiúscula), mas o model (`Server/models/Pedido.js`) usa `tableName: 'pedidos'` (minúscula) — um
+mismatch que já existia **antes** desta migração para MariaDB, mas ficava invisível: no SQLite os
+nomes de tabela são comparados sem distinguir maiúsculas/minúsculas, e no MariaDB do **Windows**
+(`lower_case_table_names=1`, confirmado com `SHOW VARIABLES`) os nomes são sempre dobrados para
+minúsculas independentemente do que se pede — por isso todos os testes locais desta migração
+passaram sem nunca revelar o problema. No MariaDB de **Linux** (omissão `lower_case_table_names=0`,
+como na Pi), os nomes são case-sensitive: a tabela física ficou `Pedidos`, mas o Sequelize procurava
+`pedidos` → erro.
+
+**Correção (duas frentes):**
+1. `Server/migrations/20250506190829-create-pedidos.js` — `createTable`/`addIndex`/`dropTable`
+   passam a usar `'pedidos'` (minúscula), para instalações de raiz futuras já saírem corretas.
+2. `Server/migrations/20260703150000-rename-pedidos-table.js` (nova) — para bases **já migradas**
+   (Pi, dev local): faz `RENAME TABLE Pedidos TO pedidos`, mas só depois de confirmar com
+   `information_schema.tables` + `BINARY` (comparação exata de maiúsculas/minúsculas) que existe
+   mesmo uma tabela física `Pedidos` distinta — evita rebentar em sistemas onde já é `pedidos`
+   (confirmado: correr às cegas no Windows dava `ERROR 1050: Table 'pedidos' already exists`).
+
+Testado localmente: a verificação `BINARY` distingue corretamente `'Pedidos'` (0 linhas) de
+`'pedidos'` (1 linha) mesmo no Windows onde a tabela física é só uma; a migration correu como no-op
+aqui (correto); CRUD completo (incluindo `Pedido` com join) confirmado a funcionar depois.
+
+**Lição:** testar só no Windows não basta quando o alvo de produção é Linux — `lower_case_table_names`
+é uma das diferenças silenciosas entre os dois. Migrations que criam nomes de tabela devem ser
+escritas e revistas assumindo case-sensitivity.
+
+### Estado (Fase 3)
+- [ ] **Correr a nova migration na Pi** (`db:migrate`) para renomear `Pedidos` → `pedidos` na base
+      já existente — só depois disso a página de utente deixa de dar erro 500.
 - [ ] **Confirmar o template "Predefinida":** o serviço já arrancou antes dos seeders existirem, por
       isso `seedDefaults()` pode ter criado um `TabelaPadrao` vazio (só corre uma vez). Verificar
       `JSON_LENGTH` das `configs` e, se vazio, apagar e reiniciar para regenerar com os 43 botões.

@@ -2,7 +2,7 @@
 
 module.exports = {
   async up(queryInterface, Sequelize) {
-    await queryInterface.createTable('Pedidos', {
+    await queryInterface.createTable('pedidos', {
       id: {
         type: Sequelize.INTEGER,
         primaryKey: true,
@@ -46,11 +46,11 @@ module.exports = {
       }
     });
 
-    await queryInterface.addIndex('Pedidos', ['utenteId']);
-    await queryInterface.addIndex('Pedidos', ['botaoId']);
+    await queryInterface.addIndex('pedidos', ['utenteId']);
+    await queryInterface.addIndex('pedidos', ['botaoId']);
   },
 
   async down(queryInterface) {
-    await queryInterface.dropTable('Pedidos');
+    await queryInterface.dropTable('pedidos');
   }
 };
