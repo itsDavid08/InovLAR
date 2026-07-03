@@ -2596,16 +2596,47 @@ Duplicate entry '1' for key 'PRIMARY'` (o seeder usa IDs fixos). Por isso o `ins
 contra o MariaDB de dev nos dois cenários: tabela cheia → salta (confirmado); tabela vazia → semeia as
 43 linhas com sucesso, acentos (Emergência, Medicação, Café/Chá) intactos.
 
+### `/opt/inov-lar` continha uma instalação antiga, pré-migração
+
+Ao investigar onde ficava o `.env` (o `install.sh` escreve-o ao lado de onde o próprio script está —
+`SCRIPT_DIR`, não um caminho fixo), percebeu-se que a app real tinha sido corrida a partir de
+`/home/informatica/Documentos/InovLAR-main`, e que `/opt/inov-lar` continha uma cópia **antiga**:
+tinha pastas `Server/core` e `Server/build` que não existem na árvore atual do repositório — quase de
+certeza a instalação pré-migração, ainda com `sqlite3`, e provável origem do crash-loop antigo
+("Inov-LAR Server", SEGV) visto no `journalctl` numa sessão anterior.
+
+**Ação:** `/opt/inov-lar` renomeado para `/opt/inov-lar.old` (não apagado — só depois de confirmar
+tudo a funcionar do novo sítio), a app real movida de `Documentos/InovLAR-main` para `/opt/inov-lar`,
+e o `install.sh` corrido outra vez de lá — reescreve o `.service` com o `WorkingDirectory`/`ExecStart`
+corretos e reaproveita a password do `.env` já existente (idempotência confirmada: "Reutilizo a
+password da BD já registada"; migrations: "já estava atualizado"; seeders: "salto (43 já existem)").
+Serviço confirmado ativo e estável a partir de `/opt/inov-lar` (`curl` 200 OK, sem crashes).
+
+### `npm install` também caía no Node errado (mesma família do bug do `find_node`)
+
+Avisos `EBADENGINE` durante o `npm install` mostravam `current: { node: 'v18.20.5' }`, apesar de o
+`find_node()` ter escolhido corretamente o v22 para as migrations. Causa: o `npm-cli.js` tem shebang
+`#!/usr/bin/env node` — invocado diretamente (mesmo com `NPM_BIN` absoluto), o SO resolve esse `node`
+por `$PATH`, não pelo `NODE_BIN` escolhido. Sob `sudo`, o `$PATH` é mínimo e não inclui o nvm, caindo
+de volta no `/usr/local/bin/node` (v18). Não partiu nada desta vez (`mariadb` é pacote 100% JS, sem
+compilação nativa), mas era um risco real para uma dependência futura. **Corrigido:** as subshells que
+correm `npm install`/`npm run build` agora exportam `PATH="$(dirname "$NODE_BIN"):$PATH"` antes de
+chamar `$NPM_BIN`, garantindo que o `env node` do shebang resolve para o mesmo binário validado.
+
 ### Estado (Fase 3)
 - [x] `mariadb-server` da distro instalado e a correr na Pi (10.11.3).
 - [x] BD/utilizador criados via `install.sh`, idempotente.
 - [x] Migrations aplicadas com sucesso na Pi (Node v22 via nvm, encontrado por `find_node()`).
 - [x] Serviço systemd `inov-lar` ativo; `curl` devolve 200 OK com a SPA.
-- [x] Seeders dos botões (`install.sh`), idempotentes por contagem prévia — testado localmente.
-- [ ] **Na Pi:** correr o `install.sh` atualizado para semear os botões; depois **apagar o template
-      "Predefinida" vazio** (criado no primeiro arranque, antes da correção) para o `seedDefaults()` o
-      regenerar corretamente no próximo restart — ver comandos na próxima mensagem.
+- [x] Seeders dos botões (`install.sh`), idempotentes por contagem prévia — confirmado na Pi (43 linhas).
+- [x] App movida para `/opt/inov-lar` (local definitivo); instalação antiga preservada em
+      `/opt/inov-lar.old` até se confirmar tudo, depois apagável.
+- [x] `npm install`/`npm run build` também usam o Node validado (correção do `$PATH` do shebord do npm).
+- [ ] **Confirmar o template "Predefinida":** o serviço já arrancou antes dos seeders existirem, por
+      isso `seedDefaults()` pode ter criado um `TabelaPadrao` vazio (só corre uma vez). Verificar
+      `JSON_LENGTH` das `configs` e, se vazio, apagar e reiniciar para regenerar com os 43 botões.
 - [ ] Validação funcional na app (browser): criar botão sem imagem; abrir/gravar o tabuleiro de um
       utente (round-trip JSON); confirmar que os 3 bugs corrigidos (imagem allowNull, updatedAt do
       through-table, JSON como objeto) se comportam bem em produção real, não só via script de teste.
+- [ ] Apagar `/opt/inov-lar.old` depois de tudo confirmado.
 - [ ] Fase 4 — kiosk mode (Chromium a abrir sozinho no boot).
