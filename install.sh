@@ -149,6 +149,20 @@ log "A correr as migrations (sequelize-cli, sem npx — binário direto via node
 # re-resolução de $PATH (que reapanharia o node v22 do nvm).
 ( cd "$SERVER_DIR" && "$NODE_BIN" node_modules/sequelize-cli/lib/sequelize db:migrate )
 
+# Seeders (botões predefinidos). AO CONTRÁRIO das migrations, o sequelize-cli NÃO regista os
+# seeders já corridos (sem SequelizeMeta própria) — correr `db:seed:all` duas vezes rebentava com
+# chave duplicada (o seeder usa IDs fixos). Por isso a idempotência é feita aqui, à mão: só corre
+# se a tabela `Botoes` estiver vazia. Tem de correr ANTES do serviço arrancar, porque o
+# `seedDefaults()` do `main.js` usa os botões existentes para construir o template "Predefinida"
+# (e só o faz uma vez — se arrancar com a tabela vazia, o template fica vazio para sempre).
+BOTAO_COUNT="$("$MYSQL_CLI" -N -e "SELECT COUNT(*) FROM \`${DB_NAME}\`.Botoes;" 2>/dev/null || echo 0)"
+if [ "${BOTAO_COUNT:-0}" -eq 0 ]; then
+  log "A popular os botões predefinidos (seeders)..."
+  ( cd "$SERVER_DIR" && "$NODE_BIN" node_modules/sequelize-cli/lib/sequelize db:seed:all )
+else
+  log "Tabela Botoes já tem ${BOTAO_COUNT} linha(s) — salto os seeders (idempotência)."
+fi
+
 # node_modules / dist foram criados como root; devolve a posse ao utilizador do serviço.
 chown -R "${SERVICE_USER}:${SERVICE_USER}" "$APP_DIR"
 
