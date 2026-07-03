@@ -36,12 +36,8 @@ DB_HOST="127.0.0.1"
 DB_PORT="3306"
 ENV_FILE="${SERVER_DIR}/.env"
 
-# Caminhos ABSOLUTOS do Node/npm. Lição da Pi: o Node v22 do nvm mascarava /usr/local/bin/node,
-# por isso usamos SEMPRE caminho absoluto (nunca dependemos do PATH). Ajusta se o teu Node estiver noutro sítio.
-# NOTA: NÃO usamos `npx` — o npx-cli.js relança um novo processo `node` via $PATH, o que voltaria a
-# apanhar o nvm e derrotava o caminho absoluto. Chamamos o binário do sequelize-cli diretamente (ver TAREFA migrations).
-NODE_BIN="/usr/local/bin/node"
-NPM_BIN="/usr/local/bin/npm"
+# Versão mínima do Node exigida pelo conector `mariadb` (package.json: engines.node >= 20).
+NODE_MIN_MAJOR=20
 
 ### -------- Helpers --------
 log()  { printf '\n\033[1;32m==>\033[0m %s\n' "$*"; }
@@ -52,10 +48,41 @@ die()  { printf '\n\033[1;31m[erro]\033[0m %s\n' "$*" >&2; exit 1; }
 id "$SERVICE_USER" >/dev/null 2>&1 || die "Utilizador '${SERVICE_USER}' não existe. Define SERVICE_USER no topo do script."
 [ -d "$SERVER_DIR" ] || die "Não encontro ${SERVER_DIR}. Corre o script a partir da raiz do projeto."
 
-### -------- 0) Node / npm (caminho absoluto) --------
-[ -x "$NODE_BIN" ] || die "Node não encontrado em ${NODE_BIN}. Instala o Node ou ajusta NODE_BIN no topo."
-[ -x "$NPM_BIN" ]  || die "npm não encontrado em ${NPM_BIN}. Ajusta NPM_BIN no topo."
-log "Node $("$NODE_BIN" -v) / npm $("$NPM_BIN" -v)"
+SERVICE_HOME="$(getent passwd "$SERVICE_USER" | cut -d: -f6)"
+
+### -------- 0) Node / npm — encontra um binário ABSOLUTO com versão suficiente --------
+# NUNCA confiamos no `node` resolvido por $PATH (lição da Pi: sob `sudo` o PATH não tem o nvm do
+# utilizador, e um `/usr/local/bin/node` pode ser uma instalação antiga — foi o que aconteceu aqui:
+# apontava para um Node 18 quando o mariadb exige >=20). Por isso procura-se e VALIDA-SE a versão de
+# cada candidato, em vez de fixar um caminho às cegas.
+node_major() { "$1" -v 2>/dev/null | sed 's/^v//' | cut -d. -f1; }
+
+find_node() {
+  local candidates=(
+    "/usr/local/bin/node"
+    "$(command -v node 2>/dev/null || true)"
+  )
+  # Todas as versões instaladas via nvm do utilizador do serviço, da mais recente para a mais antiga.
+  local nvm_node
+  for nvm_node in $(ls -d "${SERVICE_HOME}/.nvm/versions/node"/*/bin/node 2>/dev/null | sort -Vr); do
+    candidates+=("$nvm_node")
+  done
+  local c major
+  for c in "${candidates[@]}"; do
+    [ -n "$c" ] && [ -x "$c" ] || continue
+    major="$(node_major "$c")"
+    if [ -n "$major" ] && [ "$major" -ge "$NODE_MIN_MAJOR" ] 2>/dev/null; then
+      echo "$c"
+      return 0
+    fi
+  done
+  return 1
+}
+
+NODE_BIN="$(find_node)" || die "Não encontrei nenhum Node >= ${NODE_MIN_MAJOR} (exigido pelo conector mariadb). Instala um (ex.: 'sudo -u ${SERVICE_USER} bash -lc \"nvm install --lts\"') e volta a correr o script."
+NPM_BIN="$(dirname "$NODE_BIN")/npm"
+[ -x "$NPM_BIN" ] || die "npm não encontrado ao lado de ${NODE_BIN}."
+log "Node $("$NODE_BIN" -v) (${NODE_BIN}) / npm $("$NPM_BIN" -v)"
 
 ### -------- 1) MariaDB (pacote da distro) --------
 log "A instalar/garantir o mariadb-server (pacote da distro)..."
