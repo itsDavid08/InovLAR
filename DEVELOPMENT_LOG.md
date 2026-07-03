@@ -2554,3 +2554,34 @@ sudo journalctl -u inov-lar -n 30 --no-pager   # logs do serviço
 ```
 Depois de "curl" e "journalctl" limpos, validar a app (criar botão sem imagem, abrir o tabuleiro de
 um utente, guardar um layout — os 3 casos que exercitam os bugs corrigidos + o round-trip JSON).
+
+### Fase 3 — SUCESSO (2026-07-03), com correção de Node aplicada
+
+Corrida do `install.sh` já com o `find_node()` (ver secção acima): encontrou e usou o Node v22.23.1 via
+nvm (`/home/informatica/.nvm/versions/node/v22.23.1/bin/node`), não o v18 de `/usr/local/bin/node`.
+Resultado:
+- `mariadb-server` 10.11.3 (distro) — já presente, `systemctl enable --now` OK.
+- BD `inovlar` + user `inovlar_app` criados, password gerada, `.env` escrito.
+- `npm install` (Server + Client) e `vite build` OK.
+- **As 4 migrations correram e ficaram `migrated`** — antes falhavam com "please upgrade node".
+- Serviço systemd `inov-lar` instalado e **ativo** (`Main PID` a correr `node` do nvm v22).
+- `curl http://localhost:3000` → **200 OK**, HTML completo da SPA servido.
+
+**Nota sobre o `journalctl` mostrar SEGV:** as entradas `code=killed, status=11/SEGV` com restart
+counter a chegar a 2417 são de uma unidade systemd **anterior a esta sessão** (descrição antiga
+"Inov-LAR Server", distinta da atual "InovLAR (Express + Socket.io + MariaDB)") — resíduo de uma
+instalação prévia presa num ciclo de crash-loop há muito tempo, provavelmente ainda ligada ao
+`sqlite3` original. O `install.sh` sobrescreveu o `.service` e fez `daemon-reload`+`restart`; a partir
+da entrada `Started inov-lar.service - InovLAR (Express + Socket.io + MariaDB)` às 14:47:31 não há mais
+crashes. Não é uma regressão — é histórico antigo no mesmo ficheiro de log. Opcional para limpar o
+contador: `sudo systemctl reset-failed inov-lar`.
+
+### Estado (Fase 3)
+- [x] `mariadb-server` da distro instalado e a correr na Pi (10.11.3).
+- [x] BD/utilizador criados via `install.sh`, idempotente.
+- [x] Migrations aplicadas com sucesso na Pi (Node v22 via nvm, encontrado por `find_node()`).
+- [x] Serviço systemd `inov-lar` ativo; `curl` devolve 200 OK com a SPA.
+- [ ] Validação funcional na app (browser): criar botão sem imagem; abrir/gravar o tabuleiro de um
+      utente (round-trip JSON); confirmar que os 3 bugs corrigidos (imagem allowNull, updatedAt do
+      through-table, JSON como objeto) se comportam bem em produção real, não só via script de teste.
+- [ ] Fase 4 — kiosk mode (Chromium a abrir sozinho no boot).
