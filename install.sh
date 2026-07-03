@@ -38,9 +38,10 @@ ENV_FILE="${SERVER_DIR}/.env"
 
 # Caminhos ABSOLUTOS do Node/npm. Lição da Pi: o Node v22 do nvm mascarava /usr/local/bin/node,
 # por isso usamos SEMPRE caminho absoluto (nunca dependemos do PATH). Ajusta se o teu Node estiver noutro sítio.
+# NOTA: NÃO usamos `npx` — o npx-cli.js relança um novo processo `node` via $PATH, o que voltaria a
+# apanhar o nvm e derrotava o caminho absoluto. Chamamos o binário do sequelize-cli diretamente (ver TAREFA migrations).
 NODE_BIN="/usr/local/bin/node"
 NPM_BIN="/usr/local/bin/npm"
-NPX_BIN="$(dirname "$NODE_BIN")/npx"
 
 ### -------- Helpers --------
 log()  { printf '\n\033[1;32m==>\033[0m %s\n' "$*"; }
@@ -115,8 +116,11 @@ else
   warn "Pasta Client não encontrada (${CLIENT_DIR}) — salto o build do frontend."
 fi
 
-log "A correr as migrations (sequelize-cli)..."
-( cd "$SERVER_DIR" && "$NPX_BIN" --yes sequelize-cli db:migrate )
+log "A correr as migrations (sequelize-cli, sem npx — binário direto via node absoluto)..."
+# `sequelize-cli` é dependência do projeto → existe em node_modules após o `npm install` acima.
+# Chamamos o ficheiro bin diretamente com o node ABSOLUTO: contorna o npx-cli.js e a sua
+# re-resolução de $PATH (que reapanharia o node v22 do nvm).
+( cd "$SERVER_DIR" && "$NODE_BIN" node_modules/sequelize-cli/lib/sequelize db:migrate )
 
 # node_modules / dist foram criados como root; devolve a posse ao utilizador do serviço.
 chown -R "${SERVICE_USER}:${SERVICE_USER}" "$APP_DIR"
