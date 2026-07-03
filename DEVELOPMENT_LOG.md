@@ -2576,11 +2576,35 @@ da entrada `Started inov-lar.service - InovLAR (Express + Socket.io + MariaDB)` 
 crashes. Não é uma regressão — é histórico antigo no mesmo ficheiro de log. Opcional para limpar o
 contador: `sudo systemctl reset-failed inov-lar`.
 
+### Bug real na Pi (2026-07-03) — `install.sh` corria migrations mas nunca os seeders
+
+Depois do serviço ficar ativo, faltavam os 43 botões predefinidos e o template "Predefinida" ficou
+vazio. Causa: o script só chamava `db:migrate`, nunca `db:seed:all` (`Server/seeders/20250506190850-seed-botoes.js`).
+Isto também tem uma consequência em cascata: `Server/Util/seedDefaults.js` corre a cada arranque do
+`main.js` e só cria o template "Predefinida" **uma vez** (`if (await TabelaPadrao.count() > 0) return`).
+Se o serviço arranca com `Botoes` vazia, o template fica vazio **para sempre**, mesmo depois de
+semear os botões mais tarde — precisa de o apagar para se regenerar (ver instruções abaixo).
+
+**Diferença importante migrations vs. seeders:** as migrations ficam registadas em `SequelizeMeta`
+(idempotentes por construção). Os **seeders não têm essa tabela** — confirmado ao correr
+`db:seed:all` duas vezes localmente: a segunda vez rebenta com `SequelizeUniqueConstraintError:
+Duplicate entry '1' for key 'PRIMARY'` (o seeder usa IDs fixos). Por isso o `install.sh` não podia só
+"adicionar mais um comando"; precisava de uma guarda.
+
+**Correção:** adicionado um passo entre migrations e o arranque do serviço — conta as linhas de
+`Botoes` via `SELECT COUNT(*)`; só corre `db:seed:all` se a tabela estiver vazia. Testado localmente
+contra o MariaDB de dev nos dois cenários: tabela cheia → salta (confirmado); tabela vazia → semeia as
+43 linhas com sucesso, acentos (Emergência, Medicação, Café/Chá) intactos.
+
 ### Estado (Fase 3)
 - [x] `mariadb-server` da distro instalado e a correr na Pi (10.11.3).
 - [x] BD/utilizador criados via `install.sh`, idempotente.
 - [x] Migrations aplicadas com sucesso na Pi (Node v22 via nvm, encontrado por `find_node()`).
 - [x] Serviço systemd `inov-lar` ativo; `curl` devolve 200 OK com a SPA.
+- [x] Seeders dos botões (`install.sh`), idempotentes por contagem prévia — testado localmente.
+- [ ] **Na Pi:** correr o `install.sh` atualizado para semear os botões; depois **apagar o template
+      "Predefinida" vazio** (criado no primeiro arranque, antes da correção) para o `seedDefaults()` o
+      regenerar corretamente no próximo restart — ver comandos na próxima mensagem.
 - [ ] Validação funcional na app (browser): criar botão sem imagem; abrir/gravar o tabuleiro de um
       utente (round-trip JSON); confirmar que os 3 bugs corrigidos (imagem allowNull, updatedAt do
       through-table, JSON como objeto) se comportam bem em produção real, não só via script de teste.
