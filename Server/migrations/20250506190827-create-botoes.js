@@ -19,7 +19,7 @@ module.exports = {
       },
       imagem: {
         type: Sequelize.STRING,
-        allowNull: false
+        allowNull: true
       },
       categoria: {
         type: Sequelize.STRING,

@@ -2414,3 +2414,112 @@ pedido na própria vista**.
 - [x] Reutiliza `updatePedido`/`PUT /pedidos/:id` (sem mudanças no servidor)
 - [x] `npm run build` (Client) ✓
 - [ ] Verificação visual em runtime (concluir em board + telemóvel; confirmar/cancelar; som silencioso)
+
+---
+
+## 2026-07-03 — Migração SQLite → MariaDB (Fase 2: código, testado localmente)
+
+### Contexto — porque saímos do SQLite
+
+Sintoma: `sqlite3` (módulo nativo N-API) provoca **SEGV reprodutível** na Raspberry Pi 500 de
+produção — userspace **armhf 32-bit** sobre kernel **aarch64**, SoC BCM2712.
+
+Causa raiz confirmada por backtrace `gdb` → `napi_module_register_by_symbol`. Só se chegou aqui
+depois de **eliminar sete hipóteses** com evidência real, por ordem:
+
+- **Arquitetura do processo** — não era só "32 vs 64"; o crash mantinha-se com o Node certo.
+- **Versão do Node** — testadas várias; SEGV persiste (não é regressão de versão).
+- **Versão do `sqlite3`** — downgrades/upgrades do pacote não resolvem.
+- **Binário corrompido** — rebuild limpo do módulo nativo → mesmo crash.
+- **`libarmmem` do sistema** — descartada como origem.
+- **Cache de ABI** — limpa; sem efeito.
+- **Conflito de PATH do nvm** — o Node v22 do nvm mascarava `/usr/local/bin/node`; corrigido
+  usando **sempre caminho absoluto** do node/npm na Pi. Não era a causa do SEGV, mas contaminava
+  o diagnóstico.
+
+Decisão: **abandonar `sqlite3`** e migrar para **MariaDB**. O driver é JavaScript puro (sem binário
+nativo), logo elimina de raiz esta classe de bug de arquitetura.
+
+### O que NÃO era o problema (para não reabrir)
+Versão do Node · versão do `sqlite3` · binário corrompido · `libarmmem` · cache de ABI · PATH do nvm.
+Todos eliminados com evidência. **Não reabrir esta investigação.**
+
+### Alterações de código (Fase 2)
+
+- **`config/database.js`** — deixa de instanciar `sqlite` diretamente; passa a ler de `config/config.js`
+  (fonte única de credenciais), por `NODE_ENV`.
+- **`config/config.js`** (novo, substitui `config/config.json`) — lê `.env` via `dotenv`; dialeto
+  MariaDB; `charset/collate` utf8mb4.
+- **`.sequelizerc`** (novo) — aponta o `sequelize-cli` para `config/config.js` + pastas models/migrations/seeders.
+- **`.env` / `.env.example`** — credenciais fora do repo (`.env` no `.gitignore`).
+- **`package.json`** — removidos `sqlite` e `sqlite3` (fonte do SEGV); adicionado `dotenv`.
+- **Migrations corrigidas** (bugs que o SQLite mascarava — ver abaixo).
+
+### Dois bugs de schema que o SQLite escondia (apanhados por teste real)
+
+1. **`imagem` NOT NULL vs model `allowNull:true`** — a migration `create-botoes` tinha
+   `imagem: allowNull:false`, mas o model (e a feature de apagar imagem, que faz *nullify*) exige
+   nullable. Em MariaDB, criar botão sem imagem → `ER_BAD_NULL_ERROR`. Corrigido para `allowNull:true`.
+2. **`UtenteBotoes` sem `updatedAt`** — o `belongsToMany({ through:"UtenteBotoes" })` usa
+   `timestamps:true` (espera `createdAt` **e** `updatedAt`), mas a migration só criava `createdAt`.
+   Carregar os botões de um utente → `Unknown column 'updatedAt'`. Adicionada a coluna.
+
+> Ambos "funcionavam" no SQLite porque a BD tinha sido criada por `sync()` (que gera o schema a partir
+> dos models); ao passar a criar por **migrations**, a divergência migration↔model veio ao de cima.
+> Numa instalação de raiz (a Pi) teriam rebentado. Este é o valor de testar contra a BD real, não "no papel".
+
+### Driver: `mariadb`, não `mysql2` (mudança face ao plano inicial)
+
+Com `dialect:'mysql'` + `mysql2` contra um servidor **MariaDB**, as colunas `JSON` (TabelaLayout.config,
+TabelaPadrao.configs) voltam como **string** — o MariaDB guarda JSON como `LONGTEXT` e o dialeto mysql
+do Sequelize não faz `JSON.parse` na leitura. Isto partia todo o tabuleiro (o cliente faz `config.cells`,
+`configs[dispositivo]`) e o `seedDefaults`.
+
+Correção: `dialect:'mariadb'` + conector oficial **`mariadb`** (também **JS puro / ARM-safe**, portanto
+mantém a razão original de fugir a binários nativos). `mysql2` removido. JSON passa a fazer parse
+automático. Confirmado por `res.json()` real: `"configs":{"smartphone":{...}}` (objeto, não string).
+
+### Teste local (MariaDB 12.3.2, Windows) — output real
+
+- `npx sequelize-cli db:migrate` → 4 migrations OK, tabelas InnoDB + utf8mb4, ENUM/BOOLEAN/FK nativos.
+- Arranque do servidor → `sync()` das 3 tabelas auxiliares + `seedDefaults` OK.
+- CRUD por model (create+read): Utente (acentos utf8mb4 intactos), Botao (`imagem` null), N:N
+  UtenteBotoes, Pedido (ENUM+BOOLEAN+FK+join), TabelaLayout/TabelaPadrao (**JSON round-trip = objeto**).
+- `GET /tabelas-padrao` via HTTP → `configs` como objeto aninhado. ✅
+
+### Estado
+- [x] Código migrado para MariaDB e **testado localmente** contra MariaDB 12.3.2 (x86_64 Windows).
+- [x] Dois bugs de schema (migration↔model) corrigidos.
+- [x] Driver `mariadb` (JS puro) — JSON round-trip resolvido.
+- [ ] **Validação final em produção (Pi, ARM32) — PENDENTE** (Fase 3). A Pi usará o MariaDB da distro
+      (Raspberry Pi OS bookworm = **10.11 LTS**), não 12.3 — ver nota armhf abaixo.
+- [x] `install.sh` da Pi (TAREFA 2) — criado na raiz do repo (`bash -n` OK; valida-se na Pi, não corre no Windows).
+- [ ] Kiosk mode (Fase 4) — só depois da Fase 3 limpa.
+
+### `install.sh` (TAREFA 2) — decisões
+- **Versão do MariaDB NÃO fixada em 12.3 na Pi.** Os repositórios oficiais do MariaDB (incl. 12.3) só
+  publicam para arm64/amd64, **não para armhf 32-bit**. Usa-se o `mariadb-server` da distro (Raspberry
+  Pi OS bookworm = **10.11 LTS**). Compatível: JSON + conector `mariadb` funcionam desde a 10.5+. O
+  script imprime a versão instalada para confirmação manual.
+- **Idempotente:** `CREATE ... IF NOT EXISTS`, reutiliza a password do `.env` se já existir.
+- **Password gerada** (`openssl rand`), nunca hardcoded; escrita em `Server/.env` (600), lida pela app via dotenv.
+- **Caminho absoluto** do node/npm (`/usr/local/bin/`) — lição do conflito de PATH do nvm.
+- Utilizador da BD criado para `127.0.0.1` (app liga por TCP) **e** `localhost` (CLI) — evita o mismatch
+  clássico entre `user@localhost` e ligação TCP no Linux.
+- Serviço systemd `inov-lar` (arranca no boot, `After/Requires=mariadb.service`).
+- **`.gitattributes`** novo: força LF em `*.sh` (CRLF do Windows parte o shebang na Pi).
+- **Não** instala nem remove `sqlite3` (já não existe no projeto).
+
+### Validação na Pi (Fase 3) — agora via `install.sh`
+O `install.sh` automatiza a instalação do MariaDB, criação da BD/utilizador (password gerada),
+dependências, build do Client, migrations e o serviço systemd. Na Pi:
+```bash
+# código já copiado para /opt/inov-lar; node/npm em /usr/local/bin (caminho absoluto)
+cd /opt/inov-lar
+sudo bash install.sh
+mariadb --version                              # CONFIRMAR o major instalado (distro = 10.11 LTS; não 12.3)
+curl -v http://localhost:3000                  # app a responder?
+sudo journalctl -u inov-lar -n 30 --no-pager   # logs do serviço
+```
+Depois de "curl" e "journalctl" limpos, validar a app (criar botão sem imagem, abrir o tabuleiro de
+um utente, guardar um layout — os 3 casos que exercitam os bugs corrigidos + o round-trip JSON).
