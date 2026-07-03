@@ -133,12 +133,18 @@ chown "${SERVICE_USER}:${SERVICE_USER}" "$ENV_FILE" 2>/dev/null || true
 log "Escrito ${ENV_FILE} (permissões 600)."
 
 ### -------- 4) Dependências + build + migrations --------
+# `npm` (e o seu `npm-cli.js`) tem shebang `#!/usr/bin/env node` — invocado diretamente, o SO resolve
+# esse `node` por $PATH, não pelo NODE_BIN que escolhemos. Sob `sudo`, o $PATH é mínimo e não inclui o
+# nvm, por isso `env node` cairia de volta no v18 antigo (visto nos avisos EBADENGINE de uma corrida
+# anterior). Corrige-se pondo a pasta do NODE_BIN escolhido à frente do $PATH só nestas subshells.
+NODE_DIR="$(dirname "$NODE_BIN")"
+
 log "A instalar dependências do Server..."
-( cd "$SERVER_DIR" && "$NPM_BIN" install )
+( export PATH="${NODE_DIR}:${PATH}"; cd "$SERVER_DIR" && "$NPM_BIN" install )
 
 if [ -d "$CLIENT_DIR" ]; then
   log "A instalar dependências e a fazer o build do Client (React)..."
-  ( cd "$CLIENT_DIR" && "$NPM_BIN" install && "$NPM_BIN" run build )
+  ( export PATH="${NODE_DIR}:${PATH}"; cd "$CLIENT_DIR" && "$NPM_BIN" install && "$NPM_BIN" run build )
 else
   warn "Pasta Client não encontrada (${CLIENT_DIR}) — salto o build do frontend."
 fi
