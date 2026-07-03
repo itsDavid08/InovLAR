@@ -2509,6 +2509,11 @@ automático. Confirmado por `res.json()` real: `"configs":{"smartphone":{...}}` 
 - Serviço systemd `inov-lar` (arranca no boot, `After/Requires=mariadb.service`).
 - **`.gitattributes`** novo: força LF em `*.sh` (CRLF do Windows parte o shebang na Pi).
 - **Não** instala nem remove `sqlite3` (já não existe no projeto).
+- **Migrations sem `npx`.** O `npx-cli.js` relança um novo processo `node` via `$PATH` — reapanharia o
+  Node v22 do nvm, derrotando o caminho absoluto (a estratégia que funcionou para `npm-cli.js` **não**
+  se generaliza ao `npx`). Por isso `sequelize-cli` passou a **dependência** do projeto e o script
+  chama o binário direto: `"$NODE_BIN" node_modules/sequelize-cli/lib/sequelize db:migrate`. Verificado
+  localmente com `db:migrate:status` (as 4 migrations `up`, lidas da `SequelizeMeta` no MariaDB).
 
 ### Validação na Pi (Fase 3) — agora via `install.sh`
 O `install.sh` automatiza a instalação do MariaDB, criação da BD/utilizador (password gerada),
