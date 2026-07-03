@@ -18,6 +18,8 @@ const TabuleiroComunicacao = () => {
         postPedido,
         updatePedido,
         setUtenteId,
+        fetchUtente,
+        fetchPedidosUtilizador,
         setStaffUnlocked,
         apiUrl,
     } = useContext(Context);
@@ -84,8 +86,14 @@ const TabuleiroComunicacao = () => {
         navigate("/staff");
     };
 
+    // Força dados frescos ao entrar nesta página — mesmo revisitando o mesmo utente. O
+    // ContextProvider sobrevive à navegação da SPA, por isso `utente` pode já estar em
+    // contexto (de uma visita anterior) com `pedidos` desatualizados; sem isto só um F5
+    // os atualizava.
     useEffect(() => {
-        if (!utente || utente.id !== id) setUtenteId(id);
+        setUtenteId(id);
+        fetchUtente(id);
+        fetchPedidosUtilizador(id);
     }, [id]);
 
     // Estar no tabuleiro = estar na "gaiola": fecha o gate de staff E limpa o
