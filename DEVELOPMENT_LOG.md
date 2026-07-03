@@ -2677,3 +2677,47 @@ escritas e revistas assumindo case-sensitivity.
       through-table, JSON como objeto) se comportam bem em produção real, não só via script de teste.
 - [ ] Apagar `/opt/inov-lar.old` depois de tudo confirmado.
 - [ ] Fase 4 — kiosk mode (Chromium a abrir sozinho no boot).
+
+---
+
+## 2026-07-03 — Fix: tabuleiro do utente não atualizava a lista de pedidos sem F5
+
+### Contexto
+Depois da migração para MariaDB funcionar em produção, reparou-se que `TabuleiroComunicacao.jsx`
+não atualizava automaticamente a "Lista de Pedidos" (nem o badge/"Estou Bem") ao entrar na página —
+só um F5 mostrava dados frescos.
+
+### Causa
+```jsx
+useEffect(() => {
+    if (!utente || utente.id !== id) setUtenteId(id);
+}, [id]);
+```
+O `ContextProvider` **sobrevive a toda a navegação da SPA** (envolve o `<Router>`). Se o `utente` em
+contexto já era o mesmo (`utente.id === id`) — por ex. reentrar no tabuleiro do mesmo utente depois de
+sair pelo PIN — a condição não disparava `setUtenteId`, e portanto não havia novo `fetchUtente`/
+`fetchPedidosUtilizador`. O socket (`bd_alterado`) resolve "estou na página e algo muda", mas não
+"acabei de entrar com dados já desatualizados no contexto".
+
+### Correção — `Client/src/Pages/TabuleiroComunicacao.jsx`
+```jsx
+useEffect(() => {
+    setUtenteId(id);
+    fetchUtente(id);
+    fetchPedidosUtilizador(id);
+}, [id]);
+```
+Busca sempre dados frescos ao entrar, independentemente de já ser o mesmo utente. `fetchUtente` e
+`fetchPedidosUtilizador` já estavam expostos pelo `Context` — só foi preciso desestruturá-los.
+
+### Teste (browser real, não só build)
+`npm run build` (Client) OK. Testado ao vivo com Server+Client em dev contra o MariaDB local:
+1. Criado um utente de teste e navegado para o seu tabuleiro (sem layout configurado — ok para este teste).
+2. Navegado para fora (`/`) e criado um pedido via `POST /pedidos` diretamente (simula alteração
+   externa enquanto o utente não estava na página).
+3. Navegado de volta ao mesmo tabuleiro (`/2850454783`, SPA, sem reload).
+4. Confirmado por rede (`preview_network`) que `GET pedidos/utente/4` dispara a cada montagem.
+5. Confirmado visualmente (accessibility snapshot): botão "Estou Bem" apareceu e a gaveta mostrou o
+   pedido "Emergência" criado no passo 2 — sem F5.
+
+Dados de teste limpos da BD de dev depois.
