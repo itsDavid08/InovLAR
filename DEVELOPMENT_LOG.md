@@ -2503,7 +2503,10 @@ automático. Confirmado por `res.json()` real: `"configs":{"smartphone":{...}}` 
   script imprime a versão instalada para confirmação manual.
 - **Idempotente:** `CREATE ... IF NOT EXISTS`, reutiliza a password do `.env` se já existir.
 - **Password gerada** (`openssl rand`), nunca hardcoded; escrita em `Server/.env` (600), lida pela app via dotenv.
-- **Caminho absoluto** do node/npm (`/usr/local/bin/`) — lição do conflito de PATH do nvm.
+- **Node ≥20 procurado e VALIDADO, não um caminho fixo.** Ver "Bug real na Pi" abaixo — `/usr/local/bin/node`
+  fixo era, ele próprio, uma versão antiga. O script agora corre `find_node()`, que testa candidatos
+  (`/usr/local/bin/node`, `$PATH`, todas as versões nvm de `SERVICE_USER`) e só aceita o primeiro com
+  major ≥20; nunca assume que um caminho "absoluto" tem a versão certa.
 - Utilizador da BD criado para `127.0.0.1` (app liga por TCP) **e** `localhost` (CLI) — evita o mismatch
   clássico entre `user@localhost` e ligação TCP no Linux.
 - Serviço systemd `inov-lar` (arranca no boot, `After/Requires=mariadb.service`).
@@ -2514,6 +2517,29 @@ automático. Confirmado por `res.json()` real: `"configs":{"smartphone":{...}}` 
   se generaliza ao `npx`). Por isso `sequelize-cli` passou a **dependência** do projeto e o script
   chama o binário direto: `"$NODE_BIN" node_modules/sequelize-cli/lib/sequelize db:migrate`. Verificado
   localmente com `db:migrate:status` (as 4 migrations `up`, lidas da `SequelizeMeta` no MariaDB).
+
+### Bug real na Pi (2026-07-03) — `/usr/local/bin/node` era Node 18, mariadb exige ≥20
+
+Primeira corrida real do `install.sh` na Pi: `mariadb-server` instalado OK (10.11.3), BD/user OK, `npm
+install`/build do Client OK — mas as migrations falharam: `please upgrade node: mariadb requires at
+least version 20.0.0`.
+
+**Causa:** `NODE_BIN="/usr/local/bin/node"` estava fixo no script (lição anterior sobre PATH/nvm), mas
+esse caminho é um **symlink para uma instalação manual do Node v18.20.5** — nunca se verificou a
+*versão* desse caminho "absoluto", só se assumiu que "absoluto" implicava "correto". Entretanto o
+utilizador da Pi tem **Node v22.23.1 instalado via nvm** (`~/.nvm/versions/node/v22.23.1/`), que
+satisfaz o requisito — só não estava a ser usado porque o script apontava para outro sítio.
+
+**Correção:** substituída a atribuição fixa por `find_node()` — testa `/usr/local/bin/node`, o `node`
+do `$PATH`, e todas as versões nvm de `SERVICE_USER` (da mais recente para a mais antiga via `sort
+-Vr`), e só aceita o primeiro cujo `major` seja ≥20 (`NODE_MIN_MAJOR`). Se nada qualificar, o script
+para com mensagem clara em vez de falhar a meio das migrations. Lógica testada localmente (Windows)
+com binários `node` falsos a simular o layout da Pi: encontra corretamente o v22 e ignora o v18;
+recusa-se a escolher quando só há v18 disponível.
+
+**Lição:** "caminho absoluto" resolve *ambiguidade de PATH*, não garante *versão suficiente*. Quando a
+dependência importa a versão (aqui, `engines.node >=20` do pacote `mariadb`), o script tem de validar,
+não assumir.
 
 ### Validação na Pi (Fase 3) — agora via `install.sh`
 O `install.sh` automatiza a instalação do MariaDB, criação da BD/utilizador (password gerada),
