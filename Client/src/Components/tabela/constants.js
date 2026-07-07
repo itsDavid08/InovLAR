@@ -24,3 +24,18 @@ export const COR_CATEGORIA = {
     "Chamar": "#F0A33E",
     "Medicamentos": "#BA1A1A",
 };
+
+// Cor de fundo por categoria (pastel) — pinta o próprio botão no quadro. Default
+// usado quando o staff não escolheu um override em `config.coresCategoria`.
+export const COR_CATEGORIA_FUNDO = {
+    "Sinto-me": "#FDE7C8",
+    "Necessidades": "#E6E1F0",
+    "Tecnologias": "#D6EBF9",
+    "Chamar": "#FBE4C6",
+    "Medicamentos": "#F6D3D3",
+};
+
+// Override do staff > default pastel > sem cor (nunca inventa cor para categorias
+// desconhecidas).
+export const resolverCorCategoria = (categoria, overrides) =>
+    overrides?.[categoria] ?? COR_CATEGORIA_FUNDO[categoria] ?? null;

@@ -4,7 +4,7 @@ import {
     useDraggable, useDroppable,
 } from "@dnd-kit/core";
 import ButtonTile from "./ButtonTile";
-import { DISPOSITIVOS, COR_CATEGORIA, escalaPorColunas } from "./constants";
+import { DISPOSITIVOS, COR_CATEGORIA, resolverCorCategoria, escalaPorColunas } from "./constants";
 
 // remove nulls finais (mantém o array compacto)
 const trim = (arr) => { let e = arr.length; while (e > 0 && arr[e - 1] == null) e--; return arr.slice(0, e); };
@@ -27,7 +27,7 @@ const LibraryTile = ({ botao, apiUrl, selecionado, onSelect }) => {
 };
 
 // ---- célula da grelha (droppable; arrastável quando preenchida) ----
-const GridCell = ({ pos, botao, apiUrl, size, onRemove, selecionado, onCellClick }) => {
+const GridCell = ({ pos, botao, apiUrl, size, corFundo, onRemove, selecionado, onCellClick }) => {
     const { setNodeRef: dropRef, isOver } = useDroppable({ id: `cell:${pos}`, data: { tipo: "cell", pos } });
     const drag = useDraggable({ id: `slot:${pos}`, data: { tipo: "slot", pos }, disabled: !botao });
     return (
@@ -35,7 +35,7 @@ const GridCell = ({ pos, botao, apiUrl, size, onRemove, selecionado, onCellClick
             {botao ? (
                 <div ref={drag.setNodeRef} {...drag.listeners} {...drag.attributes}
                     className={`group relative h-full cursor-pointer active:cursor-grabbing ${drag.isDragging ? "opacity-40" : ""}`}>
-                    <ButtonTile botao={botao} apiUrl={apiUrl} size={size} fill />
+                    <ButtonTile botao={botao} apiUrl={apiUrl} size={size} fill corFundo={corFundo} />
                     {selecionado && <MarchingAnts />}
                     <button onClick={(e) => { e.stopPropagation(); onRemove(pos); }}
                         className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-error text-on-error flex items-center justify-center shadow opacity-0 group-hover:opacity-100 transition-opacity z-10"
@@ -83,6 +83,7 @@ const TabelaEditor = ({
     dispositivo, setDispositivo,
     cols, setCols, size, setSize,
     cells, setCells,
+    coresCategoria = {}, setCoresCategoria,
     dirty, saving, onSave, onVoltar,
 }) => {
     const [activeId, setActiveId] = useState(null);
@@ -150,6 +151,16 @@ const TabelaEditor = ({
     };
 
     const botaoPorId = useMemo(() => Object.fromEntries(botoes.map((b) => [b.id, b])), [botoes]);
+
+    // categorias presentes no Quadro Atual (para o painel de cores), excluindo SOS
+    const categoriasNoQuadro = useMemo(() => {
+        const set = new Set();
+        for (const bId of cells) {
+            const b = botaoPorId[bId];
+            if (b && b.categoria !== "SOS" && b.nome !== "SOS") set.add(b.categoria || "Sem categoria");
+        }
+        return [...set].sort();
+    }, [cells, botaoPorId]);
 
     const dev = DISPOSITIVOS[dispositivo];
     const [aspW, aspH] = dev.aspect.split("/").map((n) => parseFloat(n));
@@ -281,12 +292,17 @@ const TabelaEditor = ({
                                     style={{ maxWidth: dev.maxW, aspectRatio: dev.aspect, maxHeight: "100%", transform: `scale(${zoom})`, transformOrigin: "center" }}>
                                     <div className="grid h-full"
                                         style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))` }}>
-                                        {Array.from({ length: slots }).map((_, pos) => (
-                                            <GridCell key={pos} pos={pos} botao={botaoPorId[cells[pos]]} apiUrl={apiUrl} size={escala}
-                                                selecionado={selecionado?.tipo === "slot" && selecionado.pos === pos}
-                                                onCellClick={aoClicarCelula}
-                                                onRemove={(p) => setCells((prev) => trim(prev.map((v, i) => (i === p ? null : v))))} />
-                                        ))}
+                                        {Array.from({ length: slots }).map((_, pos) => {
+                                            const b = botaoPorId[cells[pos]];
+                                            const isSOS = b && (b.categoria === "SOS" || b.nome === "SOS");
+                                            const cor = b && !isSOS ? resolverCorCategoria(b.categoria, coresCategoria) : null;
+                                            return (
+                                                <GridCell key={pos} pos={pos} botao={b} apiUrl={apiUrl} size={escala} corFundo={cor}
+                                                    selecionado={selecionado?.tipo === "slot" && selecionado.pos === pos}
+                                                    onCellClick={aoClicarCelula}
+                                                    onRemove={(p) => setCells((prev) => trim(prev.map((v, i) => (i === p ? null : v))))} />
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             </div>
@@ -301,6 +317,34 @@ const TabelaEditor = ({
 
                     {/* Biblioteca (droppable para remover) */}
                     <LibDrop>
+                        {setCoresCategoria && categoriasNoQuadro.length > 0 && (
+                            <div className="mb-4 pb-4 border-b border-surface-variant" onClick={(e) => e.stopPropagation()}>
+                                <h3 className="font-staff-mono font-bold text-on-surface-variant mb-2 text-sm">Cores por categoria</h3>
+                                <div className="flex flex-col gap-1.5">
+                                    {categoriasNoQuadro.map((cat) => {
+                                        const atual = resolverCorCategoria(cat, coresCategoria);
+                                        const temOverride = coresCategoria?.[cat] != null;
+                                        return (
+                                            <div key={cat} className="flex items-center gap-2">
+                                                <input type="color" value={atual || "#ffffff"}
+                                                    onChange={(e) => setCoresCategoria((prev) => ({ ...prev, [cat]: e.target.value }))}
+                                                    className="w-7 h-7 rounded cursor-pointer border border-surface-variant shrink-0"
+                                                    aria-label={`Cor de ${cat}`} />
+                                                <span className="text-body-md text-on-surface truncate flex-1">{cat}</span>
+                                                {temOverride && (
+                                                    <button type="button" onClick={() => setCoresCategoria((prev) => {
+                                                        const { [cat]: _omit, ...resto } = prev;
+                                                        return resto;
+                                                    })} className="text-staff-mono text-primary hover:underline shrink-0">
+                                                        repor
+                                                    </button>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
                         <h2 className="font-display-lg text-lg font-bold text-on-surface mb-3">Biblioteca de Botões</h2>
                         <div className="relative mb-4">
                             <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">search</span>

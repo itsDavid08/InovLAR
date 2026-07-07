@@ -5,7 +5,7 @@ import { fetchTabela, saveTabela } from "../api/tabela";
 import TabelaEditor from "../Components/tabela/TabelaEditor";
 import { DISPOSITIVOS } from "../Components/tabela/constants";
 
-const defaultConfig = (d) => ({ cols: DISPOSITIVOS[d].colsDefault, size: "M", cells: [] });
+const defaultConfig = (d) => ({ cols: DISPOSITIVOS[d].colsDefault, size: "M", cells: [], coresCategoria: {} });
 
 const GerirTabela = () => {
     const { id } = useParams();
@@ -44,7 +44,7 @@ const GerirTabela = () => {
                 const next = { ...prev };
                 for (const [d, c] of entradas)
                     if (c && Array.isArray(c.cells))
-                        next[d] = { cols: c.cols ?? DISPOSITIVOS[d].colsDefault, size: c.size ?? "M", cells: c.cells };
+                        next[d] = { cols: c.cols ?? DISPOSITIVOS[d].colsDefault, size: c.size ?? "M", cells: c.cells, coresCategoria: c.coresCategoria ?? {} };
                 return next;
             });
         })();
@@ -96,6 +96,8 @@ const GerirTabela = () => {
                 setSize={(v) => patch({ size: v })}
                 cells={cfg.cells}
                 setCells={(fn) => patch({ cells: typeof fn === "function" ? fn(cfg.cells) : fn })}
+                coresCategoria={cfg.coresCategoria || {}}
+                setCoresCategoria={(fn) => patch({ coresCategoria: typeof fn === "function" ? fn(cfg.coresCategoria || {}) : fn })}
                 dirty={dirtyAtivo}
                 saving={saving}
                 onSave={onSave}

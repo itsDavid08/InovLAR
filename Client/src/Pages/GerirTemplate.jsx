@@ -5,7 +5,7 @@ import { fetchTabelasPadrao, saveTabelaPadrao } from "../api/tabelasPadrao";
 import TabelaEditor from "../Components/tabela/TabelaEditor";
 import { DISPOSITIVOS } from "../Components/tabela/constants";
 
-const defaultConfig = (d) => ({ cols: DISPOSITIVOS[d].colsDefault, size: "M", cells: [] });
+const defaultConfig = (d) => ({ cols: DISPOSITIVOS[d].colsDefault, size: "M", cells: [], coresCategoria: {} });
 const configsVazias = () => ({ smartphone: defaultConfig("smartphone"), tablet: defaultConfig("tablet"), pc: defaultConfig("pc") });
 
 const GerirTemplate = () => {
@@ -26,7 +26,13 @@ const GerirTemplate = () => {
         fetchTabelasPadrao().then((lista) => {
             if (!vivo) return;
             const t = Array.isArray(lista) ? lista.find((x) => String(x.id) === String(id)) : null;
-            if (t) { setNome(t.nome); setConfigs({ ...configsVazias(), ...(t.configs || {}) }); }
+            if (t) {
+                setNome(t.nome);
+                const carregado = configsVazias();
+                for (const d of Object.keys(carregado))
+                    if (t.configs?.[d]) carregado[d] = { ...carregado[d], ...t.configs[d] };
+                setConfigs(carregado);
+            }
             setCarregado(true);
         }).catch(() => setCarregado(true));
         return () => { vivo = false; };
@@ -71,6 +77,8 @@ const GerirTemplate = () => {
                 setSize={(v) => patch({ size: v })}
                 cells={cfg.cells}
                 setCells={(fn) => patch({ cells: typeof fn === "function" ? fn(cfg.cells) : fn })}
+                coresCategoria={cfg.coresCategoria || {}}
+                setCoresCategoria={(fn) => patch({ coresCategoria: typeof fn === "function" ? fn(cfg.coresCategoria || {}) : fn })}
                 dirty={dirty}
                 saving={saving}
                 onSave={onSave}

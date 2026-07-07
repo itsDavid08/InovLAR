@@ -4,7 +4,7 @@ import { Context } from "../ContextProvider";
 import { staffLogout } from "../api/auth";
 import { fetchTabela } from "../api/tabela";
 import { idDoToken } from "../utils/utenteToken";
-import { DISPOSITIVOS } from "../Components/tabela/constants";
+import { DISPOSITIVOS, resolverCorCategoria } from "../Components/tabela/constants";
 import RequestListDrawer from "../Components/RequestListDrawer.jsx";
 import SuccessModal from "../Components/SuccessModal.jsx";
 import PinPrompt from "../Components/PinPrompt.jsx";
@@ -196,6 +196,7 @@ const TabuleiroComunicacao = () => {
     const renderTabela = (config, disp) => {
         const cols = config.cols || 4;
         const cells = config.cells || [];
+        const coresCategoria = config.coresCategoria || {};
         const [aspW, aspH] = (DISPOSITIVOS[disp]?.aspect || "16 / 10")
             .split("/")
             .map((n) => parseFloat(n));
@@ -228,6 +229,7 @@ const TabuleiroComunicacao = () => {
                             />
                         );
                     const isSOS = b.categoria === "SOS" || b.nome === "SOS";
+                    const cor = !isSOS ? resolverCorCategoria(b.categoria, coresCategoria) : null;
                     return (
                         <button
                             key={i}
@@ -236,7 +238,7 @@ const TabuleiroComunicacao = () => {
                             }
                             aria-label={b.nome}
                             className={`btn d-flex flex-column align-items-center justify-content-center rounded overflow-hidden ${isSOS ? "btn-danger" : "btn-light border border-secondary"}`}
-                            style={{ minHeight: 0, padding: "2%" }}
+                            style={{ minHeight: 0, padding: "2%", ...(cor ? { backgroundColor: cor } : {}) }}
                         >
                             <img
                                 src={
