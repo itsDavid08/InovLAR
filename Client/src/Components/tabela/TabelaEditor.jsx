@@ -225,16 +225,23 @@ const TabelaEditor = ({
 
     const dev = DISPOSITIVOS[dispositivo];
     const [aspW, aspH] = dev.aspect.split("/").map((n) => parseFloat(n));
+    // spans "efetivos" para efeitos de desenho: durante um arrasto de redimensionar, sobrepõe
+    // o tamanho em pré-visualização ao da âncora que está a ser redimensionada — sem isto, as
+    // células vizinhas que a pré-visualização passa a cobrir continuavam a ser calculadas a
+    // partir do `spans` committado (ainda no tamanho antigo) e renderizavam-se como células
+    // livres à parte, sobrepostas ao botão a crescer.
+    const spansEfetivos = useMemo(
+        () => (resizePreview ? { ...spans, [resizePreview.pos]: { w: resizePreview.w, h: resizePreview.h } } : spans),
+        [spans, resizePreview]
+    );
     // linhas que enchem a moldura mantendo as células ~quadradas (sem scroll nem espaço em branco);
     // considera a extensão de cada botão (âncora + altura do span), não só a última célula preenchida
-    const extent = extentRows(cells, spans, cols);
-    const extentPreview = resizePreview ? Math.floor(resizePreview.pos / cols) + resizePreview.h : 0;
-    const rows = Math.max(Math.round((cols * aspH) / aspW), extent, extentPreview, 1);
+    const rows = Math.max(Math.round((cols * aspH) / aspW), extentRows(cells, spansEfetivos, cols), 1);
     const slots = rows * cols;
     // mapa posição → âncora, para saber que células saltar (cobertas por um botão maior)
-    const ocupacao = useMemo(() => buildOcupacao(cells, spans, cols), [cells, spans, cols]);
+    const ocupacao = useMemo(() => buildOcupacao(cells, spansEfetivos, cols), [cells, spansEfetivos, cols]);
     // matriz de categorias do quadro, para a fusão visual dos cantos (raioFusao)
-    const gridCategorias = useMemo(() => matrizCategorias(cells, spans, cols, rows, botaoPorId), [cells, spans, cols, rows, botaoPorId]);
+    const gridCategorias = useMemo(() => matrizCategorias(cells, spansEfetivos, cols, rows, botaoPorId), [cells, spansEfetivos, cols, rows, botaoPorId]);
 
     const escala = escalaPorColunas(cols);
     const handleCols = (c) => { setCols(c); setSize(escalaPorColunas(c)); };
@@ -359,8 +366,7 @@ const TabelaEditor = ({
                                             const anchor = ocupacao.get(pos);
                                             if (anchor !== undefined && anchor !== pos) return null; // coberta por um botão maior
                                             const isAnchor = anchor === pos;
-                                            const emResize = resizePreview?.pos === pos;
-                                            const { w, h } = emResize ? resizePreview : isAnchor ? getSpan(spans, pos) : { w: 1, h: 1 };
+                                            const { w, h } = isAnchor ? getSpan(spansEfetivos, pos) : { w: 1, h: 1 };
                                             const b = isAnchor ? botaoPorId[cells[pos]] : null;
                                             const isSOS = b && (b.categoria === "SOS" || b.nome === "SOS");
                                             const cor = b && !isSOS ? resolverCorCategoria(b.categoria, coresCategoria) : null;
