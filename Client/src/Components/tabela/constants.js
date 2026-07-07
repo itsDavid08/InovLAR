@@ -39,3 +39,30 @@ export const COR_CATEGORIA_FUNDO = {
 // desconhecidas).
 export const resolverCorCategoria = (categoria, overrides) =>
     overrides?.[categoria] ?? COR_CATEGORIA_FUNDO[categoria] ?? null;
+
+// Matriz de categorias do quadro (índice = r*cols+c), para a ilusão de fusão visual
+// entre células vizinhas da mesma categoria. SOS nunca entra — mantém-se sempre uma
+// "ilha" isolada, com os 4 cantos arredondados.
+export const matrizCategorias = (cells, cols, rows, botaoPorId) =>
+    Array.from({ length: rows }, (_, r) =>
+        Array.from({ length: cols }, (_, c) => {
+            const b = botaoPorId[cells[r * cols + c]];
+            if (!b || b.categoria === "SOS" || b.nome === "SOS") return null;
+            return b.categoria;
+        }));
+
+// Raio de canto que dá a ilusão de fusão: só os cantos exteriores ao grupo da mesma
+// categoria arredondam; os cantos partilhados com um vizinho da mesma categoria ficam
+// quadrados. Sem categoria (célula vazia/SOS) → 4 cantos arredondados, como sempre.
+export const raioFusao = (grid, r, c, raio = "1rem") => {
+    const cat = grid[r]?.[c];
+    if (!cat) return { borderRadius: raio };
+    const same = (rr, cc) => grid[rr]?.[cc] === cat;
+    const up = same(r - 1, c), down = same(r + 1, c), left = same(r, c - 1), right = same(r, c + 1);
+    return {
+        borderTopLeftRadius: up || left ? 0 : raio,
+        borderTopRightRadius: up || right ? 0 : raio,
+        borderBottomLeftRadius: down || left ? 0 : raio,
+        borderBottomRightRadius: down || right ? 0 : raio,
+    };
+};

@@ -4,7 +4,7 @@ import { Context } from "../ContextProvider";
 import { staffLogout } from "../api/auth";
 import { fetchTabela } from "../api/tabela";
 import { idDoToken } from "../utils/utenteToken";
-import { DISPOSITIVOS, resolverCorCategoria } from "../Components/tabela/constants";
+import { DISPOSITIVOS, resolverCorCategoria, matrizCategorias, raioFusao } from "../Components/tabela/constants";
 import RequestListDrawer from "../Components/RequestListDrawer.jsx";
 import SuccessModal from "../Components/SuccessModal.jsx";
 import PinPrompt from "../Components/PinPrompt.jsx";
@@ -208,6 +208,9 @@ const TabuleiroComunicacao = () => {
             1,
         );
         const slots = rows * cols;
+        // matriz de categorias do quadro, para a fusão visual dos cantos (raioFusao) —
+        // exige gap 0 na grelha, senão os fundos não "encostam" e a ilusão não resulta.
+        const grid = matrizCategorias(cells, cols, rows, botaoPorId);
         return (
             <div
                 className="flex-grow-1"
@@ -215,7 +218,7 @@ const TabuleiroComunicacao = () => {
                     display: "grid",
                     gridTemplateColumns: `repeat(${cols}, 1fr)`,
                     gridTemplateRows: `repeat(${rows}, 1fr)`,
-                    gap: "1%",
+                    gap: 0,
                     minHeight: 0,
                 }}
             >
@@ -230,36 +233,48 @@ const TabuleiroComunicacao = () => {
                         );
                     const isSOS = b.categoria === "SOS" || b.nome === "SOS";
                     const cor = !isSOS ? resolverCorCategoria(b.categoria, coresCategoria) : null;
+                    const r = Math.floor(i / cols),
+                        c = i % cols;
                     return (
-                        <button
+                        <div
                             key={i}
-                            onClick={() =>
-                                isSOS ? handleButtonSOS() : handleButtonClick(b)
-                            }
-                            aria-label={b.nome}
-                            className={`btn d-flex flex-column align-items-center justify-content-center rounded overflow-hidden ${isSOS ? "btn-danger" : "btn-light border border-secondary"}`}
-                            style={{ minHeight: 0, padding: "2%", ...(cor ? { backgroundColor: cor } : {}) }}
+                            className="transition-all"
+                            style={{
+                                minHeight: 0,
+                                padding: "4%",
+                                background: cor || "transparent",
+                                ...raioFusao(grid, r, c),
+                            }}
                         >
-                            <img
-                                src={
-                                    apiUrl +
-                                    (b.imagem || "/imagesBotoes/default.png")
+                            <button
+                                onClick={() =>
+                                    isSOS ? handleButtonSOS() : handleButtonClick(b)
                                 }
-                                alt={b.nome}
-                                style={{
-                                    flex: "1 1 0",
-                                    minHeight: 0,
-                                    maxWidth: "100%",
-                                    objectFit: "contain",
-                                }}
-                            />
-                            <span
-                                className="fw-bold text-center text-truncate w-100"
-                                style={{ fontSize: "min(2.5vw, 16px)" }}
+                                aria-label={b.nome}
+                                className={`btn d-flex flex-column align-items-center justify-content-center rounded overflow-hidden w-100 h-100 ${isSOS ? "btn-danger" : "btn-light border border-secondary"}`}
+                                style={{ minHeight: 0, padding: "2%" }}
                             >
-                                {b.nome}
-                            </span>
-                        </button>
+                                <img
+                                    src={
+                                        apiUrl +
+                                        (b.imagem || "/imagesBotoes/default.png")
+                                    }
+                                    alt={b.nome}
+                                    style={{
+                                        flex: "1 1 0",
+                                        minHeight: 0,
+                                        maxWidth: "100%",
+                                        objectFit: "contain",
+                                    }}
+                                />
+                                <span
+                                    className="fw-bold text-center text-truncate w-100"
+                                    style={{ fontSize: "min(2.5vw, 16px)" }}
+                                >
+                                    {b.nome}
+                                </span>
+                            </button>
+                        </div>
                     );
                 })}
             </div>

@@ -4,7 +4,7 @@ import {
     useDraggable, useDroppable,
 } from "@dnd-kit/core";
 import ButtonTile from "./ButtonTile";
-import { DISPOSITIVOS, COR_CATEGORIA, resolverCorCategoria, escalaPorColunas } from "./constants";
+import { DISPOSITIVOS, COR_CATEGORIA, resolverCorCategoria, matrizCategorias, raioFusao, escalaPorColunas } from "./constants";
 
 // remove nulls finais (mantém o array compacto)
 const trim = (arr) => { let e = arr.length; while (e > 0 && arr[e - 1] == null) e--; return arr.slice(0, e); };
@@ -27,15 +27,15 @@ const LibraryTile = ({ botao, apiUrl, selecionado, onSelect }) => {
 };
 
 // ---- célula da grelha (droppable; arrastável quando preenchida) ----
-const GridCell = ({ pos, botao, apiUrl, size, corFundo, onRemove, selecionado, onCellClick }) => {
+const GridCell = ({ pos, botao, apiUrl, size, corFundo, raio = { borderRadius: "1rem" }, onRemove, selecionado, onCellClick }) => {
     const { setNodeRef: dropRef, isOver } = useDroppable({ id: `cell:${pos}`, data: { tipo: "cell", pos } });
     const drag = useDraggable({ id: `slot:${pos}`, data: { tipo: "slot", pos }, disabled: !botao });
     return (
-        <div ref={dropRef} className="relative h-full min-h-0" style={{ padding: "4%" }} onClick={(e) => { e.stopPropagation(); onCellClick(pos); }}>
+        <div ref={dropRef} className="relative h-full min-h-0 transition-all" style={{ padding: "4%", background: corFundo || "transparent", ...raio }} onClick={(e) => { e.stopPropagation(); onCellClick(pos); }}>
             {botao ? (
                 <div ref={drag.setNodeRef} {...drag.listeners} {...drag.attributes}
                     className={`group relative h-full cursor-pointer active:cursor-grabbing ${drag.isDragging ? "opacity-40" : ""}`}>
-                    <ButtonTile botao={botao} apiUrl={apiUrl} size={size} fill corFundo={corFundo} />
+                    <ButtonTile botao={botao} apiUrl={apiUrl} size={size} fill />
                     {selecionado && <MarchingAnts />}
                     <button onClick={(e) => { e.stopPropagation(); onRemove(pos); }}
                         className="absolute -top-1.5 -right-1.5 w-6 h-6 rounded-full bg-error text-on-error flex items-center justify-center shadow opacity-0 group-hover:opacity-100 transition-opacity z-10"
@@ -168,6 +168,8 @@ const TabelaEditor = ({
     // linhas que enchem a moldura mantendo as células ~quadradas (sem scroll nem espaço em branco)
     const rows = Math.max(Math.round((cols * aspH) / aspW), Math.ceil((lastFilled + 1) / cols), 1);
     const slots = rows * cols;
+    // matriz de categorias do quadro, para a fusão visual dos cantos (raioFusao)
+    const gridCategorias = useMemo(() => matrizCategorias(cells, cols, rows, botaoPorId), [cells, cols, rows, botaoPorId]);
 
     const escala = escalaPorColunas(cols);
     const handleCols = (c) => { setCols(c); setSize(escalaPorColunas(c)); };
@@ -296,8 +298,9 @@ const TabelaEditor = ({
                                             const b = botaoPorId[cells[pos]];
                                             const isSOS = b && (b.categoria === "SOS" || b.nome === "SOS");
                                             const cor = b && !isSOS ? resolverCorCategoria(b.categoria, coresCategoria) : null;
+                                            const r = Math.floor(pos / cols), c = pos % cols;
                                             return (
-                                                <GridCell key={pos} pos={pos} botao={b} apiUrl={apiUrl} size={escala} corFundo={cor}
+                                                <GridCell key={pos} pos={pos} botao={b} apiUrl={apiUrl} size={escala} corFundo={cor} raio={raioFusao(gridCategorias, r, c)}
                                                     selecionado={selecionado?.tipo === "slot" && selecionado.pos === pos}
                                                     onCellClick={aoClicarCelula}
                                                     onRemove={(p) => setCells((prev) => trim(prev.map((v, i) => (i === p ? null : v))))} />

@@ -1,14 +1,11 @@
 import { TAMANHOS } from "./constants";
 
-const ButtonTile = ({ botao, apiUrl, size = "M", fill = false, corFundo }) => {
+const ButtonTile = ({ botao, apiUrl, size = "M", fill = false }) => {
     const t = TAMANHOS[size] || TAMANHOS.M;
     return (
         <div
             className={`w-full flex flex-col items-center justify-center rounded-2xl bg-surface-container-lowest border border-surface-variant text-on-surface shadow-sm select-none overflow-hidden ${fill ? "h-full min-h-0" : "gap-1 p-1"}`}
-            style={{
-                ...(fill ? { padding: "6%", gap: "4%" } : { minHeight: t.min }),
-                ...(corFundo ? { backgroundColor: corFundo } : {}),
-            }}
+            style={fill ? { padding: "6%", gap: "4%" } : { minHeight: t.min }}
         >
             <img
                 src={apiUrl + (botao.imagem || "/imagesBotoes/default.png")}
