@@ -20,6 +20,11 @@ utentes, botões, tabelas e monitorização de pedidos).
 
 ## Primeira vez (setup local)
 
+> **Atalho:** os passos 1–3 abaixo (criar BD/utilizador, `.env`, `npm install`, migrations+seeders)
+> podem ser feitos de uma vez com `./install.ps1` (Windows/PowerShell), a partir da raiz do
+> repositório. É idempotente — correr outra vez não parte nada. Ver `Get-Help ./install.ps1 -Full`
+> para os parâmetros (nome da BD, utilizador, password de root, etc.).
+
 ### 1. Criar a base de dados e o utilizador no MariaDB
 
 Numa consola com acesso ao `mysql`/`mariadb` (ajusta a password):
@@ -103,7 +108,10 @@ novos ainda não aplicados a essa base.)
 
 ## Notas
 
-- Se mudares de máquina/base de dados, repete os passos 1–3 (criar BD, copiar `.env`, migrar+semear).
+- Se mudares de máquina/base de dados, repete os passos 1–3 (criar BD, copiar `.env`, migrar+semear)
+  — ou corre `install.ps1` outra vez, que faz tudo isso de uma vez e é seguro repetir.
+- `install.ps1` (Windows) é só para **desenvolvimento local** — não instala o MariaDB (assume que já
+  o tens) nem arranca nenhum serviço em background.
 - Para produção/deploy numa Raspberry Pi, ver `install.sh` na raiz do repositório (automatiza a
   instalação do MariaDB, criação da BD/utilizador, migrations, seeders e o serviço systemd) e o
   histórico de decisões em `DEVELOPMENT_LOG.md`.
