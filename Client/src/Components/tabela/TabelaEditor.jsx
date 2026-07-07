@@ -5,6 +5,7 @@ import {
 } from "@dnd-kit/core";
 import ButtonTile from "./ButtonTile";
 import { DISPOSITIVOS, COR_CATEGORIA, resolverCorCategoria, matrizCategorias, raioFusao, escalaPorColunas } from "./constants";
+import { getSpan, buildOcupacao, extentRows, colocarComEmpurrao } from "./gridSpans";
 
 // remove nulls finais (mantém o array compacto)
 const trim = (arr) => { let e = arr.length; while (e > 0 && arr[e - 1] == null) e--; return arr.slice(0, e); };
@@ -27,11 +28,16 @@ const LibraryTile = ({ botao, apiUrl, selecionado, onSelect }) => {
 };
 
 // ---- célula da grelha (droppable; arrastável quando preenchida) ----
-const GridCell = ({ pos, botao, apiUrl, size, corFundo, raio = { borderRadius: "1rem" }, onRemove, selecionado, onCellClick }) => {
+// `col`/`row` (linhas 1-indexadas) + `w`/`h` posicionam explicitamente o retângulo que este
+// botão ocupa — não se confia no auto-flow do CSS Grid, que não sabe que células vizinhas
+// foram propositadamente omitidas (cobertas por este ou por outro span).
+const GridCell = ({ pos, botao, apiUrl, size, corFundo, col, row, w = 1, h = 1, raio = { borderRadius: "1rem" }, onRemove, onResizeStart, selecionado, onCellClick }) => {
     const { setNodeRef: dropRef, isOver } = useDroppable({ id: `cell:${pos}`, data: { tipo: "cell", pos } });
     const drag = useDraggable({ id: `slot:${pos}`, data: { tipo: "slot", pos }, disabled: !botao });
     return (
-        <div ref={dropRef} className="relative h-full min-h-0 transition-all" style={{ padding: "4%", background: corFundo || "transparent", ...raio }} onClick={(e) => { e.stopPropagation(); onCellClick(pos); }}>
+        <div ref={dropRef} className="relative h-full min-h-0 transition-all"
+            style={{ gridColumn: `${col} / span ${w}`, gridRow: `${row} / span ${h}`, padding: "4%", background: corFundo || "transparent", ...raio }}
+            onClick={(e) => { e.stopPropagation(); onCellClick(pos); }}>
             {botao ? (
                 <div ref={drag.setNodeRef} {...drag.listeners} {...drag.attributes}
                     className={`group relative h-full cursor-pointer active:cursor-grabbing ${drag.isDragging ? "opacity-40" : ""}`}>
@@ -42,6 +48,13 @@ const GridCell = ({ pos, botao, apiUrl, size, corFundo, raio = { borderRadius: "
                         aria-label="Remover">
                         <span className="material-symbols-outlined text-[16px]">close</span>
                     </button>
+                    {selecionado && (
+                        <div onPointerDown={(e) => onResizeStart(e, pos)} style={{ touchAction: "none" }}
+                            className="absolute -bottom-1.5 -right-1.5 w-6 h-6 rounded-full bg-primary text-on-primary flex items-center justify-center shadow cursor-nwse-resize z-10"
+                            aria-label="Redimensionar" title="Arrastar para redimensionar">
+                            <span className="material-symbols-outlined text-[16px]">open_in_full</span>
+                        </div>
+                    )}
                 </div>
             ) : (
                 <div className={`h-full rounded-2xl border-2 border-dashed transition-colors ${isOver ? "border-primary bg-primary/5" : "border-outline-variant bg-surface-container-low"}`} />
@@ -83,12 +96,14 @@ const TabelaEditor = ({
     dispositivo, setDispositivo,
     cols, setCols, size, setSize,
     cells, setCells,
+    spans = {}, setSpans,
     coresCategoria = {}, setCoresCategoria,
     dirty, saving, onSave, onVoltar,
 }) => {
     const [activeId, setActiveId] = useState(null);
     const [busca, setBusca] = useState("");
     const [selecionado, setSelecionado] = useState(null); // { tipo:"lib", botaoId } | { tipo:"slot", pos }
+    const [resizePreview, setResizePreview] = useState(null); // { pos, w, h } — pré-visualização local, só commitada no pointerup
     const sensors = useSensors(
         useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
         useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
@@ -97,6 +112,7 @@ const TabelaEditor = ({
     const [zoom, setZoom] = useState(1);
     const zoomRef = useRef(1);
     const frameWrapRef = useRef(null);
+    const gridRef = useRef(null);
     const pinch = useRef({ dist: 0, zoom: 1 });
     const aplicarZoom = (z) => { const c = Math.min(3, Math.max(1, z)); zoomRef.current = c; setZoom(c); };
 
@@ -127,27 +143,72 @@ const TabelaEditor = ({
     const aoSelecionarLib = (botaoId) =>
         setSelecionado((s) => (s?.tipo === "lib" && s.botaoId === botaoId ? null : { tipo: "lib", botaoId }));
 
+    // remove um botão colocado e a respetiva entrada de span (se tiver)
+    const removerBotao = (pos) => {
+        setCells(trim(cells.map((v, i) => (i === pos ? null : v))));
+        if (spans[pos]) { const { [pos]: _omit, ...resto } = spans; setSpans(resto); }
+    };
+
     const aoClicarCelula = (pos) => {
         if (selecionado?.tipo === "slot" && selecionado.pos === pos) { setSelecionado(null); return; }
         if (!selecionado) { if (cells[pos] != null) setSelecionado({ tipo: "slot", pos }); return; }
-        setCells((prev) => {
-            const next = prev.slice();
-            const need = (i) => { while (next.length <= i) next.push(null); };
-            need(pos);
-            if (selecionado.tipo === "lib") next[pos] = selecionado.botaoId;            // colocar
-            else if (selecionado.tipo === "slot") {                                      // mover/trocar
-                need(selecionado.pos);
-                const tmp = next[pos]; next[pos] = next[selecionado.pos]; next[selecionado.pos] = tmp;
-            }
-            return trim(next);
-        });
+        if (selecionado.tipo === "lib") {                                                // colocar
+            const resultado = colocarComEmpurrao(cells, spans, cols, pos, selecionado.botaoId, { w: 1, h: 1 }, null);
+            if (resultado) { setCells(trim(resultado.cells)); setSpans(resultado.spans); }
+        } else if (selecionado.tipo === "slot") {                                        // mover
+            const { w, h } = getSpan(spans, selecionado.pos);
+            const resultado = colocarComEmpurrao(cells, spans, cols, pos, cells[selecionado.pos], { w, h }, selecionado.pos);
+            if (resultado) { setCells(trim(resultado.cells)); setSpans(resultado.spans); }
+        }
         setSelecionado(null);
     };
 
     const aoEliminarSelecionado = () => {
         if (selecionado?.tipo !== "slot") return;
-        setCells((prev) => trim(prev.map((v, i) => (i === selecionado.pos ? null : v))));
+        removerBotao(selecionado.pos);
         setSelecionado(null);
+    };
+
+    // ---- redimensionar por arrasto (pega WYSIWYG) ----
+    // Eventos de ponteiro nativos, à parte do DndContext (que trata de mover peças) — evita
+    // conflito entre os dois mecanismos de arrasto, tal como o pinch-zoom acima já faz.
+    const iniciarResize = (e, pos) => {
+        e.stopPropagation();
+        e.preventDefault();
+        const el = gridRef.current;
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        const { w: startW, h: startH } = getSpan(spans, pos);
+        const startX = e.clientX, startY = e.clientY;
+        const cellPxW = rect.width / cols, cellPxH = rect.height / rows;
+        const c = pos % cols;
+
+        setResizePreview({ pos, w: startW, h: startH });
+
+        const onMove = (ev) => {
+            const deltaCols = Math.round((ev.clientX - startX) / cellPxW);
+            const deltaRows = Math.round((ev.clientY - startY) / cellPxH);
+            const novoW = Math.min(Math.max(1, startW + deltaCols), cols - c);
+            const novoH = Math.max(1, startH + deltaRows);
+            setResizePreview({ pos, w: novoW, h: novoH });
+        };
+        const finalizar = (commit) => {
+            window.removeEventListener("pointermove", onMove);
+            window.removeEventListener("pointerup", onUp);
+            window.removeEventListener("pointercancel", onCancel);
+            setResizePreview((prev) => {
+                if (commit && prev) {
+                    const resultado = colocarComEmpurrao(cells, spans, cols, prev.pos, cells[prev.pos], { w: prev.w, h: prev.h }, prev.pos);
+                    if (resultado) { setCells(trim(resultado.cells)); setSpans(resultado.spans); }
+                }
+                return null;
+            });
+        };
+        const onUp = () => finalizar(true);
+        const onCancel = () => finalizar(false);
+        window.addEventListener("pointermove", onMove);
+        window.addEventListener("pointerup", onUp);
+        window.addEventListener("pointercancel", onCancel);
     };
 
     const botaoPorId = useMemo(() => Object.fromEntries(botoes.map((b) => [b.id, b])), [botoes]);
@@ -164,12 +225,16 @@ const TabelaEditor = ({
 
     const dev = DISPOSITIVOS[dispositivo];
     const [aspW, aspH] = dev.aspect.split("/").map((n) => parseFloat(n));
-    const lastFilled = cells.reduce((m, v, i) => (v != null ? i : m), -1);
-    // linhas que enchem a moldura mantendo as células ~quadradas (sem scroll nem espaço em branco)
-    const rows = Math.max(Math.round((cols * aspH) / aspW), Math.ceil((lastFilled + 1) / cols), 1);
+    // linhas que enchem a moldura mantendo as células ~quadradas (sem scroll nem espaço em branco);
+    // considera a extensão de cada botão (âncora + altura do span), não só a última célula preenchida
+    const extent = extentRows(cells, spans, cols);
+    const extentPreview = resizePreview ? Math.floor(resizePreview.pos / cols) + resizePreview.h : 0;
+    const rows = Math.max(Math.round((cols * aspH) / aspW), extent, extentPreview, 1);
     const slots = rows * cols;
+    // mapa posição → âncora, para saber que células saltar (cobertas por um botão maior)
+    const ocupacao = useMemo(() => buildOcupacao(cells, spans, cols), [cells, spans, cols]);
     // matriz de categorias do quadro, para a fusão visual dos cantos (raioFusao)
-    const gridCategorias = useMemo(() => matrizCategorias(cells, cols, rows, botaoPorId), [cells, cols, rows, botaoPorId]);
+    const gridCategorias = useMemo(() => matrizCategorias(cells, spans, cols, rows, botaoPorId), [cells, spans, cols, rows, botaoPorId]);
 
     const escala = escalaPorColunas(cols);
     const handleCols = (c) => { setCols(c); setSize(escalaPorColunas(c)); };
@@ -190,24 +255,20 @@ const TabelaEditor = ({
         setActiveId(null);
         if (!over) return;
         const a = active.data.current, o = over.data.current;
-        setCells((prev) => {
-            const next = prev.slice();
-            const need = (i) => { while (next.length <= i) next.push(null); };
-            if (o.tipo === "trash" || o.tipo === "lib") { // largar no lixo ou na biblioteca = remover
-                if (a.tipo === "slot") { need(a.pos); next[a.pos] = null; }
-                return trim(next);
+        if (o.tipo === "trash" || o.tipo === "lib") { // largar no lixo ou na biblioteca = remover
+            if (a.tipo === "slot") removerBotao(a.pos);
+            return;
+        }
+        if (o.tipo === "cell") {
+            if (a.tipo === "lib") {                                  // colocar
+                const resultado = colocarComEmpurrao(cells, spans, cols, o.pos, a.botaoId, { w: 1, h: 1 }, null);
+                if (resultado) { setCells(trim(resultado.cells)); setSpans(resultado.spans); }
+            } else if (a.tipo === "slot") {                          // mover
+                const { w, h } = getSpan(spans, a.pos);
+                const resultado = colocarComEmpurrao(cells, spans, cols, o.pos, cells[a.pos], { w, h }, a.pos);
+                if (resultado) { setCells(trim(resultado.cells)); setSpans(resultado.spans); }
             }
-            if (o.tipo === "cell") {
-                need(o.pos);
-                if (a.tipo === "lib") next[o.pos] = a.botaoId;       // colocar
-                else if (a.tipo === "slot") {                        // mover/trocar
-                    need(a.pos);
-                    const tmp = next[o.pos]; next[o.pos] = next[a.pos]; next[a.pos] = tmp;
-                }
-                return trim(next);
-            }
-            return prev;
-        });
+        }
     };
 
     // botão a mostrar no overlay durante o arrasto
@@ -292,18 +353,26 @@ const TabelaEditor = ({
                             <div className="min-h-full w-full flex items-center justify-center">
                                 <div className="w-full rounded-[20px] border-2 border-outline-variant bg-surface p-2 sm:p-3 overflow-hidden"
                                     style={{ maxWidth: dev.maxW, aspectRatio: dev.aspect, maxHeight: "100%", transform: `scale(${zoom})`, transformOrigin: "center" }}>
-                                    <div className="grid h-full"
+                                    <div ref={gridRef} className="grid h-full"
                                         style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))` }}>
                                         {Array.from({ length: slots }).map((_, pos) => {
-                                            const b = botaoPorId[cells[pos]];
+                                            const anchor = ocupacao.get(pos);
+                                            if (anchor !== undefined && anchor !== pos) return null; // coberta por um botão maior
+                                            const isAnchor = anchor === pos;
+                                            const emResize = resizePreview?.pos === pos;
+                                            const { w, h } = emResize ? resizePreview : isAnchor ? getSpan(spans, pos) : { w: 1, h: 1 };
+                                            const b = isAnchor ? botaoPorId[cells[pos]] : null;
                                             const isSOS = b && (b.categoria === "SOS" || b.nome === "SOS");
                                             const cor = b && !isSOS ? resolverCorCategoria(b.categoria, coresCategoria) : null;
                                             const r = Math.floor(pos / cols), c = pos % cols;
                                             return (
-                                                <GridCell key={pos} pos={pos} botao={b} apiUrl={apiUrl} size={escala} corFundo={cor} raio={raioFusao(gridCategorias, r, c)}
+                                                <GridCell key={pos} pos={pos} botao={b} apiUrl={apiUrl} size={escala} corFundo={cor}
+                                                    col={c + 1} row={r + 1} w={w} h={h}
+                                                    raio={raioFusao(gridCategorias, r, c, w, h)}
                                                     selecionado={selecionado?.tipo === "slot" && selecionado.pos === pos}
                                                     onCellClick={aoClicarCelula}
-                                                    onRemove={(p) => setCells((prev) => trim(prev.map((v, i) => (i === p ? null : v))))} />
+                                                    onResizeStart={iniciarResize}
+                                                    onRemove={removerBotao} />
                                             );
                                         })}
                                     </div>

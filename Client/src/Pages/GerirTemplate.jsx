@@ -5,7 +5,7 @@ import { fetchTabelasPadrao, saveTabelaPadrao } from "../api/tabelasPadrao";
 import TabelaEditor from "../Components/tabela/TabelaEditor";
 import { DISPOSITIVOS } from "../Components/tabela/constants";
 
-const defaultConfig = (d) => ({ cols: DISPOSITIVOS[d].colsDefault, size: "M", cells: [], coresCategoria: {} });
+const defaultConfig = (d) => ({ cols: DISPOSITIVOS[d].colsDefault, size: "M", cells: [], spans: {}, coresCategoria: {} });
 const configsVazias = () => ({ smartphone: defaultConfig("smartphone"), tablet: defaultConfig("tablet"), pc: defaultConfig("pc") });
 
 const GerirTemplate = () => {
@@ -77,6 +77,8 @@ const GerirTemplate = () => {
                 setSize={(v) => patch({ size: v })}
                 cells={cfg.cells}
                 setCells={(fn) => patch({ cells: typeof fn === "function" ? fn(cfg.cells) : fn })}
+                spans={cfg.spans || {}}
+                setSpans={(fn) => patch({ spans: typeof fn === "function" ? fn(cfg.spans || {}) : fn })}
                 coresCategoria={cfg.coresCategoria || {}}
                 setCoresCategoria={(fn) => patch({ coresCategoria: typeof fn === "function" ? fn(cfg.coresCategoria || {}) : fn })}
                 dirty={dirty}

@@ -5,6 +5,7 @@ import { staffLogout } from "../api/auth";
 import { fetchTabela } from "../api/tabela";
 import { idDoToken } from "../utils/utenteToken";
 import { DISPOSITIVOS, resolverCorCategoria, matrizCategorias, raioFusao } from "../Components/tabela/constants";
+import { getSpan, buildOcupacao, extentRows } from "../Components/tabela/gridSpans";
 import RequestListDrawer from "../Components/RequestListDrawer.jsx";
 import SuccessModal from "../Components/SuccessModal.jsx";
 import PinPrompt from "../Components/PinPrompt.jsx";
@@ -196,21 +197,23 @@ const TabuleiroComunicacao = () => {
     const renderTabela = (config, disp) => {
         const cols = config.cols || 4;
         const cells = config.cells || [];
+        const spans = config.spans || {};
         const coresCategoria = config.coresCategoria || {};
         const [aspW, aspH] = (DISPOSITIVOS[disp]?.aspect || "16 / 10")
             .split("/")
             .map((n) => parseFloat(n));
-        const lastFilled = cells.reduce((m, v, i) => (v != null ? i : m), -1);
         // mesmas linhas que o editor (geométrico) → reproduz o desenho, não estica os botões
         const rows = Math.max(
             Math.round((cols * aspH) / aspW),
-            Math.ceil((lastFilled + 1) / cols),
+            extentRows(cells, spans, cols),
             1,
         );
         const slots = rows * cols;
+        // mapa posição → âncora, para saltar as células cobertas por um botão maior
+        const ocupacao = buildOcupacao(cells, spans, cols);
         // matriz de categorias do quadro, para a fusão visual dos cantos (raioFusao) —
         // exige gap 0 na grelha, senão os fundos não "encostam" e a ilusão não resulta.
-        const grid = matrizCategorias(cells, cols, rows, botaoPorId);
+        const grid = matrizCategorias(cells, spans, cols, rows, botaoPorId);
         return (
             <div
                 className="flex-grow-1"
@@ -222,28 +225,34 @@ const TabuleiroComunicacao = () => {
                     minHeight: 0,
                 }}
             >
-                {Array.from({ length: slots }).map((_, i) => {
-                    const b = botaoPorId[cells[i]];
+                {Array.from({ length: slots }).map((_, pos) => {
+                    const anchor = ocupacao.get(pos);
+                    if (anchor !== undefined && anchor !== pos) return null; // coberta por um botão maior
+                    const b = anchor === pos ? botaoPorId[cells[pos]] : null;
+                    const r = Math.floor(pos / cols),
+                        c = pos % cols;
+                    const { w, h } = anchor === pos ? getSpan(spans, pos) : { w: 1, h: 1 };
+                    const posStyle = { gridColumn: `${c + 1} / span ${w}`, gridRow: `${r + 1} / span ${h}` };
                     if (!b)
                         return (
                             <div
-                                key={i}
+                                key={pos}
+                                style={posStyle}
                                 className="rounded-2xl border-2 border-dashed border-outline-variant bg-surface-container-low"
                             />
                         );
                     const isSOS = b.categoria === "SOS" || b.nome === "SOS";
                     const cor = !isSOS ? resolverCorCategoria(b.categoria, coresCategoria) : null;
-                    const r = Math.floor(i / cols),
-                        c = i % cols;
                     return (
                         <div
-                            key={i}
+                            key={pos}
                             className="transition-all"
                             style={{
+                                ...posStyle,
                                 minHeight: 0,
                                 padding: "4%",
                                 background: cor || "transparent",
-                                ...raioFusao(grid, r, c),
+                                ...raioFusao(grid, r, c, w, h),
                             }}
                         >
                             <button

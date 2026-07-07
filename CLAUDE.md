@@ -8,34 +8,46 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Utente (Patient)**: Tablet board with customizable buttons/requests, request history drawer, emergency SOS
 - **Staff**: Management console for patient profiles, button customization, request monitoring, customizable layouts/templates
 
-**Tech stack:** React (Vite, Ant Design, Bootstrap) × Express (Sequelize ORM, SQLite) × Socket.io × bcryptjs auth
+**Tech stack:** React (Vite, Ant Design, Bootstrap) × Express (Sequelize ORM, **MariaDB**) × Socket.io × bcryptjs auth
+
+> Migrated off SQLite (mid-2026) — SQLite caused a SEGV crash loop on the Pi's armhf/aarch64 build. See `DEVELOPMENT_LOG.md` for the migration history and the MariaDB-specific gotchas below.
 
 ---
 
 ## Quick Start
 
+Requires Node ≥ 20 (the `mariadb` connector needs it) and a running local MariaDB instance.
+
 ### First-time setup
 
-**Server:**
-```bash
-cd Server
-npm i
-npx sequelize-cli db:migrate
-npx sequelize-cli db:seed:all
-node main.js                # runs on port 3000
-```
+**Shortcut (Windows):** `./install.ps1` from the repo root does steps 1–3 below in one shot (creates the dev DB/user, writes `Server/.env`, `npm i` both projects, migrates + seeds). Idempotent — safe to re-run. See `Get-Help ./install.ps1 -Full` for params (DB name/user, root password, etc.).
 
-**Client:**
-```bash
-cd Client
-npm i
-npm run dev                  # Vite dev server with HMR (port 5173)
-```
+1. **Create the DB + app user in MariaDB:**
+   ```powershell
+   mysql -u root -p -e "CREATE DATABASE inovlar_dev CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; CREATE USER 'inovlar_app'@'localhost' IDENTIFIED BY 'yourpassword'; GRANT ALL ON inovlar_dev.* TO 'inovlar_app'@'localhost'; FLUSH PRIVILEGES;"
+   ```
+2. **Configure `Server/.env`** (copy `Server/.env.example`, then fill in `DB_NAME`, `DB_USER`, `DB_PASS`, `DB_HOST`, `DB_PORT`). Never committed — it's in `.gitignore`.
+3. **Install, migrate, seed:**
+   ```bash
+   cd Server
+   npm i
+   npx sequelize-cli db:migrate
+   npx sequelize-cli db:seed:all   # seeds the 43 default botões
+   node main.js                     # runs on port 3000
+   ```
+4. **Client (separate shell):**
+   ```bash
+   cd Client
+   npm i
+   npm run dev                  # Vite dev server with HMR (port 5173), talks to API on :3000
+   ```
 
 ### After first setup
 
 **Server:** `cd Server && node main.js`
 **Client:** `cd Client && npm run dev`
+
+(No need to repeat `db:migrate`/`db:seed:all` unless new migrations/seeders were added.)
 
 ### Production build
 
@@ -44,24 +56,28 @@ cd Client && npm run build   # generates Client/dist/
 cd ../Server && node main.js # serves React build + API + socket.io on http://<ip>:3000
 ```
 
+Raspberry Pi deployment (MariaDB install, DB/user creation, migrations, systemd service) is automated by `install.sh` at the repo root — see it and `DEVELOPMENT_LOG.md` (Phase 3 entries) for the deployment-specific gotchas (Node version resolution under `sudo`, `lower_case_table_names` differences between Windows/Linux MariaDB, etc.).
+
 ---
 
 ## Architecture
 
 ### Core Concepts
 
-1. **Kiosk Mode:** The tablet starts locked (`staffUnlocked: false`). Staff enters PIN to access management console. Entering patient board (`/main/:token`) closes the gate. Only PIN reopens staff access — physical reset or password deletion via SQLite.
+1. **Kiosk Mode:** The tablet starts locked (`staffUnlocked: false`). Staff enters PIN to access management console. Entering patient board (`/main/:token`) closes the gate. Only PIN reopens staff access — physical reset or deleting the `StaffAuth` row in MariaDB.
 
 2. **Two Authentication Paths:**
    - **Staff:** Shared password per device (bcrypt-hashed), session cookie (httpOnly, signed, ~1 year).
    - **Utente:** Token-based access (no auth per se; URL is the secret: `/main/{token}`).
 
 3. **State Management:**
-   - **ContextProvider:** Global state (utentes, botoes, pedidos, staffUnlocked) + API calls delegated to `api/` layer.
+   - **ContextProvider:** Global state (utentes, botoes, pedidos, staffUnlocked) + API calls delegated to `api/` layer. It wraps `<Router>` in `App.jsx`, so it **survives all SPA navigation** — re-entering a page for the same entity (e.g. same patient's board) does *not* automatically refetch unless the effect's dependency actually changes. If a page looks stale on re-entry without a socket event in between, check whether its `useEffect` unconditionally refetches on mount vs. only on id-change (see `TabuleiroComunicacao.jsx` and the 2026-07-03 entry in `DEVELOPMENT_LOG.md`).
    - **API Layer** (`src/api/`): Pure functions for HTTP requests (GET, POST, PUT, DELETE).
    - **Socket.io:** Real-time sync of DB changes across clients.
 
 4. **Responsive Design:** Sidebar+header on desktop; bottom navigation bar on mobile. Layout components centralized in `Components/layout/`.
+
+5. **Schema management is split, not uniform:** `Utente`, `Botao`, `Pedido` (and the `UtenteBotoes` join table) are managed by Sequelize **migrations** (`Server/migrations/`, run via `sequelize-cli db:migrate`). `StaffAuth`, `TabelaLayout`, `TabelaPadrao` are instead created via `Model.sync()` called directly in `main.js` on every server start — no migration files for these. When adding a column to the first group you must write a migration; for the second group, editing the model is enough.
 
 ### File Structure
 
@@ -99,15 +115,17 @@ Client/src/
 ```
 Server/
 ├── config/
-│   ├── database.js       # Sequelize connection (SQLite: database/apcm.sqlite)
+│   ├── config.js         # sequelize-cli dialect config, reads DB_* from .env (dialect: 'mariadb')
+│   ├── database.js       # Sequelize instance built from config.js, used by models/index.js
 │   └── auth.js           # COOKIE_SECRET, MIN_DIGITOS
+├── .env                  # DB_NAME/DB_USER/DB_PASS/DB_HOST/DB_PORT — gitignored, copy from .env.example
 ├── models/
 │   ├── Botao.js          # Button/quick-request (imagem: allowNull)
 │   ├── Utente.js         # Patient (hasMany Botao, hasMany Tabela)
-│   ├── Pedido.js         # Request instance (timestamps, status)
-│   ├── StaffAuth.js      # Single row: passwordHash
-│   ├── TabelaLayout.js   # User-specific table layout (utente + device)
-│   ├── TabelaPadrao.js   # Template for bulk apply to patients
+│   ├── Pedido.js         # Request instance (timestamps, status); tableName: 'pedidos' (lowercase — see gotcha below)
+│   ├── StaffAuth.js      # Single row: passwordHash — sync()'d, no migration
+│   ├── TabelaLayout.js   # User-specific table layout (utente + device) — sync()'d, no migration
+│   ├── TabelaPadrao.js   # Template for bulk apply to patients — sync()'d, no migration
 │   └── index.js          # Exports + associations
 ├── routes/
 │   ├── route.js          # Main API endpoints (auth, utentes, botoes, pedidos, tabelas, imagesBotoes)
@@ -116,17 +134,17 @@ Server/
 ├── middleware/           # auth.js (requireStaff middleware)
 ├── Util/
 │   ├── socketIO.js       # Socket.io setup + notificarAlteracaoBD broadcast
-│   └── seedDefaults.js   # Create "Predefinida" template on first run
-├── seeders/              # Seed scripts for testing data
-├── migrations/           # Sequelize migrations (one-time; sync() now used instead)
+│   └── seedDefaults.js   # Create "Predefinida" template on first run (runs once — guards on TabelaPadrao.count())
+├── seeders/              # Seed scripts (43 default botões); no run-once tracking table, re-running errors on dup IDs
+├── migrations/           # Sequelize migrations for Utente/Botao/Pedido/UtenteBotoes — run via db:migrate
 ├── public/               # Static files served by Express
 │   ├── imagesBotoes/     # Flat structure (no subfolders); upload/delete here
 │   └── [other assets]
 ├── views/                # Orphaned EJS views (replaced by React SPA)
-├── database/
-│   └── apcm.sqlite       # SQLite DB
-└── main.js               # Entry point: sets up Express, socket.io, static file serving
+└── main.js               # Entry point: Express + socket.io + static file serving; also calls sync() for the 3 non-migrated models
 ```
+
+**MariaDB table-name gotcha:** table/column name casing is compared case-*insensitively* on Windows MariaDB (`lower_case_table_names=1`) but case-*sensitively* on Linux (default on the Pi/Debian, `=0`). A migration that creates `'Pedidos'` while the model declares `tableName: 'pedidos'` will silently work on Windows dev but throw `ER_NO_SUCH_TABLE` on the Pi. Always create tables with the exact lowercase name the model uses; see `Server/migrations/20260703150000-rename-pedidos-table.js` for the fix pattern (checks `information_schema.tables` with `BINARY` before renaming, so it's a no-op where the name is already correct).
 
 ---
 
@@ -234,16 +252,19 @@ Server/
 | Start Server (dev) | `cd Server && node main.js` |
 | Start Client (dev) | `cd Client && npm run dev` |
 | Build Client | `cd Client && npm run build` |
-| Reset staff password | `sqlite3 database/apcm.sqlite "DELETE FROM StaffAuth;"` then restart |
+| Reset staff password | Delete the single row in `StaffAuth` (e.g. `mysql -u inovlar_app -p inovlar_dev -e "DELETE FROM StaffAuth;"`), then restart the server |
 | Run migrations | `cd Server && npx sequelize-cli db:migrate` |
-| Seed test data | `cd Server && npx sequelize-cli db:seed:all` |
-| Lint Client | `cd Client && npm run lint` (requires eslint.config.js setup; not yet done) |
+| Seed test data | `cd Server && npx sequelize-cli db:seed:all` (errors on 2nd run — no run-once guard; see table-name gotcha above) |
+| Full local dev setup (Windows) | `./install.ps1` from repo root |
+| Lint Client | `cd Client && npm run lint` (currently broken — see below) |
+
+There is no automated test suite for either `Server` or `Client` (`Server`'s `npm test` is an unset placeholder).
 
 ---
 
 ## Known Limitations & TODOs
 
-- **ESLint v9 not configured** — `npm run lint` doesn't work; `eslint.config.js` not present (pré-existing).
+- **ESLint v9 not configured** — `Client/package.json` has a `lint` script but no `eslint.config.js` exists, so `npm run lint` fails.
 - **CSS class cleanup** — `.new-container` / `.edit-container` in `index.css` no longer used (UtenteForm was refactored); safe to remove.
 - **Safe-area inset for iPhone** — bottom nav could include `env(safe-area-inset-bottom)` in height for cleaner spacing near home indicator.
 - **Orphaned components** — `Home.jsx`, `UtenteHome.jsx`, `AbrirUtente.jsx`, `BindUtente.jsx`, `EscreverMensagem.jsx` not in router (kept for reference).
@@ -253,4 +274,4 @@ Server/
 
 ## Memory & Context
 
-See `DEVELOPMENT_LOG.md` for chronological decision log (authentication design, responsive mobile, image upload with cache-busting, kiosk flow, etc.). Key entries: 2026-06-09 (deployment unification), 2026-06-09 (staff auth), 2026-06-17 (image management), 2026-06-17 (responsive mobile).
+See `DEVELOPMENT_LOG.md` for chronological decision log (authentication design, responsive mobile, image upload with cache-busting, kiosk flow, MariaDB migration, Raspberry Pi deployment, etc.). Key entries: 2026-06-09 (deployment unification), 2026-06-09 (staff auth), 2026-06-17 (image management), 2026-06-17 (responsive mobile), 2026-07-03 (MariaDB migration + Pi deployment, table-casing bug, ContextProvider refetch-on-navigation fix).

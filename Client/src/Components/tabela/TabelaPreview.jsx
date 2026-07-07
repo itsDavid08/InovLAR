@@ -1,16 +1,19 @@
 import { DISPOSITIVOS } from "./constants";
+import { getSpan, buildOcupacao, extentRows } from "./gridSpans";
 
-// Pré-visualização read-only de uma tabela (mesma lógica de linhas do editor).
+// Pré-visualização read-only de uma tabela (mesma lógica de linhas e spans do editor).
 const TabelaPreview = ({ config, dispositivo, botaoPorId, apiUrl }) => {
     const dev = DISPOSITIVOS[dispositivo];
     const cells = Array.isArray(config?.cells) ? config.cells : [];
+    const spans = config?.spans || {};
     const cols = config?.cols || dev.colsDefault;
     const [aspW, aspH] = dev.aspect.split("/").map((n) => parseFloat(n));
-    const lastFilled = cells.reduce((m, v, i) => (v != null ? i : m), -1);
-    const rows = Math.max(Math.round((cols * aspH) / aspW), Math.ceil((lastFilled + 1) / cols), 1);
+    const temBotoes = cells.some((v) => v != null);
+    const rows = Math.max(Math.round((cols * aspH) / aspW), extentRows(cells, spans, cols), 1);
     const slots = rows * cols;
+    const ocupacao = buildOcupacao(cells, spans, cols);
 
-    if (lastFilled < 0) {
+    if (!temBotoes) {
         return (
             <div className="w-full rounded-md border border-dashed border-outline-variant bg-surface-container-low flex items-center justify-center text-on-surface-variant"
                 style={{ aspectRatio: dev.aspect }}>
@@ -22,10 +25,14 @@ const TabelaPreview = ({ config, dispositivo, botaoPorId, apiUrl }) => {
         <div className="w-full rounded-md border border-outline-variant bg-surface overflow-hidden" style={{ aspectRatio: dev.aspect }}>
             <div className="grid h-full p-[3%]"
                 style={{ gridTemplateColumns: `repeat(${cols}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)` }}>
-                {Array.from({ length: slots }).map((_, i) => {
-                    const b = botaoPorId[cells[i]];
+                {Array.from({ length: slots }).map((_, pos) => {
+                    const anchor = ocupacao.get(pos);
+                    if (anchor !== undefined && anchor !== pos) return null; // coberta por um botão maior
+                    const b = anchor === pos ? botaoPorId[cells[pos]] : null;
+                    const { w, h } = anchor === pos ? getSpan(spans, pos) : { w: 1, h: 1 };
+                    const r = Math.floor(pos / cols), c = pos % cols;
                     return (
-                        <div key={i} className="p-[6%]">
+                        <div key={pos} className="p-[6%]" style={{ gridColumn: `${c + 1} / span ${w}`, gridRow: `${r + 1} / span ${h}` }}>
                             {b ? (
                                 <div className="w-full h-full rounded-md bg-surface-container-lowest border border-surface-variant flex items-center justify-center overflow-hidden">
                                     <img src={apiUrl + (b.imagem || "/imagesBotoes/default.png")} alt="" className="w-full h-full object-contain p-[10%]" draggable={false} />

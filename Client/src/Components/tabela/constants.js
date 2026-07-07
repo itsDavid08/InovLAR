@@ -1,3 +1,5 @@
+import { getSpan, footprint } from "./gridSpans";
+
 export const DISPOSITIVOS = {
     smartphone: { label: "Telemóvel", icon: "smartphone", colsDefault: 4, colsMin: 2, colsMax: 8,  maxW: 640,  aspect: "16 / 9" },
     tablet:     { label: "Tablet",    icon: "tablet",     colsDefault: 5, colsMin: 2, colsMax: 10, maxW: 760,  aspect: "4 / 3" },
@@ -41,28 +43,36 @@ export const resolverCorCategoria = (categoria, overrides) =>
     overrides?.[categoria] ?? COR_CATEGORIA_FUNDO[categoria] ?? null;
 
 // Matriz de categorias do quadro (índice = r*cols+c), para a ilusão de fusão visual
-// entre células vizinhas da mesma categoria. SOS nunca entra — mantém-se sempre uma
-// "ilha" isolada, com os 4 cantos arredondados.
-export const matrizCategorias = (cells, cols, rows, botaoPorId) =>
-    Array.from({ length: rows }, (_, r) =>
-        Array.from({ length: cols }, (_, c) => {
-            const b = botaoPorId[cells[r * cols + c]];
-            if (!b || b.categoria === "SOS" || b.nome === "SOS") return null;
-            return b.categoria;
-        }));
+// entre células vizinhas da mesma categoria. Preenche toda a pegada de um botão maior
+// (não só a âncora), para a fusão funcionar em qualquer aresta dele. SOS nunca entra
+// — mantém-se sempre uma "ilha" isolada, com os 4 cantos arredondados.
+export const matrizCategorias = (cells, spans, cols, rows, botaoPorId) => {
+    const grid = Array.from({ length: rows }, () => Array(cols).fill(null));
+    cells.forEach((botaoId, pos) => {
+        const b = botaoPorId[botaoId];
+        if (!b || b.categoria === "SOS" || b.nome === "SOS") return;
+        const { w, h } = getSpan(spans, pos);
+        for (const p of footprint(pos, w, h, cols) || [pos]) {
+            const r = Math.floor(p / cols), c = p % cols;
+            if (r < rows) grid[r][c] = b.categoria;
+        }
+    });
+    return grid;
+};
 
 // Raio de canto que dá a ilusão de fusão: só os cantos exteriores ao grupo da mesma
 // categoria arredondam; os cantos partilhados com um vizinho da mesma categoria ficam
 // quadrados. Sem categoria (célula vazia/SOS) → 4 cantos arredondados, como sempre.
-export const raioFusao = (grid, r, c, raio = "1rem") => {
+// `w`/`h` (default 1x1) é a pegada do botão ancorado em (r,c) — os 4 cantos passam a
+// ser os do retângulo inteiro, não os de uma única célula.
+export const raioFusao = (grid, r, c, w = 1, h = 1, raio = "1rem") => {
     const cat = grid[r]?.[c];
     if (!cat) return { borderRadius: raio };
     const same = (rr, cc) => grid[rr]?.[cc] === cat;
-    const up = same(r - 1, c), down = same(r + 1, c), left = same(r, c - 1), right = same(r, c + 1);
     return {
-        borderTopLeftRadius: up || left ? 0 : raio,
-        borderTopRightRadius: up || right ? 0 : raio,
-        borderBottomLeftRadius: down || left ? 0 : raio,
-        borderBottomRightRadius: down || right ? 0 : raio,
+        borderTopLeftRadius: same(r - 1, c) || same(r, c - 1) ? 0 : raio,
+        borderTopRightRadius: same(r - 1, c + w - 1) || same(r, c + w) ? 0 : raio,
+        borderBottomLeftRadius: same(r + h, c) || same(r + h - 1, c - 1) ? 0 : raio,
+        borderBottomRightRadius: same(r + h, c + w - 1) || same(r + h - 1, c + w) ? 0 : raio,
     };
 };
