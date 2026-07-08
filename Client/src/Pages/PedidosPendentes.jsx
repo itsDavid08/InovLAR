@@ -9,7 +9,7 @@ import PedidosPhone from "../Components/pedidos/PedidosPhone";
 import "../index.css";
 
 // Container: mantém o estado/áudio/teclado e escolhe o layout por tamanho de ecrã
-// (TV = Opção B, Tablet = Opção A, Telemóvel = lista). Os layouts são "burros".
+// (Tablet e TV/PC = board em grelha, Telemóvel = lista). Os layouts são "burros".
 function PedidosPendentes() {
     const { pedidosPendentes, updatePedido } = useContext(Context);
     const [now, setNow] = useState(Date.now());
@@ -74,12 +74,12 @@ function PedidosPendentes() {
         updatePedido(pedido, "concluido");
     };
 
-    const { all, emergencias, normais } = split(pedidosPendentes, now);
+    const { all } = split(pedidosPendentes, now);
 
-    // TV/PC (≥1280px) usa o board (Opção B). Tablet e telemóvel partilham a
-    // mesma lista de cartões.
-    if (mode === "tv") return <PedidosTV emergencias={emergencias} normais={normais} onResolver={handleResolver} />;
-    return (<><PedidosPhone all={all} onResolver={handleResolver} /><StaffBottomNav /></>);
+    // Telemóvel (<640px) usa a lista de cartões (1 coluna). Tablet e TV/PC
+    // (≥640px) partilham o board em grelha (2 colunas).
+    if (mode === "phone") return (<><PedidosPhone all={all} onResolver={handleResolver} /><StaffBottomNav /></>);
+    return <PedidosTV all={all} onResolver={handleResolver} />;
 }
 
 export default PedidosPendentes;

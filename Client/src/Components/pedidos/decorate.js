@@ -32,8 +32,7 @@ export function decorate(pedido, now) {
     };
 }
 
-// Decora tudo e separa, mantendo a ordem que o servidor já devolve.
+// Decora tudo, mantendo a ordem que o servidor já devolve (emergência primeiro).
 export function split(pedidos, now) {
-    const all = pedidos.map((p) => decorate(p, now));
-    return { all, emergencias: all.filter((r) => r.emergencia), normais: all.filter((r) => !r.emergencia) };
+    return { all: pedidos.map((p) => decorate(p, now)) };
 }
