@@ -1,12 +1,38 @@
+import { useEffect, useRef, useState } from "react";
 import { usePagedRotation } from "./usePagedRotation";
+
+// Altura mínima de um cartão (px) para o texto (nome/quarto/pedido) não
+// cortar; abaixo disto passa a rodar mais páginas em vez de espremer.
+const MIN_ROW_HEIGHT = 100;
+const GRID_GAP = 14; // aprox. do gap real (clamp 10-14px), só para o cálculo
 
 // Tablet e TV/PC: grelha de 2 colunas (aproveita a largura do ecrã). O
 // servidor já ordena emergência primeiro (depois por hora) e o grid preenche
 // por linha, por isso o(s) cartão(ões) de emergência aparecem sempre primeiro
 // — só que destacados (vermelho, flash) em vez de reservarem uma coluna
 // dedicada, já que raramente há mais que um em simultâneo.
+//
+// O número de pedidos por página é variável: mede-se a altura disponível e
+// calcula-se quantas linhas cabem sem descer de MIN_ROW_HEIGHT; o resto roda
+// por páginas (usePagedRotation), tal como a versão anterior de 1 coluna.
 export default function PedidosTV({ all, onResolver }) {
-    const fila = usePagedRotation(all, 14, 8000);
+    const gridRef = useRef(null);
+    const [rowsAvailable, setRowsAvailable] = useState(7);
+
+    useEffect(() => {
+        const el = gridRef.current;
+        if (!el) return;
+        const medir = () => {
+            const rows = Math.max(1, Math.floor((el.clientHeight + GRID_GAP) / (MIN_ROW_HEIGHT + GRID_GAP)));
+            setRowsAvailable(rows);
+        };
+        medir();
+        const ro = new ResizeObserver(medir);
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, []);
+
+    const fila = usePagedRotation(all, rowsAvailable * 2, 8000);
     const numEmergencias = all.filter((r) => r.emergencia).length;
     const rows = Math.max(1, Math.ceil(fila.pageItems.length / 2));
 
@@ -31,13 +57,14 @@ export default function PedidosTV({ all, onResolver }) {
                 </span>
             </div>
 
-            <div style={{ flex: 1, display: "grid", gridTemplateColumns: "1fr 1fr", gridTemplateRows: `repeat(${rows}, 1fr)`,
-                gap: "clamp(10px,0.9vw,14px)", minHeight: 0 }}>
+            <div ref={gridRef} style={{ flex: 1, display: "grid", gridTemplateColumns: "1fr 1fr",
+                gridTemplateRows: `repeat(${rows}, minmax(${MIN_ROW_HEIGHT}px, 1fr))`,
+                gap: "clamp(10px,0.9vw,14px)", minHeight: 0, overflow: "hidden" }}>
                 {fila.pageItems.map((r) => (
                     <div key={r.id} style={{ minHeight: 0, minWidth: 0, background: r.cardBg, border: `2px solid ${r.cardBorder}`,
                         borderLeft: `12px solid ${r.accent}`, borderRadius: 20, padding: "clamp(6px,0.8vw,10px) clamp(12px,1.2vw,22px)",
                         display: "flex", flexWrap: "wrap", alignItems: "center", gap: "clamp(10px,1.2vw,20px)", animation: r.emgAnim }}>
-                        <div style={{ width: "clamp(48px,4.5vw,92px)", height: "clamp(48px,4.5vw,92px)", borderRadius: 20,
+                        <div style={{ height: "70%", maxHeight: 130, aspectRatio: "1", borderRadius: 20,
                             background: r.iconBg, display: "flex", alignItems: "center", justifyContent: "center", flex: "0 0 auto" }}>
                             <img src={r.img} alt="" style={{ width: "85%", height: "85%", objectFit: "contain" }} />
                         </div>
