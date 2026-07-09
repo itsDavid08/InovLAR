@@ -4,8 +4,17 @@ import { Context } from "../ContextProvider";
 import { staffLogout } from "../api/auth";
 import { fetchTabela } from "../api/tabela";
 import { idDoToken } from "../utils/utenteToken";
-import { DISPOSITIVOS, resolverCorCategoria, matrizCategorias, raioFusao } from "../Components/tabela/constants";
-import { getSpan, buildOcupacao, extentRows } from "../Components/tabela/gridSpans";
+import {
+    DISPOSITIVOS,
+    resolverCorCategoria,
+    matrizCategorias,
+    raioFusao,
+} from "../Components/tabela/constants";
+import {
+    getSpan,
+    buildOcupacao,
+    extentRows,
+} from "../Components/tabela/gridSpans";
 import RequestListDrawer from "../Components/RequestListDrawer.jsx";
 import SuccessModal from "../Components/SuccessModal.jsx";
 import PinPrompt from "../Components/PinPrompt.jsx";
@@ -231,8 +240,12 @@ const TabuleiroComunicacao = () => {
                     const b = anchor === pos ? botaoPorId[cells[pos]] : null;
                     const r = Math.floor(pos / cols),
                         c = pos % cols;
-                    const { w, h } = anchor === pos ? getSpan(spans, pos) : { w: 1, h: 1 };
-                    const posStyle = { gridColumn: `${c + 1} / span ${w}`, gridRow: `${r + 1} / span ${h}` };
+                    const { w, h } =
+                        anchor === pos ? getSpan(spans, pos) : { w: 1, h: 1 };
+                    const posStyle = {
+                        gridColumn: `${c + 1} / span ${w}`,
+                        gridRow: `${r + 1} / span ${h}`,
+                    };
                     if (!b)
                         return (
                             <div
@@ -242,7 +255,9 @@ const TabuleiroComunicacao = () => {
                             />
                         );
                     const isSOS = b.categoria === "SOS" || b.nome === "SOS";
-                    const cor = !isSOS ? resolverCorCategoria(b.categoria, coresCategoria) : null;
+                    const cor = !isSOS
+                        ? resolverCorCategoria(b.categoria, coresCategoria)
+                        : null;
                     return (
                         <div
                             key={pos}
@@ -257,7 +272,9 @@ const TabuleiroComunicacao = () => {
                         >
                             <button
                                 onClick={() =>
-                                    isSOS ? handleButtonSOS() : handleButtonClick(b)
+                                    isSOS
+                                        ? handleButtonSOS()
+                                        : handleButtonClick(b)
                                 }
                                 aria-label={b.nome}
                                 className={`btn d-flex flex-column align-items-center justify-content-center rounded overflow-hidden w-100 h-100 ${isSOS ? "btn-danger" : "btn-light border border-secondary"}`}
@@ -266,7 +283,8 @@ const TabuleiroComunicacao = () => {
                                 <img
                                     src={
                                         apiUrl +
-                                        (b.imagem || "/imagesBotoes/default.png")
+                                        (b.imagem ||
+                                            "/imagesBotoes/default.png")
                                     }
                                     alt={b.nome}
                                     style={{
@@ -342,7 +360,11 @@ const TabuleiroComunicacao = () => {
                 </div>
                 <button
                     className="btn btn-outline-light text-muted border"
-                    style={{ display: "flex", alignItems: "center", gap: "4px" }}
+                    style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
+                    }}
                     onClick={() => setPinVisible(true)}
                     aria-label="Acesso staff"
                 >

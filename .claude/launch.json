@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "server",
+      "runtimeExecutable": "cmd.exe",
+      "runtimeArgs": ["/c", "cd Server && node main.js"],
+      "port": 3000
+    },
+    {
+      "name": "client",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "cd Client && npm run dev"],
+      "port": 5173
+    }
+  ]
+}

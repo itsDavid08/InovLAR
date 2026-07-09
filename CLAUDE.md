@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**InovLAR** is a tablet-based communication and assistance system for nursing home patients (APCM partnership). It has two interfaces:
+**InovLAR** is a tablet-based communication and assistance system for nursing home patients. It has two interfaces:
 - **Utente (Patient)**: Tablet board with customizable buttons/requests, request history drawer, emergency SOS
 - **Staff**: Management console for patient profiles, button customization, request monitoring, customizable layouts/templates
 
@@ -89,8 +89,8 @@ Client/src/
 │   ├── layout/       # StaffShell, StaffSidebar, StaffBottomNav, ItemMenu, navItems.js
 │   ├── botoes/       # EditBotoes (container) + BotoesList + BotaoForm + ConflitoImagemModal
 │   ├── utentes/      # EditUtente, NewUtente, UtenteForm
-│   ├── pedidos/      # PedidosPhone, PedidosTV (view modes) + usePagedRotation + useViewportMode
-│   ├── tabela/       # TabelaEditor, TabelaPreview, ButtonTile, constants.js
+│   ├── pedidos/      # PedidosPhone, PedidosTV (view modes) + decorate.js (pedido→visual props) + usePagedRotation + useViewportMode
+│   ├── tabela/       # TabelaEditor, TabelaPreview, ButtonTile, constants.js, gridSpans.js
 │   ├── RequireStaff.jsx       # Gate: blocks staff routes if staffUnlocked=false
 │   ├── Keypad.jsx             # Reusable numeric keypad (PIN, password)
 │   ├── PinPrompt.jsx          # Modal to exit patient board
@@ -217,6 +217,20 @@ Server/
 - **Order + flex utilities** — form/preview reorder on mobile without page reflow.
 - **Safe-area inset** — respects iPhone notch/home indicator.
 - **Two request view modes** — PedidosPhone (mobile optimized) and PedidosTV (large-screen, portrait rotation).
+
+### 5. Variable-Size Buttons & Category Coloring
+- **Spans, not a grid resize** — a button can occupy a rectangular w×h "footprint" anchored at
+  its top-left cell. Anchor cell holds the `botaoId`; the rest of the footprint is reserved as
+  `null`. Missing entry in `config.spans` = 1×1 (backward-compatible with tables saved before
+  this existed). See `Client/src/Components/tabela/gridSpans.js`.
+- **Auto-push on collision** — placing/resizing a button at a target position pushes any
+  colliding buttons to the next free cell (row-major scan; grid grows if needed). Deterministic
+  by position order, not drag order.
+- **Category coloring is opt-in, staff-overridable** — `constants.js` has default pastel colors
+  per category; staff can override via `config.coresCategoria`. Precedence: staff override >
+  default pastel > no color. SOS never gets a background color. Adjacent same-category cells
+  visually "merge" (shared corners square off) — computed per-cell, accounting for each button's
+  full footprint, not just its anchor.
 
 ---
 
