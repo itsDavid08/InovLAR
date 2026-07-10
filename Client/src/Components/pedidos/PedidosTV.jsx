@@ -4,6 +4,9 @@ import { usePagedRotation } from "./usePagedRotation";
 // Altura mínima de um cartão (px) para o texto (nome/quarto/pedido) não
 // cortar; abaixo disto passa a rodar mais páginas em vez de espremer.
 const MIN_ROW_HEIGHT = 100;
+// Altura máxima de um cartão (px); acima disto, com poucos pedidos, o cartão
+// deixa de esticar para preencher o ecrã inteiro (fica ancorado ao topo).
+const MAX_ROW_HEIGHT = 220;
 const GRID_GAP = 14; // aprox. do gap real (clamp 10-14px), só para o cálculo
 
 // Tablet e TV/PC: grelha de 2 colunas (aproveita a largura do ecrã). O
@@ -58,8 +61,8 @@ export default function PedidosTV({ all, onResolver }) {
             </div>
 
             <div ref={gridRef} style={{ flex: 1, display: "grid", gridTemplateColumns: "1fr 1fr",
-                gridTemplateRows: `repeat(${rows}, minmax(${MIN_ROW_HEIGHT}px, 1fr))`,
-                gap: "clamp(10px,0.9vw,14px)", minHeight: 0, overflow: "hidden" }}>
+                gridTemplateRows: `repeat(${rows}, minmax(${MIN_ROW_HEIGHT}px, ${MAX_ROW_HEIGHT}px))`,
+                gap: "clamp(10px,0.9vw,14px)", minHeight: 0, alignContent: "start", overflow: "hidden" }}>
                 {fila.pageItems.map((r) => (
                     <div key={r.id} style={{ minHeight: 0, minWidth: 0, background: r.cardBg, border: `2px solid ${r.cardBorder}`,
                         borderLeft: `12px solid ${r.accent}`, borderRadius: 20, padding: "clamp(6px,0.8vw,10px) clamp(12px,1.2vw,22px)",

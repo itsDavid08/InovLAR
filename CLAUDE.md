@@ -283,9 +283,12 @@ There is no automated test suite for either `Server` or `Client` (`Server`'s `np
 - **Safe-area inset for iPhone** — bottom nav could include `env(safe-area-inset-bottom)` in height for cleaner spacing near home indicator.
 - **Orphaned components** — `Home.jsx`, `UtenteHome.jsx`, `AbrirUtente.jsx`, `BindUtente.jsx`, `EscreverMensagem.jsx` not in router (kept for reference).
 - **Production HTTPS** — `secure: true` needed in cookie config (`authController.js`) when deployed over HTTPS.
+- **Known security gaps** — `SECURITY_CHECKLIST.md` (PT, internal) has a severity-ranked list from a manual audit: no rate limiting on staff login (4-digit PIN brute-forceable), static `"ok"` session cookie, hardcoded `COOKIE_SECRET` fallback, patient data endpoints (`/utentes`, `/pedidos`) reachable with no auth, open CORS reflecting any origin, mass assignment in a few controllers. Check this file before touching auth, CORS, or the patient-data GET endpoints.
 
 ---
 
 ## Memory & Context
 
 See `DEVELOPMENT_LOG.md` for chronological decision log (authentication design, responsive mobile, image upload with cache-busting, kiosk flow, MariaDB migration, Raspberry Pi deployment, etc.). Key entries: 2026-06-09 (deployment unification), 2026-06-09 (staff auth), 2026-06-17 (image management), 2026-06-17 (responsive mobile), 2026-07-03 (MariaDB migration + Pi deployment, table-casing bug, ContextProvider refetch-on-navigation fix).
+
+`OPEN_SOURCE_CHECKLIST.md` (PT, internal) tracks prep work for making the repo public and writing an accompanying paper (git-history secret scan, license, CONTRIBUTING.md, generalizing the nursing-home-specific vocabulary, CI). Not part of the architecture, but relevant if asked to work on repo hygiene, licensing, or genericizing button/category naming.

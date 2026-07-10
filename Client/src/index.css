@@ -664,6 +664,159 @@ textarea {
   z-index: 1000;
 }
 
+/* ==================== */
+/* WELCOME (split brand panel) */
+/* ==================== */
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.welcome-split {
+  min-height: 100vh;
+  display: flex;
+  background: #fff;
+}
+
+.welcome-split-brand {
+  width: 40%;
+  min-width: 320px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 48px 40px;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(160deg, #04D9D9 0%, #12B8C4 55%, #1E90FF 100%);
+}
+
+.welcome-split-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.18);
+}
+
+.welcome-split-ring--top {
+  width: 360px;
+  height: 360px;
+  top: -120px;
+  left: -120px;
+}
+
+.welcome-split-ring--bottom {
+  width: 260px;
+  height: 260px;
+  bottom: -90px;
+  right: -70px;
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.welcome-split-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: relative;
+  z-index: 1;
+}
+
+.welcome-split-logo-mark {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.22);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 800;
+  font-size: 20px;
+  font-family: Georgia, serif;
+}
+
+.welcome-split-logo-text {
+  color: white;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.welcome-split-tagline {
+  position: relative;
+  z-index: 1;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.welcome-split-caption {
+  position: relative;
+  z-index: 1;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 13px;
+}
+
+.welcome-split-content {
+  width: 60%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 0 72px;
+  background: #FAFCFD;
+}
+
+.welcome-split-content h1 {
+  margin: 0 0 12px;
+  font-size: 44px;
+  font-weight: 700;
+  color: #1A2333;
+  letter-spacing: -0.5px;
+  animation: fadeUp 0.6s ease both;
+}
+
+.welcome-split-content .login-subtitulo {
+  margin: 0 0 48px;
+  font-size: 19px;
+  color: #5B6675;
+  max-width: 400px;
+  line-height: 1.55;
+  text-align: left;
+  animation: fadeUp 0.6s ease 0.08s both;
+}
+
+.welcome-split-content .login-iniciar {
+  margin-top: 0;
+  padding: 19px 58px;
+  border-radius: 14px;
+  font-size: 20px;
+  animation: fadeUp 0.6s ease 0.16s both;
+}
+
+@media (max-width: 760px) {
+  .welcome-split {
+    flex-direction: column;
+  }
+
+  .welcome-split-brand {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .welcome-split-content {
+    width: 100%;
+    align-items: center;
+    text-align: center;
+    padding: 40px 24px 56px;
+  }
+
+  .welcome-split-content .login-subtitulo {
+    text-align: center;
+  }
+}
+
 .login-screen {
   position: relative;
   display: flex;

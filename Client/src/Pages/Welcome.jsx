@@ -6,9 +6,27 @@ export default function Welcome() {
     const navigate = useNavigate();
 
     return (
-        <div className="login-screen">
-            <div className="welcome-box">
-                <h1>Bem-vindo à InovLAR</h1>
+        <div className="welcome-split">
+            <div className="welcome-split-brand">
+                <div className="welcome-split-ring welcome-split-ring--top" />
+                <div className="welcome-split-ring welcome-split-ring--bottom" />
+
+                <div className="welcome-split-logo">
+                    <span className="welcome-split-logo-mark">i</span>
+                    <span className="welcome-split-logo-text">InovLAR</span>
+                </div>
+
+                <p className="welcome-split-tagline">
+                    Comunicação simples entre residentes e equipa.
+                </p>
+
+                <span className="welcome-split-caption">
+                    
+                </span>
+            </div>
+
+            <div className="welcome-split-content">
+                <h1>Bem-vindo</h1>
                 <p className="login-subtitulo">
                     Toque no botão para iniciar sessão com o seu PIN.
                 </p>

@@ -12,6 +12,6 @@
       "runtimeExecutable": "bash",
       "runtimeArgs": ["-c", "cd Client && npm run dev"],
       "port": 5173
-    }
+    },
   ]
 }
