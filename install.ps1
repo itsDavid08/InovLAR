@@ -92,6 +92,16 @@ if ((Test-Path $EnvFile) -and (Select-String -Path $EnvFile -Pattern '^DB_PASS='
     Write-Step "Gerada nova password para a BD"
 }
 
+# Reutiliza o COOKIE_SECRET do .env se já existir — não o muda em execuções seguintes.
+if ((Test-Path $EnvFile) -and (Select-String -Path $EnvFile -Pattern '^COOKIE_SECRET=' -Quiet)) {
+    $CookieSecret = (Select-String -Path $EnvFile -Pattern '^COOKIE_SECRET=(.*)$').Matches[0].Groups[1].Value
+    Write-Step "Reutilizo o COOKIE_SECRET já registado em $EnvFile"
+} else {
+    $secretChars = (48..57) + (65..90) + (97..122) | Get-Random -Count 32 | ForEach-Object { [char]$_ }
+    $CookieSecret = -join $secretChars
+    Write-Step "Gerado novo COOKIE_SECRET"
+}
+
 $rootArgs = @("-u", $RootUser)
 if ($RootPassword) { $rootArgs += "-p$RootPassword" }
 
@@ -116,6 +126,8 @@ DB_USER=$DbUser
 DB_PASS=$DbPass
 DB_HOST=$DbHost
 DB_PORT=$DbPort
+COOKIE_SECRET=$CookieSecret
+COOKIE_SECURE=false
 "@ | Set-Content -Path $EnvFile -Encoding utf8
 Write-Step "Escrito $EnvFile"
 

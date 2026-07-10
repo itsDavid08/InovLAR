@@ -2782,3 +2782,158 @@ está isolado às rotas de auth.
 ### Próximo
 Seguinte item do `SECURITY_CHECKLIST.md`: tornar `COOKIE_SECRET` obrigatório (falhar arranque se
 ausente) e `secure: true` no cookie de sessão em produção.
+
+---
+
+## 2026-07-10 — `COOKIE_SECRET` obrigatório em produção + `secure` do cookie opt-in
+
+### Contexto
+Segundo item do `SECURITY_CHECKLIST.md`. `Server/config/auth.js` tinha um fallback hardcoded
+(`"troca-isto-por-um-segredo-bem-grande"`) visível no repositório público — se `COOKIE_SECRET` não
+fosse definido em produção, qualquer pessoa que lesse o código conseguia forjar cookies de sessão
+válidos e entrar na consola de staff sem saber o PIN. O cookie também tinha `secure: false` fixo,
+mesmo pensando em produção.
+
+### Bug relacionado encontrado durante a investigação
+`main.js` faz `require('./config/auth')` (linha 7) **antes** de `require('./models')` (linha 8) —
+e é só a cadeia `models/index.js → config/database.js → config/config.js` que chama
+`require('dotenv').config()`. Ou seja: mesmo com `COOKIE_SECRET` no `Server/.env`, `config/auth.js`
+lia `process.env.COOKIE_SECRET` **antes** do dotenv ter carregado o ficheiro — nunca seria apanhado.
+Estava mascarado pelo fallback. Corrigido adicionando `require('dotenv').config()` ao próprio
+`config/auth.js`.
+
+### Decisão importante: `secure` não fica ligado a `NODE_ENV`
+A proposta óbvia seria `secure: process.env.NODE_ENV === 'production'`. Não foi essa a escolha:
+a Pi em produção corre com `NODE_ENV=production` (systemd, `install.sh`) mas serve por **HTTP
+simples** — não há TLS configurado em lado nenhum do `install.sh`. Ligar `secure` a `NODE_ENV`
+cegamente faria o browser deixar de enviar o cookie assim que a mudança fosse para produção,
+**partindo o login imediatamente**. Em vez disso, `secure` passa a ler uma flag opt-in separada
+(`COOKIE_SECURE`), documentada no `.env.example`, a ativar manualmente só quando houver um reverse
+proxy com HTTPS à frente do servidor.
+
+### Correção — `Server/config/auth.js`
+```javascript
+require('dotenv').config();
+
+const isProd = process.env.NODE_ENV === 'production';
+let COOKIE_SECRET = process.env.COOKIE_SECRET;
+
+if (!COOKIE_SECRET) {
+    if (isProd) {
+        console.error('COOKIE_SECRET não definido. Define-o no Server/.env antes de arrancar em produção.');
+        process.exit(1);
+    }
+    console.warn('AVISO: COOKIE_SECRET não definido — a usar um valor fixo só para desenvolvimento local. NÃO uses isto em produção.');
+    COOKIE_SECRET = 'dev-only-cookie-secret-inseguro-nao-usar-em-producao';
+}
+
+module.exports = { COOKIE_SECRET };
+```
+
+### Correção — `Server/controller/authController.js`
+```javascript
+secure: process.env.COOKIE_SECURE === "true", // true só quando houver HTTPS à frente (ver .env.example)
+```
+
+### Correção — `Server/.env.example`, `install.sh`, `install.ps1`
+`.env.example` passa a documentar `COOKIE_SECRET` (obrigatório) e `COOKIE_SECURE` (opt-in, default
+`false`). `install.sh` e `install.ps1` passam a gerar `COOKIE_SECRET` automaticamente, com o mesmo
+padrão idempotente já usado para `DB_PASS` (reutiliza se já existir no `.env`, gera um novo caso
+contrário) — para que instalações novas (e a Pi, se o script for corrido lá) nunca caiam no caminho
+de erro.
+
+### Aviso operacional (ação fora do repositório)
+A Pi em produção nunca teve `COOKIE_SECRET` definido em lado nenhum. Com esta mudança, o serviço
+`inov-lar` entra em crash-loop no próximo restart **a menos que** `COOKIE_SECRET` seja adicionado ao
+`/opt/inov-lar/Server/.env` antes disso — correndo o `install.sh` atualizado (gera-o sozinho) ou
+adicionando a linha manualmente.
+
+### Teste
+Sem superfície de UI a verificar (mudança de configuração/arranque do servidor); testado
+diretamente com `node -e` e `curl` contra o servidor local reiniciado:
+
+1. **`NODE_ENV=production` sem `COOKIE_SECRET`** → `process.exit(1)` com a mensagem de erro
+   esperada (exit code 1 confirmado).
+2. **Dev sem `COOKIE_SECRET`** → aviso na consola, servidor continua com o valor fixo de dev.
+3. **`NODE_ENV=production` com `COOKIE_SECRET` no `.env`** → arranca normalmente, usa o valor do
+   `.env` (confirmado que já não é o fallback).
+4. **`COOKIE_SECURE`** — confirmado por avaliação direta (`process.env.COOKIE_SECURE === "true"`)
+   que fica `false` quando ausente/`"false"` e `true` só quando explicitamente `"true"`.
+5. Servidor de dev reiniciado com o código novo: `GET /auth/staff/status` continuou a responder
+   normalmente (`configurado: true`), confirmando que o fluxo de auth existente não partiu.
+6. `bash -n install.sh` e `[System.Management.Automation.Language.Parser]::ParseFile` em
+   `install.ps1` — sintaxe de ambos os scripts validada sem erros.
+
+`.env` local restaurado ao estado original depois dos testes (sem o `COOKIE_SECRET` de teste).
+
+### Próximo
+Terceiro item do `SECURITY_CHECKLIST.md`: substituir o cookie de sessão de valor estático `"ok"`
+por um identificador de sessão real (revogável, com expiração server-side).
+
+---
+
+## 2026-07-10 — Sessões reais de staff (substituir o cookie estático `"ok"`)
+
+### Contexto
+Terceiro item do `SECURITY_CHECKLIST.md`. O cookie de sessão assinado guardava literalmente a
+string `"ok"` para toda a gente (`res.cookie(COOKIE_NAME, "ok", ...)`), e o `requireStaff` só
+verificava `=== "ok"`. Consequências: impossível revogar uma sessão individual, logout não
+invalidava nada do lado do servidor (só limpava o cookie no browser), e se o `COOKIE_SECRET` vazasse
+qualquer pessoa forjava um cookie válido para sempre.
+
+### Modelo escolhido
+Token aleatório de 32 bytes (`crypto.randomBytes`) guardado no cookie; na BD guarda-se só o
+**SHA-256** desse token (nunca em claro) + `expiraEm`. Uma linha por sessão ativa.
+
+- **SHA-256, não bcrypt** — o token é aleatório de alta entropia (256 bits), não uma password de
+  baixa entropia. Um hash rápido é o correto (padrão dos GitHub PATs, Rails, etc.); bcrypt seria
+  desnecessário e lento a cada request. Guardar o hash (e não o token cru) protege contra um
+  vazamento de leitura da BD ser usado para sequestrar sessões ativas.
+- **`sync()`, sem migration** — segue o padrão já documentado no `CLAUDE.md` para `StaffAuth`,
+  `TabelaLayout` e `TabelaPadrao`: o modelo é criado por `Model.sync()` no `main.js`, não há ficheiro
+  de migration. Mantém a consistência com os outros modelos não-migrados.
+- **Limpeza preguiçosa** (decisão do utilizador) — linhas expiradas são apagadas quando validadas
+  (`validarSessao`), sem varrimento periódico nem no arranque. Suficiente para o punhado de
+  dispositivos deste caso de uso.
+- **`change` (mudar PIN) não revoga sessões** (decisão do utilizador) — é um PIN partilhado de
+  dispositivo; revogar deslogava todos os tablets ao mudar o PIN, o que não se quer.
+
+### Ficheiros
+- `Server/models/StaffSession.js` (novo) — `tokenHash` (unique) + `expiraEm`.
+- `Server/Util/sessions.js` (novo) — `criarSessao` (devolve o token em claro para o cookie),
+  `validarSessao` (devolve a sessão ou `null`; apaga se expirada), `revogarSessao`.
+- `Server/middleware/auth.js` — `requireStaff` passa a `async`, valida o token contra a BD, com
+  `try/catch` a devolver 401 (fail closed) em caso de erro.
+- `Server/controller/authController.js` — `setup`/`login` fazem `criarSessao()` e metem o token no
+  cookie; `status` valida o token (em vez de `=== "ok"`); `logout` chama `revogarSessao` antes de
+  limpar o cookie (revogação real do lado do servidor). `change` sem alterações.
+- `Server/models/index.js` + `Server/main.js` — registo do modelo + `StaffSession.sync()`.
+- **Cliente: zero alterações.** O cookie é `httpOnly`, o cliente nunca lê o valor; só depende da sua
+  presença (`credentials: "include"`) e do campo `autenticado` do `/auth/staff/status` — ambos
+  opacos à mudança de `"ok"` → token.
+
+### Impacto operacional (ação no deploy)
+Dispositivos com o cookie antigo `"ok"` deixam de autenticar após o deploy (`validarSessao("ok")`
+não encontra sessão) → cada tablet é deslogado **uma vez** e reintroduz o PIN. Não é crash, só
+re-login; sem impacto até o código chegar à Pi.
+
+### Teste
+Sem superfície de UI relevante (mudança de auth do lado do servidor). Testado por dois scripts
+(node, contra o MariaDB de dev real), depois apagados; `.env` e tabela deixados limpos.
+
+1. **Helper direto** (`Util/sessions.js`): token com 64 hex chars; `validarSessao` do token válido
+   devolve a sessão; `"ok"`/lixo/`null` devolvem `null`; a BD guarda o **hash** e não o token cru;
+   um token criado já expirado (`criarSessao(-1)`) devolve `null` e a respetiva linha é apagada
+   (limpeza preguiçosa confirmada); após `revogarSessao`, o token deixa de validar. Todos PASS.
+2. **HTTP end-to-end** — cookie assinado à mão com o `cookie-signature` (o mesmo que o
+   `cookie-parser` usa), para testar sem precisar do PIN de dev nem apagar o `StaffAuth`:
+   - `/auth/staff/status` sem cookie → `autenticado:false`; `DELETE /utentes/:id` sem cookie → 401.
+   - Cookie antigo `"ok"` (validamente assinado) → `autenticado:false` (já não vale).
+   - Sessão real forjada → `/status` `autenticado:true`; rota protegida passa o `requireStaff`
+     (404, não 401).
+   - Após `revogarSessao` do mesmo token → `/status` `autenticado:false` e rota protegida → 401.
+   Todos PASS. Confirmado no fim que `StaffSessions` ficou com 0 linhas (sem órfãs de teste).
+
+### Próximo
+Itens de "Alto" do `SECURITY_CHECKLIST.md`: restringir os endpoints de leitura de dados de pacientes
+(`/utentes`, `/pedidos`) que estão acessíveis sem autenticação (maior risco RGPD).

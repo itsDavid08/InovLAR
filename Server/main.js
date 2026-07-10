@@ -5,7 +5,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const {setIO} = require('./Util/socketIO.js');
 const { COOKIE_SECRET } = require('./config/auth');
-const { StaffAuth, TabelaLayout, TabelaPadrao } = require('./models');
+const { StaffAuth, StaffSession, TabelaLayout, TabelaPadrao } = require('./models');
 const app = express();
 const port = 3000;
 const router = require('./routes/route.js');
@@ -18,6 +18,7 @@ const DIST = path.join(__dirname, '../Client/dist');
 const { seedDefaults } = require('./Util/seedDefaults');
 (async () => {
     await StaffAuth.sync();
+    await StaffSession.sync();
     await TabelaLayout.sync();
     await TabelaPadrao.sync();
     await seedDefaults();            // cria a "Predefinida" (1ª vez) + aplica a utentes sem tabela

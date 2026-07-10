@@ -106,6 +106,15 @@ else
   log "Gerada nova password para a BD."
 fi
 
+# Reutiliza o COOKIE_SECRET se o .env já existir — não o muda em execuções seguintes (idempotência).
+if [ -f "$ENV_FILE" ] && grep -q '^COOKIE_SECRET=' "$ENV_FILE"; then
+  COOKIE_SECRET="$(grep '^COOKIE_SECRET=' "$ENV_FILE" | head -n1 | cut -d= -f2-)"
+  log "Reutilizo o COOKIE_SECRET já registado em ${ENV_FILE}."
+else
+  COOKIE_SECRET="$(openssl rand -base64 32 | tr -d '\n')"
+  log "Gerado novo COOKIE_SECRET."
+fi
+
 # root autentica por unix_socket na Pi → o cliente corre como root sem password.
 # Cria o utilizador para 127.0.0.1 (a app liga por TCP) e para localhost (conveniência/CLI).
 "$MYSQL_CLI" <<SQL
@@ -128,6 +137,8 @@ DB_USER=${DB_USER}
 DB_PASS=${DB_PASS}
 DB_HOST=${DB_HOST}
 DB_PORT=${DB_PORT}
+COOKIE_SECRET=${COOKIE_SECRET}
+COOKIE_SECURE=false
 ENV
 chown "${SERVICE_USER}:${SERVICE_USER}" "$ENV_FILE" 2>/dev/null || true
 log "Escrito ${ENV_FILE} (permissões 600)."

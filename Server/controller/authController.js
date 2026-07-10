@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
 const { StaffAuth } = require("../models");
 const { COOKIE_NAME } = require("../middleware/auth");
+const { criarSessao, validarSessao, revogarSessao } = require("../Util/sessions");
 
 const UM_ANO = 365 * 24 * 60 * 60 * 1000;
 const MIN_DIGITOS = 4;
@@ -10,7 +11,7 @@ const opcoesCookie = {
     httpOnly: true, // o JS do browser não consegue ler -> mais seguro
     signed: true, // assinado com o COOKIE_SECRET -> não pode ser forjado
     sameSite: "lax",
-    secure: false, // mete true quando servires por HTTPS
+    secure: process.env.COOKIE_SECURE === "true", // true só quando houver HTTPS à frente (ver .env.example)
     maxAge: UM_ANO, // ~1 ano no dispositivo (não volta a pedir)
 };
 
@@ -20,8 +21,8 @@ const authController = {
     status: async (req, res) => {
         try {
             const registo = await StaffAuth.findOne();
-            const autenticado =
-                req.signedCookies && req.signedCookies[COOKIE_NAME] === "ok";
+            const token = req.signedCookies && req.signedCookies[COOKIE_NAME];
+            const autenticado = !!(await validarSessao(token));
             res.json({ configurado: !!registo, autenticado });
         } catch (erro) {
             console.error("Erro no status de auth:", erro);
@@ -46,7 +47,8 @@ const authController = {
             }
             const passwordHash = await bcrypt.hash(String(password), 10);
             await StaffAuth.create({ passwordHash });
-            res.cookie(COOKIE_NAME, "ok", opcoesCookie); // fica logo autenticado
+            const token = await criarSessao(); // fica logo autenticado
+            res.cookie(COOKIE_NAME, token, opcoesCookie);
             res.json({ autenticado: true });
         } catch (erro) {
             console.error("Erro ao definir palavra-passe:", erro);
@@ -70,7 +72,8 @@ const authController = {
             if (!ok) {
                 return res.status(401).json({ mensagem: "Palavra-passe incorreta" });
             }
-            res.cookie(COOKIE_NAME, "ok", opcoesCookie);
+            const token = await criarSessao();
+            res.cookie(COOKIE_NAME, token, opcoesCookie);
             res.json({ autenticado: true });
         } catch (erro) {
             console.error("Erro no login:", erro);
@@ -113,7 +116,9 @@ const authController = {
     },
 
     // POST /auth/staff/logout
-    logout: (req, res) => {
+    logout: async (req, res) => {
+        const token = req.signedCookies && req.signedCookies[COOKIE_NAME];
+        await revogarSessao(token); // revogação real do lado do servidor
         res.clearCookie(COOKIE_NAME);
         res.json({ autenticado: false });
     },
