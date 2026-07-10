@@ -2721,3 +2721,64 @@ Busca sempre dados frescos ao entrar, independentemente de já ser o mesmo utent
    pedido "Emergência" criado no passo 2 — sem F5.
 
 Dados de teste limpos da BD de dev depois.
+
+---
+
+## 2026-07-10 — Rate limiting no login de staff (brute-force do PIN)
+
+### Contexto
+Revisão de segurança do projeto (`SECURITY_CHECKLIST.md`) identificou que o PIN de staff
+(mínimo 4 dígitos, ~10 000 combinações) não tinha qualquer limite de tentativas em
+`/auth/staff/login`, tornando-o forçável por brute-force por qualquer pessoa na rede local.
+Primeiro item do checklist a ser corrigido.
+
+### Correção — `Server/middleware/rateLimiter.js` (novo)
+```javascript
+const rateLimit = require('express-rate-limit');
+
+const staffAuthLimiter = rateLimit({
+    windowMs: 10 * 60 * 1000, // 10 minutos
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skipSuccessfulRequests: true,
+    message: { mensagem: 'Demasiadas tentativas. Tenta novamente mais tarde.' },
+});
+
+module.exports = { staffAuthLimiter };
+```
+
+Aplicado em `Server/routes/route.js` a `/auth/staff/login`, `/auth/staff/setup` e
+`/auth/staff/change`. Decisões:
+- **Limite por IP** (omissão do `express-rate-limit`) — adequado porque o PIN é partilhado por
+  dispositivo, não por conta; cada tablet/staff tem tipicamente um IP local estável. Não há proxy
+  reverso na stack atual (`install.sh`/`main.js`), por isso `req.ip` reflete o IP real sem precisar
+  de `app.set('trust proxy', ...)`.
+- **`skipSuccessfulRequests: true`** — só tentativas falhadas (401) contam para o limite; um login
+  correto nunca gasta "quota", por isso staff genuína nunca é bloqueada por uso normal ao longo do
+  dia.
+- **Store em memória** (omissão da biblioteca) — suficiente porque o servidor corre como instância
+  única no Pi (sem cluster nem Redis). Se um dia escalar para múltiplas instâncias, precisa de um
+  store partilhado.
+- **5 tentativas / 10 min** — torna o brute-force de um PIN de 4 dígitos impraticável (dias, não
+  minutos) sem incomodar alguém que erra o PIN uma ou duas vezes.
+
+### Teste
+Servidor reiniciado localmente (`node main.js`) e testado com `curl` diretamente (mudança é só de
+API, sem superfície de UI a verificar no browser):
+```bash
+for i in 1 2 3 4 5 6; do
+  curl -s -o /dev/null -w "Tentativa $i -> HTTP %{http_code}\n" \
+    -X POST http://localhost:3000/auth/staff/login \
+    -H "Content-Type: application/json" -d '{"password":"0000"}'
+done
+```
+Resultado: tentativas 1–5 devolveram `401 Palavra-passe incorreta`; a 6ª devolveu
+`429 Demasiadas tentativas. Tenta novamente mais tarde.`, com headers `RateLimit-Limit: 5`,
+`RateLimit-Remaining: 0`, `RateLimit-Reset: 591` (~10 min), `Retry-After: 591`. Confirmado também
+que uma rota não relacionada (`GET /utentes`) continuou a devolver `200` normalmente — o limite
+está isolado às rotas de auth.
+
+### Próximo
+Seguinte item do `SECURITY_CHECKLIST.md`: tornar `COOKIE_SECRET` obrigatório (falhar arranque se
+ausente) e `secure: true` no cookie de sessão em produção.

@@ -6,9 +6,10 @@ Levantamento de pontos de segurança a corrigir, feito por revisão manual do c�
 
 ## 🔴 Crítico
 
-- [ ] **Sem rate limiting no login de staff → PIN de 4 dígitos forçável por brute-force**
+- [x] **Sem rate limiting no login de staff → PIN de 4 dígitos forçável por brute-force**
   `Server/controller/authController.js` (`login`). O PIN mínimo é de 4 dígitos (`MIN_DIGITOS = 4`, ~10 000 combinações) e o endpoint `/auth/staff/login` aceita tentativas ilimitadas, sem atraso nem bloqueio. Um atacante na mesma rede consegue quebrar qualquer PIN em minutos com um script simples.
   **Correção:** adicionar rate limiting (ex. `express-rate-limit`) e/ou lockout temporário após N tentativas falhadas, no `/auth/staff/login` e idealmente também no `/auth/staff/setup`.
+  **Feito:** `Server/middleware/rateLimiter.js` (`staffAuthLimiter`) — 5 tentativas falhadas por 10 min por IP, aplicado a `/auth/staff/login`, `/auth/staff/setup` e `/auth/staff/change` em `Server/routes/route.js`.
 
 - [ ] **Cookie de sessão é um valor estático `"ok"` — não é uma sessão real**
   `Server/controller/authController.js:49` e `Server/middleware/auth.js:8`. O cookie assinado guarda literalmente a string `"ok"` para todos os utilizadores staff. Isto significa:
