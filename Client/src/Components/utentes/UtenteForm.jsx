@@ -3,6 +3,12 @@
 // Mesmo layout do BotaoForm: header com voltar + form|preview lado a lado. Em
 // mobile (flex-col-reverse) a pré-visualização fica em cima e o formulário por
 // baixo; em desktop (lg:flex-row) form à esquerda, preview à direita.
+import { useRef } from "react";
+import UtenteAvatar, { ICONE_PESSOA } from "./UtenteAvatar";
+
+// Paleta de cores de fundo do avatar (recolore iniciais e ícone). Pastéis legíveis.
+const CORES_AVATAR = ["#c7dbff", "#c9ecd3", "#ffe0c2", "#e6d6f7", "#ffd6e0", "#d6f0f5", "#f5e6c2"];
+
 const UtenteForm = ({
     title,
     formData,
@@ -14,16 +20,13 @@ const UtenteForm = ({
     hiddenId,
     templates,
     onCriarNovo,
+    apiUrl = "",
+    onUploadFoto,
+    onRemoverFoto,
 }) => {
-    // Iniciais para o avatar do cartão (igual ao cartão do StaffHome).
-    const iniciais = (formData.nome || "")
-        .trim()
-        .split(/\s+/)
-        .filter(Boolean)
-        .map((n) => n[0])
-        .slice(0, 2)
-        .join("")
-        .toUpperCase();
+    const uploadInputRef = useRef(null);
+    // Foto pessoal = imagem que é um caminho (não vazia e não o ícone).
+    const temFotoPessoal = formData.imagem && formData.imagem !== ICONE_PESSOA;
 
     return (
         <div className="bg-background text-on-background min-h-screen flex flex-col font-body-md">
@@ -70,6 +73,107 @@ const UtenteForm = ({
                             className="w-full px-4 py-3 rounded-lg bg-surface-container border border-outline-variant focus:border-primary focus:ring-2 focus:ring-primary focus:outline-none transition-all text-on-surface"
                             placeholder="Ex.: A112"
                         />
+                    </div>
+
+                    {/* Avatar: escolher O QUE mostrar (iniciais, ícone, foto atual, ou carregar). */}
+                    <div>
+                        <label className="block text-on-surface-variant font-label-xl text-sm font-semibold mb-2">
+                            Avatar
+                        </label>
+                        <div className="flex flex-wrap gap-3 p-3 bg-surface-container rounded-lg border border-outline-variant">
+                            {/* Iniciais (imagem vazia) — recolorida pela cor de fundo. */}
+                            <button
+                                type="button"
+                                onClick={() => setFormData({ ...formData, imagem: '' })}
+                                title="Usar iniciais"
+                                className="flex flex-col items-center gap-1 w-16"
+                            >
+                                <UtenteAvatar
+                                    imagem=""
+                                    corAvatar={formData.corAvatar}
+                                    nome={formData.nome}
+                                    className={`w-14 h-14 text-[18px] transition-all ${!formData.imagem ? 'ring-4 ring-primary scale-95' : 'hover:scale-105'}`}
+                                />
+                                <span className="text-[11px] text-on-surface-variant leading-tight text-center">Iniciais</span>
+                            </button>
+
+                            {/* Ícone de pessoa — recolorido pela cor de fundo. */}
+                            <button
+                                type="button"
+                                onClick={() => setFormData({ ...formData, imagem: ICONE_PESSOA })}
+                                title="Usar ícone"
+                                className="flex flex-col items-center gap-1 w-16"
+                            >
+                                <UtenteAvatar
+                                    imagem={ICONE_PESSOA}
+                                    corAvatar={formData.corAvatar}
+                                    className={`w-14 h-14 text-[20px] transition-all ${formData.imagem === ICONE_PESSOA ? 'ring-4 ring-primary scale-95' : 'hover:scale-105'}`}
+                                />
+                                <span className="text-[11px] text-on-surface-variant leading-tight text-center">Ícone</span>
+                            </button>
+
+                            {/* Foto atual: upload pessoal (só aparece quando existe). */}
+                            {temFotoPessoal && (
+                                <div className="flex flex-col items-center gap-1 w-16">
+                                    <div className="relative group/foto">
+                                        <img
+                                            src={`${apiUrl}${formData.imagem}`}
+                                            alt="Foto pessoal"
+                                            className="w-14 h-14 rounded-full object-cover ring-4 ring-primary scale-95"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => onRemoverFoto && onRemoverFoto()}
+                                            title="Remover foto"
+                                            className="absolute -top-1 -right-1 bg-error text-on-error rounded-full p-0.5 shadow flex"
+                                        >
+                                            <span className="material-symbols-outlined text-[14px] leading-none">close</span>
+                                        </button>
+                                    </div>
+                                    <span className="text-[11px] text-on-surface-variant leading-tight text-center">Foto atual</span>
+                                </div>
+                            )}
+
+                            {/* Carregar foto do dispositivo. */}
+                            <button
+                                type="button"
+                                onClick={() => uploadInputRef.current?.click()}
+                                title="Carregar foto"
+                                className="flex flex-col items-center gap-1 w-16"
+                            >
+                                <div className="w-14 h-14 rounded-full border-2 border-dashed border-outline-variant flex items-center justify-center text-on-surface-variant hover:border-primary hover:text-primary transition-colors">
+                                    <span className="material-symbols-outlined">add_a_photo</span>
+                                </div>
+                                <span className="text-[11px] text-on-surface-variant leading-tight text-center">Carregar</span>
+                            </button>
+                            <input
+                                ref={uploadInputRef}
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => { if (e.target.files[0] && onUploadFoto) onUploadFoto(e.target.files[0]); e.target.value = ''; }}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Cor de fundo — recolore as iniciais e o ícone (não afeta fotos). */}
+                    <div>
+                        <label className="block text-on-surface-variant font-label-xl text-sm font-semibold mb-1">
+                            Cor de fundo
+                        </label>
+                        <p className="text-xs text-on-surface-variant mb-2">Recolore as iniciais e o ícone (quando não há foto).</p>
+                        <div className="flex flex-wrap gap-2">
+                            {CORES_AVATAR.map((cor) => (
+                                <button
+                                    key={cor}
+                                    type="button"
+                                    title={`Cor ${cor}`}
+                                    onClick={() => setFormData({ ...formData, corAvatar: cor })}
+                                    style={{ backgroundColor: cor }}
+                                    className={`w-8 h-8 rounded-full border transition-all ${formData.corAvatar === cor ? 'ring-4 ring-primary scale-95' : 'border-outline-variant hover:scale-110'}`}
+                                />
+                            ))}
+                        </div>
                     </div>
 
                     {templates && (
@@ -123,9 +227,13 @@ const UtenteForm = ({
                     <div className="bg-surface-container-lowest rounded-lg p-6 shadow-sm border border-surface-variant hover:shadow-md hover:border-primary transition-all relative overflow-hidden group w-full max-w-sm">
                         <div className="absolute top-0 left-0 w-full h-1 bg-status-green"></div>
                         <div className="flex items-start justify-between mb-4">
-                            <div className="w-16 h-16 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center font-display-lg text-[24px] border-2 border-surface-container">
-                                {iniciais || "?"}
-                            </div>
+                            <UtenteAvatar
+                                imagem={formData.imagem}
+                                corAvatar={formData.corAvatar}
+                                nome={formData.nome}
+                                apiUrl={apiUrl}
+                                className="w-16 h-16 text-[24px] border-2 border-surface-container"
+                            />
                             <div className="px-2 py-1 rounded text-xs font-staff-mono font-bold text-status-green flex items-center gap-1">
                                 <span className="material-symbols-outlined text-[14px]">check_circle</span> Estável
                             </div>

@@ -15,7 +15,7 @@ const { staffAuthLimiter } = require('../middleware/rateLimiter');
 const { notificarAlteracaoBD } = require('../Util/socketIO');
 
 const router = express.Router();
-const { Botao } = require('../models');
+const { Botao, Utente } = require('../models');
 
 const storageImagesBotoes = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -45,6 +45,38 @@ const uploadImagemBotao = multer({
         ok ? cb(null, true) : cb(new Error('Apenas imagens (JPEG, JPG, PNG, GIF)'));
     }
 });
+
+// Fotos de perfil dos utentes. Pasta própria (separada dos ícones de botões) e
+// nome de ficheiro único/não sequencial — os uploads pessoais nunca são listados
+// pela API (só a subpasta 'predefinidos'), para confidencialidade.
+const DIR_IMAGES_UTENTES = path.join(__dirname, '../public/imagesUtentes');
+const storageImagesUtentes = multer.diskStorage({
+    destination: (req, file, cb) => {
+        fs.mkdir(DIR_IMAGES_UTENTES, { recursive: true }, (err) => cb(err, DIR_IMAGES_UTENTES));
+    },
+    filename: (req, file, cb) => {
+        const ext = path.extname(path.basename(file.originalname)).toLowerCase();
+        const unico = `utente-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+        cb(null, unico);
+    }
+});
+
+const uploadImagemUtente = multer({
+    storage: storageImagesUtentes,
+    fileFilter: (req, file, cb) => {
+        const ok = /jpeg|jpg|png|gif/i.test(file.mimetype) &&
+                   /\.(jpeg|jpg|png|gif)$/i.test(file.originalname);
+        ok ? cb(null, true) : cb(new Error('Apenas imagens (JPEG, JPG, PNG, GIF)'));
+    }
+});
+
+// True se o caminho é um upload PESSOAL de utente (não predefinido, sem traversal).
+const ehUploadPessoalUtente = (p) =>
+    typeof p === 'string' &&
+    p.startsWith('/imagesUtentes/') &&
+    !p.startsWith('/imagesUtentes/predefinidos/') &&
+    !p.includes('..') &&
+    !p.replace('/imagesUtentes/', '').includes('/');
 
 router.get('/localIP', (req, res) => {
     const interfaces = os.networkInterfaces();
@@ -110,6 +142,38 @@ router.delete('/imagesBotoes', requireStaff, async (req, res) => {
         const [affectedCount] = await Botao.update({ imagem: null }, { where: { imagem: imgPath } });
         if (affectedCount > 0) notificarAlteracaoBD();
         res.json({ eliminado: imgPath, botoesAfetados: affectedCount });
+    } catch (err) {
+        if (err.code === 'ENOENT') return res.status(404).json({ erro: 'Imagem não encontrada' });
+        res.status(500).json({ erro: 'Erro ao eliminar imagem' });
+    }
+});
+
+// Upload de foto pessoal. Substitui automaticamente a foto anterior do utente
+// (campo 'previousPath'), exceto se essa for um avatar predefinido.
+router.post('/imagesUtentes/upload', requireStaff, uploadImagemUtente.single('imagem'), async (req, res) => {
+    if (!req.file) return res.status(400).json({ erro: 'Nenhuma imagem enviada' });
+    const anterior = req.body.previousPath;
+    if (ehUploadPessoalUtente(anterior)) {
+        const filename = anterior.replace('/imagesUtentes/', '');
+        try { await fs.promises.unlink(path.join(DIR_IMAGES_UTENTES, filename)); }
+        catch (err) { if (err.code !== 'ENOENT') console.error('Erro ao apagar foto anterior:', err); }
+    }
+    res.json({ path: `/imagesUtentes/${req.file.filename}` });
+});
+
+// Eliminar foto pessoal (não permite apagar predefinidos). Anula o campo nos
+// utentes que a usam, por consistência com o padrão dos botões.
+router.delete('/imagesUtentes', requireStaff, async (req, res) => {
+    const { path: imgPath } = req.body;
+    if (!ehUploadPessoalUtente(imgPath)) {
+        return res.status(400).json({ erro: 'Operação não permitida' });
+    }
+    const filename = imgPath.replace('/imagesUtentes/', '');
+    try {
+        await fs.promises.unlink(path.join(DIR_IMAGES_UTENTES, filename));
+        const [affectedCount] = await Utente.update({ imagem: null }, { where: { imagem: imgPath } });
+        if (affectedCount > 0) notificarAlteracaoBD();
+        res.json({ eliminado: imgPath, utentesAfetados: affectedCount });
     } catch (err) {
         if (err.code === 'ENOENT') return res.status(404).json({ erro: 'Imagem não encontrada' });
         res.status(500).json({ erro: 'Erro ao eliminar imagem' });

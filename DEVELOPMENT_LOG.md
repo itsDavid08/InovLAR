@@ -2937,3 +2937,87 @@ Sem superfície de UI relevante (mudança de auth do lado do servidor). Testado 
 ### Próximo
 Itens de "Alto" do `SECURITY_CHECKLIST.md`: restringir os endpoints de leitura de dados de pacientes
 (`/utentes`, `/pedidos`) que estão acessíveis sem autenticação (maior risco RGPD).
+
+---
+
+## 2026-07-14 — Fotos de perfil dos utentes (reutilização do seletor de imagens)
+
+### Contexto
+O editor de botões já tinha seletor de imagem (grid + upload + delete). Pedido: reutilizar o
+conceito para dar **foto de perfil** aos utentes, com confidencialidade — as fotos pessoais de
+um utente não podem aparecer na galeria partilhada de outros.
+
+### Decisão
+- **Pasta e endpoints próprios** (`public/imagesUtentes/`), separados de `imagesBotoes` — evita
+  misturar caras de pessoas com ícones de botões (privacidade/RGPD).
+- **Modelo híbrido** de escolha: (a) grid de **avatares predefinidos** partilhados
+  (`public/imagesUtentes/predefinidos/`, os únicos listados pela API), (b) escolha de **cor** do
+  avatar (mostra as iniciais), (c) **upload pessoal** — guardado com nome único não sequencial
+  (`utente-{ts}-{rand}.ext`) e **nunca listado** pela API (só acessível por URL direto, como já
+  acontece com `imagesBotoes`).
+- **Substituição automática**: ao fazer novo upload pessoal, o servidor apaga a foto anterior do
+  utente **exceto se for um avatar predefinido** (helper `ehUploadPessoalUtente`). O cliente passa
+  a foto atual em `previousPath`.
+- **Fallback de render**: `imagem` → `corAvatar` + iniciais → default (iniciais em
+  `secondary-container`).
+
+### Alterações
+- **Migration** `20260714120000-add-imagem-cor-to-utentes.js` — colunas `imagem`, `corAvatar`
+  (nullable) em `Utentes`; + campos no modelo `Utente.js`.
+- **`utenteController.js`** — `createUtente`/`updateUtente` com **whitelist** dos campos
+  (`nome, quarto, imagem, corAvatar`), fechando de passagem o gap de mass assignment do update
+  (o `updateUtente` passava `req.body` direto — ver `SECURITY_CHECKLIST.md`). O update só grava as
+  chaves realmente enviadas (undefined = não mexe).
+- **`routes/route.js`** — config multer própria + `GET /imagesUtentes/predefinidos` (lista só a
+  subpasta), `POST /imagesUtentes/upload` (substitui a anterior via `previousPath`),
+  `DELETE /imagesUtentes` (recusa predefinidos, anula `imagem` nos utentes que a usam). Importado
+  `Utente` no topo (só `Botao` estava).
+- **Client** — `api/utentes.js` (`fetchAvataresPredefinidos`, `uploadImagemUtente`,
+  `deleteImagemUtente`); `UtenteForm.jsx` (secção foto: grid predefinidos + cores + upload, preview
+  do avatar); `EditUtente.jsx`/`NewUtente.jsx` (estado + handlers); `StaffHome.jsx` (avatar do
+  cartão e thumbnail do menu mostram foto/cor).
+
+### Gotcha
+`GET /imagesUtentes/predefinidos` colide com a pasta física homónima: o `express.static('public')`
+(antes do router) faz **redirect 301** para a barra final antes de chegar à rota. O `fetch` do
+browser segue o redirect automaticamente e funciona (mesmo padrão do `GET /imagesBotoes` já
+existente), mas um `curl` sem `-L` só vê o 301. Não é bug — é o comportamento herdado.
+
+### Verificação (browser + disco)
+- Migration aplicada; modelo devolve os campos novos.
+- Grid de predefinidos carrega (4 SVGs), seleção → criar utente → persiste
+  (`imagem: /imagesUtentes/predefinidos/avatar-verde.svg`) → aparece no cartão do StaffHome.
+- Upload pessoal + **substituição**: confirmado **no disco** que o ficheiro anterior é apagado e o
+  novo fica. (A verificação por HTTP dava falso 200 porque o catch-all SPA do `main.js` devolve
+  `index.html` para estáticos inexistentes em vez de 404 — usar o disco/content-type para validar.)
+- Salvaguardas: predefinido passado como `previousPath` **não** é apagado; `DELETE` de predefinido → 400.
+- Update com cor: `corAvatar` gravado e `imagem` limpo.
+
+### Nota operacional
+Foi preciso reiniciar o `node main.js` para as rotas/modelo novos ficarem ativos (sem nodemon).
+
+### Refinamento (mesmo dia) — UX do seletor de avatar
+Feedback: as cores pareciam ser uma *alternativa* ao avatar (confusão "muda a cor do perfil?").
+Reestruturado o `UtenteForm` em **duas secções independentes** (inspirado no seletor do Brave):
+- **Avatar** — o *quê* mostrar: tile "Iniciais", "Foto atual" (upload pessoal, com remover),
+  avatares predefinidos, e tile "Carregar" (add_a_photo).
+- **Cor de fundo** — separada; aparece atrás das iniciais. Escolher cor **já não limpa** a
+  `imagem` (antes fazia `imagem:''`), são ortogonais. Escolher "Iniciais" é que define `imagem:''`.
+
+### Refinamento 2 (mesmo dia) — um ícone recolorível em vez de avatares fixos
+Feedback: os 4 avatares predefinidos tinham cores fixas e não dava para mudar a cor do ícone.
+Substituídos por **um único ícone de pessoa** (Material Symbol `person`) cuja cor de fundo é
+dada pela secção "Cor de fundo" — a mesma cor recolore iniciais **e** ícone.
+- Novo componente `Components/utentes/UtenteAvatar.jsx` (+ `ICONE_PESSOA = 'icone'`, `iniciaisDe`)
+  centraliza o render do avatar nos 3 modos: foto (caminho) / ícone (`'icone'`) / iniciais (`''`).
+  Usado no `UtenteForm` (tiles + preview) e no `StaffHome` (cartão + thumbnail do menu).
+- Campo `imagem` passa a aceitar o sentinela `'icone'` (não é um caminho de ficheiro). O
+  `UtenteAvatar` trata-o; qualquer sítio que renderize avatares tem de usar o componente (senão
+  faria `<img src=".../icone">`).
+- Removidos: avatares SVG predefinidos + pasta `public/imagesUtentes/predefinidos/`, rota
+  `GET /imagesUtentes/predefinidos` e `fetchAvataresPredefinidos`. Upload/DELETE de fotos pessoais
+  mantêm-se. `ehUploadPessoalUtente('icone')` é `false` (sentinela não é caminho) → não tenta apagar.
+
+Verificado no browser: secção Avatar = [Iniciais][Ícone][(Foto atual)][Carregar]; escolher cor
+recolore o ícone (fundo `#ffe0c2`); criar utente persiste `imagem:'icone'`+`corAvatar`; StaffHome
+mostra o ícone com a cor (0 imgs partidas); sem erros de consola.

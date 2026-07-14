@@ -35,3 +35,29 @@ export function deleteUtente(id) {
         errorMsg: "Failed to delete utente",
     });
 }
+
+// Upload de foto pessoal. previousPath: foto anterior a substituir (o servidor
+// apaga-a só se for um upload pessoal, nunca um avatar predefinido).
+export async function uploadImagemUtente(file, previousPath = '') {
+    const formData = new FormData();
+    formData.append('imagem', file);
+    if (previousPath) formData.append('previousPath', previousPath);
+    const res = await fetch(`${apiUrl}imagesUtentes/upload`, {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+    });
+    if (!res.ok) throw new Error('Erro ao fazer upload da imagem');
+    return res.json();
+}
+
+export async function deleteImagemUtente(imgPath) {
+    const res = await fetch(apiUrl + 'imagesUtentes', {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: imgPath }),
+    });
+    if (!res.ok) throw new Error('Erro ao eliminar a imagem');
+    return res.json();
+}

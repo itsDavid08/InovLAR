@@ -104,6 +104,7 @@ const TabelaEditor = ({
     const [busca, setBusca] = useState("");
     const [selecionado, setSelecionado] = useState(null); // { tipo:"lib", botaoId } | { tipo:"slot", pos }
     const [resizePreview, setResizePreview] = useState(null); // { pos, w, h } — pré-visualização local, só commitada no pointerup
+    const [coresAbertas, setCoresAbertas] = useState(false);
     const sensors = useSensors(
         useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
         useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
@@ -397,30 +398,38 @@ const TabelaEditor = ({
                     <LibDrop>
                         {setCoresCategoria && categoriasNoQuadro.length > 0 && (
                             <div className="mb-4 pb-4 border-b border-surface-variant" onClick={(e) => e.stopPropagation()}>
-                                <h3 className="font-staff-mono font-bold text-on-surface-variant mb-2 text-sm">Cores por categoria</h3>
-                                <div className="flex flex-col gap-1.5">
-                                    {categoriasNoQuadro.map((cat) => {
-                                        const atual = resolverCorCategoria(cat, coresCategoria);
-                                        const temOverride = coresCategoria?.[cat] != null;
-                                        return (
-                                            <div key={cat} className="flex items-center gap-2">
-                                                <input type="color" value={atual || "#ffffff"}
-                                                    onChange={(e) => setCoresCategoria((prev) => ({ ...prev, [cat]: e.target.value }))}
-                                                    className="w-7 h-7 rounded cursor-pointer border border-surface-variant shrink-0"
-                                                    aria-label={`Cor de ${cat}`} />
-                                                <span className="text-body-md text-on-surface truncate flex-1">{cat}</span>
-                                                {temOverride && (
-                                                    <button type="button" onClick={() => setCoresCategoria((prev) => {
-                                                        const { [cat]: _omit, ...resto } = prev;
-                                                        return resto;
-                                                    })} className="text-staff-mono text-primary hover:underline shrink-0">
-                                                        repor
-                                                    </button>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
+                                <button type="button" onClick={() => setCoresAbertas((v) => !v)}
+                                    className="w-full flex items-center justify-between gap-2 text-left">
+                                    <h3 className="font-staff-mono font-bold text-on-surface-variant text-sm">Cores por categoria</h3>
+                                    <span className={`material-symbols-outlined text-on-surface-variant text-[20px] transition-transform ${coresAbertas ? "rotate-180" : ""}`}>
+                                        expand_more
+                                    </span>
+                                </button>
+                                {coresAbertas && (
+                                    <div className="flex flex-col gap-1.5 mt-2">
+                                        {categoriasNoQuadro.map((cat) => {
+                                            const atual = resolverCorCategoria(cat, coresCategoria);
+                                            const temOverride = coresCategoria?.[cat] != null;
+                                            return (
+                                                <div key={cat} className="flex items-center gap-2">
+                                                    <input type="color" value={atual || "#ffffff"}
+                                                        onChange={(e) => setCoresCategoria((prev) => ({ ...prev, [cat]: e.target.value }))}
+                                                        className="w-7 h-7 rounded cursor-pointer border border-surface-variant shrink-0"
+                                                        aria-label={`Cor de ${cat}`} />
+                                                    <span className="text-body-md text-on-surface truncate flex-1">{cat}</span>
+                                                    {temOverride && (
+                                                        <button type="button" onClick={() => setCoresCategoria((prev) => {
+                                                            const { [cat]: _omit, ...resto } = prev;
+                                                            return resto;
+                                                        })} className="text-staff-mono text-primary hover:underline shrink-0">
+                                                            repor
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
                             </div>
                         )}
                         <h2 className="font-display-lg text-lg font-bold text-on-surface mb-3">Biblioteca de Botões</h2>

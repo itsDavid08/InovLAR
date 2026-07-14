@@ -5,9 +5,10 @@ import StaffShell from "../Components/layout/StaffShell";
 import StaffSidebar from "../Components/layout/StaffSidebar";
 import ItemMenu from "../Components/layout/ItemMenu";
 import { tokenDoUtente } from "../utils/utenteToken";
+import UtenteAvatar from "../Components/utentes/UtenteAvatar";
 
 const StaffHome = () => {
-    const { utentes, setUtente, deleteUtente } = useContext(Context);
+    const { utentes, setUtente, deleteUtente, apiUrl } = useContext(Context);
     const navigate = useNavigate();
     const [searchQuery, setSearchQuery] = useState("");
     // Qual cartão tem o menu de ações aberto (só um de cada vez). O ref aponta para
@@ -87,9 +88,13 @@ const StaffHome = () => {
                             dos vizinhos e da barra inferior. */}
                         <div className="absolute top-0 left-0 w-full h-1 bg-status-green"></div>
                         <div className="flex items-start justify-between mb-3">
-                            <div className="w-11 h-11 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center font-display-lg text-[16px] border-2 border-surface-container">
-                                {utente.nome.split(' ').map(name => name[0]).slice(0, 2).join('')}
-                            </div>
+                            <UtenteAvatar
+                                imagem={utente.imagem}
+                                corAvatar={utente.corAvatar}
+                                nome={utente.nome}
+                                apiUrl={apiUrl}
+                                className="w-11 h-11 text-[16px] border-2 border-surface-container"
+                            />
                             <div className="flex items-center gap-1">
                                 <div className="px-2 py-1 rounded text-xs font-staff-mono font-bold text-status-green flex items-center gap-1">
                                     <span className="material-symbols-outlined text-[14px]">check_circle</span> Estável
@@ -100,7 +105,7 @@ const StaffHome = () => {
                                     boundaryRef={openCardRef}
                                     title={utente.nome}
                                     subtitle="Quarto Geral"
-                                    thumbnail={<span className="font-display-lg text-[16px]">{utente.nome.split(' ').map((n) => n[0]).slice(0, 2).join('')}</span>}
+                                    thumbnail={<UtenteAvatar imagem={utente.imagem} corAvatar={utente.corAvatar} nome={utente.nome} apiUrl={apiUrl} className="w-full h-full text-[16px]" />}
                                     onManage={() => handleManage(utente)}
                                     onEdit={() => handleEdit(utente)}
                                     onDelete={() => handleDelete(utente)}

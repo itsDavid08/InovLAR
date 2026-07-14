@@ -45,8 +45,8 @@ const utenteController = {
     // Criar um novo utente (template opcional → aplica a tabela já na criação)
     createUtente: async (req, res) => {
         try {
-            const { nome, quarto, templateId } = req.body;
-            const utente = await Utente.create({ nome, quarto });
+            const { nome, quarto, imagem, corAvatar, templateId } = req.body;
+            const utente = await Utente.create({ nome, quarto, imagem, corAvatar });
             if (templateId) {
                 const template = await TabelaPadrao.findByPk(templateId);
                 if (template) {
@@ -65,7 +65,12 @@ const utenteController = {
     // Atualizar um utente
     updateUtente: async (req, res) => {
         try {
-            const [updated] = await Utente.update(req.body, {
+            // Whitelist dos campos editáveis (evita mass assignment de req.body direto).
+            const { nome, quarto, imagem, corAvatar } = req.body;
+            const campos = { nome, quarto, imagem, corAvatar };
+            // Só atualiza as chaves realmente enviadas (undefined = não mexer).
+            Object.keys(campos).forEach((k) => campos[k] === undefined && delete campos[k]);
+            const [updated] = await Utente.update(campos, {
                 where: { id: req.params.id },
             });
             if (updated) {

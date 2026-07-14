@@ -13,6 +13,16 @@ const Utente = sequelize.define(
             type: DataTypes.STRING,
             allowNull: false,
             validate: { notEmpty: true }
+        },
+        // Foto de perfil: caminho da imagem (predefinida ou upload pessoal), ou null.
+        imagem: {
+            type: DataTypes.STRING,
+            allowNull: true
+        },
+        // Cor de fundo do avatar (iniciais) quando não há foto, ou null.
+        corAvatar: {
+            type: DataTypes.STRING,
+            allowNull: true
         }
     },
     {
