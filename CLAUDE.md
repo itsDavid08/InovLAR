@@ -67,7 +67,7 @@ Raspberry Pi deployment (MariaDB install, DB/user creation, migrations, systemd 
 1. **Kiosk Mode:** The tablet starts locked (`staffUnlocked: false`). Staff enters PIN to access management console. Entering patient board (`/main/:token`) closes the gate. Only PIN reopens staff access — physical reset or deleting the `StaffAuth` row in MariaDB.
 
 2. **Two Authentication Paths:**
-   - **Staff:** Shared password per device (bcrypt-hashed), session cookie (httpOnly, signed, ~1 year).
+   - **Staff:** Shared password per device (bcrypt-hashed). Session cookie (httpOnly, signed, ~1 year) holds a random 32-byte token; only its **SHA-256 hash** is stored server-side, in `StaffSession` (one row per active session). `requireStaff` (`middleware/auth.js`) is `async` and validates the token against that table on every request (fail-closed on error) — the cookie value itself proves nothing without a matching, non-expired row. `logout` deletes the row (real revocation); expired rows are lazily deleted on validation attempt, no periodic sweep. Changing the PIN does **not** revoke existing sessions (shared device PIN — revoking would log out every tablet). `/auth/staff/login`, `/setup`, and `/change` are rate-limited (`middleware/rateLimiter.js`: 5 failed attempts / 10 min / IP) against PIN brute-force.
    - **Utente:** Token-based access (no auth per se; URL is the secret: `/main/{token}`).
 
 3. **State Management:**
@@ -77,7 +77,7 @@ Raspberry Pi deployment (MariaDB install, DB/user creation, migrations, systemd 
 
 4. **Responsive Design:** Sidebar+header on desktop; bottom navigation bar on mobile. Layout components centralized in `Components/layout/`.
 
-5. **Schema management is split, not uniform:** `Utente`, `Botao`, `Pedido` (and the `UtenteBotoes` join table) are managed by Sequelize **migrations** (`Server/migrations/`, run via `sequelize-cli db:migrate`). `StaffAuth`, `TabelaLayout`, `TabelaPadrao` are instead created via `Model.sync()` called directly in `main.js` on every server start — no migration files for these. When adding a column to the first group you must write a migration; for the second group, editing the model is enough.
+5. **Schema management is split, not uniform:** `Utente`, `Botao`, `Pedido` (and the `UtenteBotoes` join table) are managed by Sequelize **migrations** (`Server/migrations/`, run via `sequelize-cli db:migrate`). `StaffAuth`, `StaffSession`, `TabelaLayout`, `TabelaPadrao` are instead created via `Model.sync()` called directly in `main.js` on every server start — no migration files for these. When adding a column to the first group you must write a migration; for the second group, editing the model is enough.
 
 ### File Structure
 
@@ -124,6 +124,7 @@ Server/
 │   ├── Utente.js         # Patient (hasMany Botao, hasMany Tabela)
 │   ├── Pedido.js         # Request instance (timestamps, status); tableName: 'pedidos' (lowercase — see gotcha below)
 │   ├── StaffAuth.js      # Single row: passwordHash — sync()'d, no migration
+│   ├── StaffSession.js   # Active staff sessions: tokenHash (SHA-256, unique) + expiraEm — sync()'d, no migration
 │   ├── TabelaLayout.js   # User-specific table layout (utente + device) — sync()'d, no migration
 │   ├── TabelaPadrao.js   # Template for bulk apply to patients — sync()'d, no migration
 │   └── index.js          # Exports + associations
@@ -131,8 +132,11 @@ Server/
 │   ├── route.js          # Main API endpoints (auth, utentes, botoes, pedidos, tabelas, imagesBotoes)
 │   └── images.js         # GET /imagesBotoes (flat listing; no subdirs)
 ├── controller/           # Request handlers (authController, utente*, botao*, etc.)
-├── middleware/           # auth.js (requireStaff middleware)
+├── middleware/
+│   ├── auth.js           # requireStaff — async, validates session token against StaffSession (fail-closed)
+│   └── rateLimiter.js    # staffAuthLimiter — 5 failed attempts/10min/IP on /auth/staff/{login,setup,change}
 ├── Util/
+│   ├── sessions.js       # criarSessao/validarSessao/revogarSessao — StaffSession helpers (hashes token, lazy expiry cleanup)
 │   ├── socketIO.js       # Socket.io setup + notificarAlteracaoBD broadcast
 │   └── seedDefaults.js   # Create "Predefinida" template on first run (runs once — guards on TabelaPadrao.count())
 ├── seeders/              # Seed scripts (43 default botões); no run-once tracking table, re-running errors on dup IDs
@@ -198,9 +202,11 @@ Server/
 
 ### 1. Staff Authentication
 - **Shared password** (device-level, not per-user) — matches kiosk workflow; no per-person accounts needed.
-- **Cookie-based sessions** (httpOnly, signed, no JWT) — simplifies stateless validation via HMAC; no session table.
-- **Bcryptjs** (not native bcrypt) — cross-platform JS; avoids build issues on Windows.
-- **Soft auth in frontend** (RequireStaff gate) vs **hard auth in backend** (requireStaff middleware on write routes).
+- **Real server-side sessions, not a stateless signed value** — the cookie carries a random 32-byte token; only its SHA-256 hash lives in `StaffSession`. This replaced an earlier design where the signed cookie just held the literal string `"ok"` (unrevocable, and a leaked `COOKIE_SECRET` could forge a valid cookie forever). See `SECURITY_CHECKLIST.md` and the 2026-07 entries in `DEVELOPMENT_LOG.md` for the full rationale.
+- **SHA-256 for the token, not bcrypt** — the token is already high-entropy (256 bits) random data, not a low-entropy password; a fast hash is correct here and bcrypt would just add latency per request.
+- **Bcryptjs** (not native bcrypt) — cross-platform JS; avoids build issues on Windows. (Still used for the PIN itself, cost factor 10.)
+- **Rate limiting on `/auth/staff/{login,setup,change}`** (`rateLimiter.js`) — mitigates brute-force of the 4-digit PIN; counts only failed attempts so normal use isn't penalized.
+- **Soft auth in frontend** (RequireStaff gate) vs **hard auth in backend** (`requireStaff` middleware, now async, validates against `StaffSession` on every request, fail-closed on error).
 
 ### 2. Image Management
 - **Flat structure** (`/imagesBotoes/`, no subdirs) — upload destination is singular; category is in Botao.categoria.
@@ -282,8 +288,8 @@ There is no automated test suite for either `Server` or `Client` (`Server`'s `np
 - **CSS class cleanup** — `.new-container` / `.edit-container` in `index.css` no longer used (UtenteForm was refactored); safe to remove.
 - **Safe-area inset for iPhone** — bottom nav could include `env(safe-area-inset-bottom)` in height for cleaner spacing near home indicator.
 - **Orphaned components** — `Home.jsx`, `UtenteHome.jsx`, `AbrirUtente.jsx`, `BindUtente.jsx`, `EscreverMensagem.jsx` not in router (kept for reference).
-- **Production HTTPS** — `secure: true` needed in cookie config (`authController.js`) when deployed over HTTPS.
-- **Known security gaps** — `SECURITY_CHECKLIST.md` (PT, internal) has a severity-ranked list from a manual audit: no rate limiting on staff login (4-digit PIN brute-forceable), static `"ok"` session cookie, hardcoded `COOKIE_SECRET` fallback, patient data endpoints (`/utentes`, `/pedidos`) reachable with no auth, open CORS reflecting any origin, mass assignment in a few controllers. Check this file before touching auth, CORS, or the patient-data GET endpoints.
+- **Production HTTPS** — cookie `secure` flag now reads `COOKIE_SECURE` env var (opt-in), since the Pi currently serves plain HTTP with no TLS anywhere in `install.sh`. Set `COOKIE_SECURE=true` once a reverse proxy with a certificate sits in front.
+- **Known security gaps** — `SECURITY_CHECKLIST.md` (PT, internal) has a severity-ranked list from a manual audit. All 🔴 Critical items are now fixed (rate limiting on staff login, real revocable sessions replacing the old static `"ok"` cookie, `COOKIE_SECRET` fallback removed/required in production, `secure` cookie flag wired up). Still open (🟠 High/🟡 Medium): patient data endpoints (`/utentes`, `/pedidos`) reachable with no auth (biggest GDPR risk), `PUT /pedidos/:id` doesn't verify request ownership, mass assignment in a few controllers (`req.body` passed straight to Sequelize), the utente URL token is reversible obfuscation (key lives in the client bundle) not real access control, open CORS reflecting any origin + no CSRF protection, weak image upload validation (mimetype/extension only, no size limits). Check this file before touching auth, CORS, uploads, or the patient-data endpoints.
 
 ---
 

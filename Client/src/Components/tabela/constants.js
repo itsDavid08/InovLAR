@@ -1,7 +1,7 @@
 import { getSpan, footprint } from "./gridSpans";
 
 export const DISPOSITIVOS = {
-    smartphone: { label: "Telemóvel", icon: "smartphone", colsDefault: 4, colsMin: 2, colsMax: 8,  maxW: 640,  aspect: "16 / 9" },
+    smartphone: { label: "Telemóvel", icon: "smartphone", colsDefault: 3, colsMin: 2, colsMax: 8,  maxW: 380,  aspect: "9 / 16" },
     tablet:     { label: "Tablet",    icon: "tablet",     colsDefault: 5, colsMin: 2, colsMax: 10, maxW: 760,  aspect: "4 / 3" },
     pc:         { label: "PC",        icon: "computer",   colsDefault: 6, colsMin: 2, colsMax: 14, maxW: 1000, aspect: "16 / 10" },
 };

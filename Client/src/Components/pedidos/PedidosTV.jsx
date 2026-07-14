@@ -18,7 +18,7 @@ const GRID_GAP = 14; // aprox. do gap real (clamp 10-14px), só para o cálculo
 // O número de pedidos por página é variável: mede-se a altura disponível e
 // calcula-se quantas linhas cabem sem descer de MIN_ROW_HEIGHT; o resto roda
 // por páginas (usePagedRotation), tal como a versão anterior de 1 coluna.
-export default function PedidosTV({ all, onResolver }) {
+export default function PedidosTV({ all, onResolver, onVoltar }) {
     const gridRef = useRef(null);
     const [rowsAvailable, setRowsAvailable] = useState(7);
 
@@ -39,11 +39,29 @@ export default function PedidosTV({ all, onResolver }) {
     const numEmergencias = all.filter((r) => r.emergencia).length;
     const rows = Math.max(1, Math.ceil(fila.pageItems.length / 2));
 
+    // Setas do teclado paginam manualmente quando há mais que uma página
+    // (o Esc para voltar atrás já é tratado no container, `PedidosPendentes.jsx`).
+    useEffect(() => {
+        if (fila.pageCount <= 1) return;
+        const onKey = (e) => {
+            if (e.key === "ArrowRight") fila.next();
+            else if (e.key === "ArrowLeft") fila.prev();
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+    }, [fila.pageCount, fila.next, fila.prev]);
+
     return (
         <div style={{ height: "100dvh", background: "#f1f5f9", padding: "clamp(20px,2vw,40px)",
             display: "flex", flexDirection: "column", gap: "clamp(12px,1.2vw,20px)", overflow: "hidden", fontFamily: "system-ui" }}>
-            <div style={{ flex: "0 0 auto", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ flex: "0 0 auto", display: "flex", alignItems: "center", justifyContent: "space-between",
+                flexWrap: "wrap", gap: "clamp(10px,1vw,18px)" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "clamp(10px,1vw,18px)" }}>
+                    <button onClick={onVoltar} title="Voltar" style={{ cursor: "pointer", border: "none", display: "inline-flex",
+                        alignItems: "center", gap: 8, background: "#e2e8f0", color: "#334155",
+                        font: "800 clamp(14px,1.2vw,22px) system-ui", padding: "8px clamp(12px,1.4vw,20px)", borderRadius: 999 }}>
+                        ← Voltar
+                    </button>
                     <span style={{ font: "900 clamp(20px,1.6vw,30px) system-ui", color: "#334155" }}>PEDIDOS PENDENTES</span>
                     {numEmergencias > 0 && (
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#dc2626", color: "#fff",
@@ -54,10 +72,25 @@ export default function PedidosTV({ all, onResolver }) {
                         </span>
                     )}
                 </div>
-                <span style={{ font: "800 clamp(14px,1.3vw,24px) system-ui", color: "#64748b", background: "#e2e8f0",
-                    padding: "6px 18px", borderRadius: 999 }}>
-                    {all.length} a aguardar{fila.pageCount > 1 ? ` · ${fila.page + 1}/${fila.pageCount}` : ""}
-                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: "clamp(8px,0.8vw,14px)" }}>
+                    {fila.pageCount > 1 && (
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: "clamp(6px,0.6vw,10px)" }}>
+                            <button onClick={fila.prev} title="Página anterior" style={{ cursor: "pointer", border: "none",
+                                background: "#e2e8f0", color: "#334155", font: "900 clamp(14px,1.3vw,24px) system-ui",
+                                width: "clamp(32px,2.6vw,44px)", height: "clamp(32px,2.6vw,44px)", borderRadius: 999 }}>‹</button>
+                            <span style={{ font: "800 clamp(13px,1.1vw,20px) system-ui", color: "#64748b" }}>
+                                {fila.page + 1}/{fila.pageCount}
+                            </span>
+                            <button onClick={fila.next} title="Página seguinte" style={{ cursor: "pointer", border: "none",
+                                background: "#e2e8f0", color: "#334155", font: "900 clamp(14px,1.3vw,24px) system-ui",
+                                width: "clamp(32px,2.6vw,44px)", height: "clamp(32px,2.6vw,44px)", borderRadius: 999 }}>›</button>
+                        </div>
+                    )}
+                    <span style={{ font: "800 clamp(14px,1.3vw,24px) system-ui", color: "#64748b", background: "#e2e8f0",
+                        padding: "6px 18px", borderRadius: 999 }}>
+                        {all.length} a aguardar
+                    </span>
+                </div>
             </div>
 
             <div ref={gridRef} style={{ flex: 1, display: "grid", gridTemplateColumns: "1fr 1fr",

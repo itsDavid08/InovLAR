@@ -26,8 +26,9 @@ function PedidosPendentes() {
     }, []);
 
     // Esc → volta ao painel de staff (comportamento anterior preservado).
+    const handleVoltar = () => navigate("/staff");
     useEffect(() => {
-        const onKey = (e) => { if (e.key === "Escape") navigate("/staff"); };
+        const onKey = (e) => { if (e.key === "Escape") handleVoltar(); };
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
     }, [navigate]);
@@ -79,7 +80,7 @@ function PedidosPendentes() {
     // Telemóvel (<640px) usa a lista de cartões (1 coluna). Tablet e TV/PC
     // (≥640px) partilham o board em grelha (2 colunas).
     if (mode === "phone") return (<><PedidosPhone all={all} onResolver={handleResolver} /><StaffBottomNav /></>);
-    return <PedidosTV all={all} onResolver={handleResolver} />;
+    return <PedidosTV all={all} onResolver={handleResolver} onVoltar={handleVoltar} />;
 }
 
 export default PedidosPendentes;
