@@ -1,7 +1,7 @@
 // Chamadas à API dos utentes. Devolvem dados; o estado vive no ContextProvider.
 import { apiUrl, get, mutate } from "./client";
 
-export const fetchUtentes = () => get("utentes");
+export const fetchUtentes = () => get("utentes", { auth: true }); // roster -> só staff
 
 export async function fetchUtente(id) {
     const res = await fetch(apiUrl + `utentes/${id}`);

@@ -6,7 +6,8 @@ import { apiUrl, get, mutate } from "./client";
 export const fetchPedidosUtente = (id) => get(`pedidos/utente/${id}`);
 
 export async function fetchPedidosPendentesEmergencia() {
-    const res = await fetch(apiUrl + "pedidos/ativos/emergencia");
+    // Agregado de todos os pedidos pendentes -> só staff (envia o cookie de sessão).
+    const res = await fetch(apiUrl + "pedidos/ativos/emergencia", { credentials: "include" });
     if (!res.ok) throw new Error("Failed to fetch pending requests");
     return res.json();
 }

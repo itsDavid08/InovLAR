@@ -102,7 +102,7 @@ router.post('/auth/staff/change', requireStaff, staffAuthLimiter, authController
 router.post('/auth/staff/logout', authController.logout);
 
 // Rotas para Utentes
-router.get('/utentes', utenteController.getUtentes);
+router.get('/utentes', requireStaff, utenteController.getUtentes); // roster completo -> só staff (RGPD)
 router.get('/utentes/:id', utenteController.getUtenteById);
 router.post('/utentes/create', requireStaff, utenteController.createUtente);
 router.put('/utentes/:id', requireStaff, utenteController.updateUtente);
@@ -111,12 +111,12 @@ router.post('/utentes/:utenteId/botoes/:botaoId', requireStaff, utenteController
 router.delete('/utentes/:utenteId/botoes/:botaoId', requireStaff, utenteController.desassociarBotao);
 
 // Layout da tabela por dispositivo
-router.get('/tabelas', tabelaController.listarTabelas);
+router.get('/tabelas', requireStaff, tabelaController.listarTabelas); // todos os layouts -> só staff
 router.get('/utentes/:id/tabela/:dispositivo', tabelaController.getTabela);
 router.put('/utentes/:id/tabela/:dispositivo', requireStaff, tabelaController.saveTabela);
 
 // Templates de tabela ("defaults")
-router.get('/tabelas-padrao', tabelaPadraoController.listar);
+router.get('/tabelas-padrao', requireStaff, tabelaPadraoController.listar); // templates -> só staff
 router.post('/tabelas-padrao', requireStaff, tabelaPadraoController.criar);
 router.put('/tabelas-padrao/:id', requireStaff, tabelaPadraoController.atualizar);
 router.delete('/tabelas-padrao/:id', requireStaff, tabelaPadraoController.eliminar);
@@ -188,10 +188,12 @@ router.put('/botoes/:id', requireStaff, botaoController.updateBotao);
 router.delete('/botoes/:id', requireStaff, botaoController.deleteBotao);
 
 // Rotas para Pedidos
-router.get('/pedidos', pedidoController.getTodosPedidos);
-router.get('/pedidos/ativos/hora', pedidoController.getPedidosAtivosPorHora);
-router.get('/pedidos/ativos/emergencia', pedidoController.getPedidosAtivosPorEmergencia);
-router.get('/pedidos/:id', pedidoController.getPedidoPorId);
+// Endpoints agregados (todos os pedidos / de todos os utentes) -> só staff (RGPD).
+// O tabuleiro do utente usa apenas /pedidos/utente/:utenteId (o seu próprio), que fica aberto.
+router.get('/pedidos', requireStaff, pedidoController.getTodosPedidos);
+router.get('/pedidos/ativos/hora', requireStaff, pedidoController.getPedidosAtivosPorHora);
+router.get('/pedidos/ativos/emergencia', requireStaff, pedidoController.getPedidosAtivosPorEmergencia);
+router.get('/pedidos/:id', requireStaff, pedidoController.getPedidoPorId);
 router.get('/pedidos/utente/:utenteId', pedidoController.getPedidosAtivosPorUtenteId);
 router.post('/pedidos', pedidoController.criarPedido);
 router.put('/pedidos/:id', pedidoController.atualizarPedido);

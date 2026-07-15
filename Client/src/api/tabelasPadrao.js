@@ -1,6 +1,6 @@
 import { get, mutate } from "./client";
 
-export const fetchTabelasPadrao = () => get("tabelas-padrao");
+export const fetchTabelasPadrao = () => get("tabelas-padrao", { auth: true }); // templates -> só staff
 
 export async function criarTabelaPadrao(dados) {
     const res = await mutate("tabelas-padrao", { method: "POST", body: dados, auth: true, errorMsg: "Failed to create template" });

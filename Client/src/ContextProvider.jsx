@@ -29,6 +29,9 @@ export const ContextProvider = ({ children }) => {
     const [staffChecked, setStaffChecked] = useState(false);
 
     const utenteIdRef = useRef(utenteId);
+    // Espelha `staffUnlocked` para o handler do socket (evita stale-closure) — assim
+    // as leituras só-staff (roster, agregados) não disparam no tabuleiro do utente.
+    const staffUnlockedRef = useRef(staffUnlocked);
 
 
     const fetchUtentes = async () => {
@@ -151,13 +154,22 @@ export const ContextProvider = ({ children }) => {
 
 
 
+    // `botoes` é o catálogo genérico de botões — o tabuleiro do utente precisa dele,
+    // por isso é buscado sempre (endpoint aberto).
     useEffect(() => {
-
-        fetchUtentes();
         fetchBotoes();
-        fetchPedidosPendentesByEmergencia();
-
     }, []);
+
+    // Leituras só-staff (roster + agregados de pedidos) — endpoints protegidos por
+    // `requireStaff`. Só correm quando o staff tem acesso; no tabuleiro do utente
+    // (sem sessão) não são chamadas, evitando 401s e não carregando dados de todos.
+    useEffect(() => {
+        staffUnlockedRef.current = staffUnlocked;
+        if (staffUnlocked) {
+            fetchUtentes();
+            fetchPedidosPendentesByEmergencia();
+        }
+    }, [staffUnlocked]);
 
     // Restaura o acesso de staff a partir do cookie do dispositivo (sessão
     // persistente). Exceção: na "gaiola" (/main) não restaura — entrar no
@@ -187,9 +199,13 @@ export const ContextProvider = ({ children }) => {
 
         socket.on('bd_alterado', () => {
 
-            fetchUtentes();
             fetchBotoes();
-            fetchPedidosPendentesByEmergencia();
+            // Agregados só-staff: só refrescam se o staff tiver acesso (senão dão 401
+            // e não são precisos no tabuleiro do utente).
+            if (staffUnlockedRef.current) {
+                fetchUtentes();
+                fetchPedidosPendentesByEmergencia();
+            }
 
             if (utenteIdRef.current) {
                 fetchUtente(utenteIdRef.current);

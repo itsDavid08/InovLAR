@@ -3021,3 +3021,136 @@ dada pela secção "Cor de fundo" — a mesma cor recolore iniciais **e** ícone
 Verificado no browser: secção Avatar = [Iniciais][Ícone][(Foto atual)][Carregar]; escolher cor
 recolore o ícone (fundo `#ffe0c2`); criar utente persiste `imagem:'icone'`+`corAvatar`; StaffHome
 mostra o ícone com a cor (0 imgs partidas); sem erros de consola.
+
+---
+
+## 2026-07-14 — Fechar endpoints agregados de dados de pacientes (RGPD)
+
+### Contexto
+Item de "Alto" do `SECURITY_CHECKLIST.md`, o de maior impacto RGPD. Vários GETs estavam abertos
+(sem `requireStaff`), incluindo os **agregados** que expõem dados de todos os utentes: `GET /utentes`
+(roster completo com nome + quarto), `GET /pedidos` e `/pedidos/ativos/*` (pedidos de todos). Pior:
+o `ContextProvider` envolve toda a app (incluindo o tabuleiro do utente em `/:token`) e no arranque
+fazia `fetchUtentes()` + `fetchPedidosPendentesByEmergencia()` — ou seja, **o próprio tablet do
+paciente descarregava a lista completa de pacientes e todos os pedidos pendentes** para memória.
+
+### Âmbito (o que fechar vs. manter aberto)
+Confirmado por leitura do cliente o que o tabuleiro realmente consome: `utente` (o próprio, via
+`GET /utentes/:id`), `botoes` (catálogo genérico de botões) e a sua `tabela`. Nunca usa a lista
+`utentes` nem os agregados de pedidos.
+
+- **Fechado com `requireStaff`** (agregados): `GET /utentes`, `/pedidos`, `/pedidos/ativos/hora`,
+  `/pedidos/ativos/emergencia`, `/pedidos/:id` (não usado pelo cliente), `/tabelas`, `/tabelas-padrao`.
+- **Mantido aberto** (o tabuleiro precisa): `/utentes/:id`, `/pedidos/utente/:utenteId`,
+  `/utentes/:id/tabela/:dispositivo`, `/botoes` + `/botoes/utente/:utenteId` (catálogo genérico
+  "SOS"/"água"…, não são dados pessoais).
+
+### Limite conhecido (fica para o item seguinte)
+`GET /utentes/:id` continua enumerável revertendo o token do utente (a chave da cifra de Feistel
+está no bundle do cliente). Fechar os agregados elimina o "descarregar o roster inteiro num pedido"
+— o maior problema — mas não a enumeração por-id, que exige o mecanismo de autorização por-utente do
+próximo item de "Alto" ("o token é ofuscação, não autenticação").
+
+### Correção — servidor (`Server/routes/route.js`)
+`requireStaff` acrescentado às 7 rotas GET agregadas listadas acima.
+
+### Correção — cliente
+- `src/api/client.js` — `get()` passa a aceitar `{ auth: true }` (envia `credentials: "include"`),
+  espelhando o que o `mutate()` já fazia.
+- `src/api/utentes.js` (`fetchUtentes`), `src/api/tabela.js` (`fetchTabelas`),
+  `src/api/tabelasPadrao.js` (`fetchTabelasPadrao`) → `{ auth: true }`.
+  `src/api/pedidos.js` (`fetchPedidosPendentesEmergencia`) → `credentials: "include"`.
+- `src/ContextProvider.jsx` — `fetchBotoes()` continua sempre (o board precisa); as leituras
+  só-staff (`fetchUtentes` + `fetchPedidosPendentesByEmergencia`) passam a correr **só quando
+  `staffUnlocked`** (efeito dependente de `staffUnlocked`). No handler do socket, guardadas com um
+  `staffUnlockedRef` novo (evita stale-closure, seguindo o padrão do `utenteIdRef` existente). Assim
+  o tabuleiro do utente (sem sessão) já não pede o roster nem os agregados.
+
+### Impacto operacional
+Nenhum risco de crash. Dispositivos-paciente deixam de carregar o roster (é o objetivo); o board
+continua a funcionar com os seus próprios endpoints. Dispositivos-staff: sem mudança visível — já
+têm sessão e passam a enviar o cookie nestes GETs.
+
+### Teste
+1. **Matriz de endpoints** (script node contra o servidor de dev, cookie de sessão real forjado com
+   `cookie-signature`; depois apagado):
+   - Sem sessão, os 7 agregados → **401**; os do tabuleiro (`/botoes`, `/utentes/:id`,
+     `/pedidos/utente/:id`, `/utentes/:id/tabela/:disp`) → **não-401**; com sessão de staff, os
+     agregados → **não-401**. Todos PASS.
+2. **Build do cliente** (`npm run build`) — passa limpo (o aviso de chunk size é pré-existente).
+3. **Browser** — carregado o tabuleiro real do utente 5 (`/4246505107`), sem sessão, contra o build
+   servido pelo Express (:3000):
+   - `read_page` confirma o board renderizado por completo (botões SOS/"Com falta de ar"/… + gaveta
+     "Lista de Pedidos" com os pedidos do próprio utente + "Acesso staff").
+   - `read_network_requests` confirma que o board busca **só** os seus endpoints — `/utentes/5`,
+     `/pedidos/utente/5`, `/utentes/5/tabela/*`, `/botoes` (todos 200) — e **não** faz `GET /utentes`
+     (roster) nem `/pedidos/ativos/emergencia` nem `/tabelas`. Ou seja, o tablet do paciente já não
+     descarrega dados de outros utentes. Consola sem erros 401.
+
+### Próximo
+Item de "Alto" seguinte: `PUT /pedidos/:id` não verifica o dono do pedido + mass assignment
+(`Pedido.create(req.body)` / `Utente.update(req.body)`), e a questão do token do utente como
+ofuscação e não autenticação real.
+
+---
+
+## 2026-07-15 — Editor de Tabelas: espaço do preview, redimensionar e drag-and-drop
+
+### Contexto
+Feedback de uso do `TabelaEditor` (`Client/src/Components/tabela/TabelaEditor.jsx`): o cabeçalho do
+"Quadro Atual" desperdiçava espaço vertical (a preview do dispositivo, sobretudo tablet, não cabia
+bem no ecrã); o redimensionamento de botões só permitia crescer para baixo/direita (o único puxador
+ficava fixo no canto superior-esquerdo); e o "ghost" do drag-and-drop mostrava sempre um botão 1×1,
+mesmo a arrastar um botão maior — fazendo a colocação cair na célula sob o cursor em vez de na
+posição real do botão.
+
+### Alterações — espaço do canvas
+- Cabeçalho do "Quadro Atual" compactado: `p-5 sm:p-6` → `p-3 sm:p-4`, título `text-xl` → `text-base`,
+  parágrafo descritivo removido (passou a `title` do `<h2>`), `mb-4` → `mb-2`.
+- `constants.js` — `DISPOSITIVOS.tablet.maxW` de `760` para `620`. Medido no DOM: a moldura do
+  tablet ocupava 87% da altura do canvas (`hRatio`) contra 74% do PC, por a proporção 4/3 ser mais
+  "quadrada" que a 16/10 do PC à mesma largura — daí parecer maior mesmo cabendo. Com `620` passa a
+  76%, visualmente equivalente ao PC.
+
+### Alterações — drag-and-drop (posição real do botão, não do cursor)
+- `onDragEnd`/novo `onDragMove` — a colocação/movimento já não usa a célula "over" do dnd-kit
+  (baseada no cursor), mas sim `active.rect.current.translated` (o retângulo real, em pixels, do nó
+  a ser arrastado, já com o "grab point" original) convertido para célula-âncora via
+  `ancoraDoArrasto()`. Sem isto, arrastar um botão maior que 1×1 colocava-o onde o cursor estava, não
+  onde o botão aparecia visualmente.
+- Novo estado `dragPreview` (+ `dragFootprint`, um `Set` das posições do footprint completo) —
+  o destaque nas células vazias (`GridCell`, prop `destacado`) passa a acender o footprint inteiro
+  do botão a arrastar, não só 1 célula sob o cursor.
+- `DragOverlay` deixou de ser uma caixa fixa de 96px com `size="P"`; agora dimensiona-se pelo `w×h`
+  real do botão arrastado (`activeSpan`, via `getSpan`) multiplicado pelo tamanho real de uma célula
+  (`cellPx`, lido do `gridRef`).
+
+### Alterações — redimensionar (duas iterações)
+**1ª versão:** puxador único (canto inferior-direito) com lógica de sinal do delta por eixo — se o
+arrasto ia "para fora" (direita/baixo) crescia com a âncora fixa; se ia "para dentro"/lado contrário
+crescia a partir do canto oposto, deslocando a âncora. Resolvia o crescer-para-cima, mas criava
+confusão: inverter o sentido do arrasto a meio de um gesto (crescer para cima e depois tentar
+encolher de volta) era interpretado como "crescer ainda mais", porque o pivô mudava com o sinal
+instantâneo do delta em vez de ficar fixo ao handle.
+
+**2ª versão (final) — caixa de redimensionar com 8 puxadores**, como um editor gráfico convencional
+(Figma/PowerPoint): 4 cantos (`nw`/`ne`/`sw`/`se`) + 4 arestas (`n`/`s`/`e`/`w`), cada um com um
+**pivô fixo** (o lado/canto oposto nunca se move durante esse gesto). `iniciarResize(e, pos, handle)`
+mapeia o `handle` para que lado de cada eixo desloca (`ladoCol`/`ladoRow`); o cálculo já não ramifica
+por sinal do delta — elimina a ambiguidade da 1ª versão. `resizePreview`/`spansEfetivos`/
+`cellsEfetivas` mantêm-se (a âncora pode deslocar-se ao crescer por cima/esquerda; a pré-visualização
+"segue" o botão até ao pointerup).
+
+### Verificação (browser, eventos de ponteiro/rato sintéticos via `javascript_tool`)
+- Espaço do canvas: medido via `getBoundingClientRect` — tablet passou de `hRatio` 0.87 → 0.76.
+- Drag-and-drop: arrastar um botão 1×2 mostra 2 células destacadas (footprint completo, antes só 1);
+  ao largar, `grid-area` confirma que ficou na âncora correspondente à posição real do "ghost", não
+  na célula do cursor.
+- Redimensionar: puxador `n` (topo) — crescer para cima (`grid-area: 1 / 6 / span 2 / span 1`) e, no
+  mesmo gesto, inverter para baixo volta exatamente ao tamanho/posição original
+  (`grid-area: 2 / 6 / span 1 / span 1`), sem o bug de "pensar que queremos crescer ainda mais".
+  Puxador `e` (direita) isolado — cresce só em largura, empurrando corretamente o botão colidente.
+- Aviso de consola pré-existente (`Cannot update a component (GerirTabela) while rendering a
+  different component (TabelaEditor)`) — confirmado que ocorre só no mount inicial (mesma contagem
+  antes e depois de qualquer interação de resize/drag), não é introduzido por estas alterações; fica
+  por investigar à parte se necessário.

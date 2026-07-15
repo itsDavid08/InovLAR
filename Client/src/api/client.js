@@ -4,8 +4,10 @@ export const apiUrl = `${window.location.protocol}//${window.location.hostname}:
 
 // GET simples — devolve o JSON. Não verifica o estado de propósito: espelha o
 // comportamento original dos `fetch` de leitura do ContextProvider.
-export async function get(path) {
-    const res = await fetch(apiUrl + path);
+//  - `auth: true` envia o cookie de sessão (leituras só-staff: roster, agregados de pedidos,
+//    layouts, templates). Os endpoints abertos (tabuleiro do utente) ficam sem credenciais.
+export async function get(path, { auth = false } = {}) {
+    const res = await fetch(apiUrl + path, auth ? { credentials: "include" } : {});
     return res.json();
 }
 

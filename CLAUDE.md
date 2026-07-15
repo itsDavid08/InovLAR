@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Utente (Patient)**: Tablet board with customizable buttons/requests, request history drawer, emergency SOS
 - **Staff**: Management console for patient profiles, button customization, request monitoring, customizable layouts/templates
 
-**Tech stack:** React (Vite, Ant Design, Bootstrap) × Express (Sequelize ORM, **MariaDB**) × Socket.io × bcryptjs auth
+**Tech stack:** React 19 (Vite, Ant Design, Bootstrap, `@dnd-kit/core` for the table editor's drag-and-drop) × Express 5 (Sequelize ORM, **MariaDB**) × Socket.io × bcryptjs auth
 
 > Migrated off SQLite (mid-2026) — SQLite caused a SEGV crash loop on the Pi's armhf/aarch64 build. See `DEVELOPMENT_LOG.md` for the migration history and the MariaDB-specific gotchas below.
 
@@ -72,7 +72,7 @@ Raspberry Pi deployment (MariaDB install, DB/user creation, migrations, systemd 
 
 3. **State Management:**
    - **ContextProvider:** Global state (utentes, botoes, pedidos, staffUnlocked) + API calls delegated to `api/` layer. It wraps `<Router>` in `App.jsx`, so it **survives all SPA navigation** — re-entering a page for the same entity (e.g. same patient's board) does *not* automatically refetch unless the effect's dependency actually changes. If a page looks stale on re-entry without a socket event in between, check whether its `useEffect` unconditionally refetches on mount vs. only on id-change (see `TabuleiroComunicacao.jsx` and the 2026-07-03 entry in `DEVELOPMENT_LOG.md`).
-   - **API Layer** (`src/api/`): Pure functions for HTTP requests (GET, POST, PUT, DELETE).
+   - **API Layer** (`src/api/`): Pure functions for HTTP requests (GET, POST, PUT, DELETE). Reads go through `get(path, { auth })` in `client.js`: `auth: true` sends the session cookie (`credentials: "include"`) for staff-only reads (roster, request aggregates, layouts, templates); open reads (patient board) omit it. Mutations (`mutate`) always send credentials. The staff-only aggregate reads are also gated in `ContextProvider` behind `staffUnlocked` (both the mount effect and the socket handler, via a `staffUnlockedRef` to dodge stale closures) so the patient board never fires them and never 401s.
    - **Socket.io:** Real-time sync of DB changes across clients.
 
 4. **Responsive Design:** Sidebar+header on desktop; bottom navigation bar on mobile. Layout components centralized in `Components/layout/`.
@@ -105,6 +105,8 @@ Client/src/
 │   ├── GerirTabela.jsx, GerirTemplate.jsx  # Table/template editors
 │   ├── TabelasView.jsx, ChangePassword.jsx
 │   └── [Orphaned] Home.jsx, UtenteHome.jsx, AbrirUtente.jsx, BindUtente.jsx, EscreverMensagem.jsx
+├── utils/
+│   └── utenteToken.js         # 32-bit Feistel cipher: id↔URL token (tokenDoUtente/idDoToken). Reversible OBFUSCATION only — key is in the bundle, not access control (see security notes)
 ├── ContextProvider.jsx        # Global state + state setters
 ├── App.jsx                    # Router + protected routes via RequireStaff
 ├── main.jsx
@@ -129,7 +131,7 @@ Server/
 │   ├── TabelaPadrao.js   # Template for bulk apply to patients — sync()'d, no migration
 │   └── index.js          # Exports + associations
 ├── routes/
-│   ├── route.js          # Main API endpoints (auth, utentes, botoes, pedidos, tabelas, imagesBotoes)
+│   ├── route.js          # Main API endpoints (auth, utentes, botoes, pedidos, tabelas, imagesBotoes, imagesUtentes)
 │   └── images.js         # GET /imagesBotoes (flat listing; no subdirs)
 ├── controller/           # Request handlers (authController, utente*, botao*, etc.)
 ├── middleware/
@@ -143,6 +145,7 @@ Server/
 ├── migrations/           # Sequelize migrations for Utente/Botao/Pedido/UtenteBotoes — run via db:migrate
 ├── public/               # Static files served by Express
 │   ├── imagesBotoes/     # Flat structure (no subfolders); upload/delete here
+│   ├── imagesUtentes/    # Patient avatars: random filenames + predefinidos/ subfolder (see Image Management below)
 │   └── [other assets]
 ├── views/                # Orphaned EJS views (replaced by React SPA)
 └── main.js               # Entry point: Express + socket.io + static file serving; also calls sync() for the 3 non-migrated models
@@ -161,15 +164,24 @@ Server/
 - `POST /auth/staff/change` + `{ currentPassword, newPassword }` → **[requireStaff]**
 - `POST /auth/staff/logout` → clear cookie
 
+> **Auth note (aggregated GETs, 2026-07-14):** endpoints that expose *all* patients' data are now
+> `requireStaff` (RGPD fix — see below). The patient board only hits its own per-id endpoints, which
+> stay open. Whether a read is protected is load-bearing; the tags below reflect the current routes.
+
 ### Utentes (Patients)
-- `GET /utentes` → all patients
-- `GET /utentes/:id` → single patient
+- `GET /utentes` → all patients → **[requireStaff]** (full roster)
+- `GET /utentes/:id` → single patient (open — the board fetches its own utente)
 - `POST /utentes/create` + body → **[requireStaff]**
 - `PUT /utentes/:id` + body → **[requireStaff]**
 - `DELETE /utentes/:id` → **[requireStaff]**
+- `POST /utentes/:utenteId/botoes/:botaoId` → associate a button with a patient → **[requireStaff]**
+- `DELETE /utentes/:utenteId/botoes/:botaoId` → disassociate → **[requireStaff]**
+- `POST /imagesUtentes/upload` (multipart) + `{ previousPath }` → `{ path }`; auto-deletes the previous personal photo unless it's a predefined avatar → **[requireStaff]**
+- `DELETE /imagesUtentes` + `{ path }` → nullify `imagem` on dependent utentes (predefined avatars can't be deleted this way) → **[requireStaff]**
 
 ### Botões (Buttons)
 - `GET /botoes` → all buttons
+- `GET /botoes/utente/:utenteId` → buttons associated with one patient
 - `POST /botoes` + body → **[requireStaff]**
 - `PUT /botoes/:id` + body → **[requireStaff]**
 - `DELETE /botoes/:id` → **[requireStaff]**
@@ -177,17 +189,20 @@ Server/
 - `DELETE /imagesBotoes` + `{ path }` → nullify imagem in dependent botões **[requireStaff]**
 
 ### Pedidos (Requests)
-- `GET /pedidos` → all requests
-- `GET /pedidos/ativos/hora` → active by time
-- `GET /pedidos/ativos/emergencia` → SOS emergencies
+- `GET /pedidos` → all requests → **[requireStaff]**
+- `GET /pedidos/ativos/hora` → active by time → **[requireStaff]**
+- `GET /pedidos/ativos/emergencia` → SOS emergencies → **[requireStaff]**
+- `GET /pedidos/:id` → single request → **[requireStaff]**
+- `GET /pedidos/utente/:utenteId` → active requests for one patient (open — the board's own history)
 - `POST /pedidos` + body → patient creates request (no auth)
 - `PUT /pedidos/:id` + body → patient updates own request (no auth)
 - `DELETE /pedidos/:id` → **[requireStaff]**
 
 ### Tabelas (Layouts)
-- `GET /utentes/:id/tabela/:dispositivo` → get layout for device (phone/tablet)
+- `GET /tabelas` → all saved layouts → **[requireStaff]**
+- `GET /utentes/:id/tabela/:dispositivo` → get layout for device (phone/tablet) (open — the board's own)
 - `PUT /utentes/:id/tabela/:dispositivo` + body → **[requireStaff]**
-- `GET /tabelas-padrao` → templates
+- `GET /tabelas-padrao` → templates → **[requireStaff]**
 - `POST /tabelas-padrao` + body → **[requireStaff]**
 - `PUT /tabelas-padrao/:id` + body → **[requireStaff]**
 - `DELETE /tabelas-padrao/:id` → **[requireStaff]**
@@ -202,7 +217,7 @@ Server/
 
 ### 1. Staff Authentication
 - **Shared password** (device-level, not per-user) — matches kiosk workflow; no per-person accounts needed.
-- **Real server-side sessions, not a stateless signed value** — the cookie carries a random 32-byte token; only its SHA-256 hash lives in `StaffSession`. This replaced an earlier design where the signed cookie just held the literal string `"ok"` (unrevocable, and a leaked `COOKIE_SECRET` could forge a valid cookie forever). See `SECURITY_CHECKLIST.md` and the 2026-07 entries in `DEVELOPMENT_LOG.md` for the full rationale.
+- **Real server-side sessions, not a stateless signed value** — the cookie carries a random 32-byte token; only its SHA-256 hash lives in `StaffSession`. This replaced an earlier design where the signed cookie just held the literal string `"ok"` (unrevocable, and a leaked `COOKIE_SECRET` could forge a valid cookie forever). See the 2026-07 entries in `DEVELOPMENT_LOG.md` for the full rationale.
 - **SHA-256 for the token, not bcrypt** — the token is already high-entropy (256 bits) random data, not a low-entropy password; a fast hash is correct here and bcrypt would just add latency per request.
 - **Bcryptjs** (not native bcrypt) — cross-platform JS; avoids build issues on Windows. (Still used for the PIN itself, cost factor 10.)
 - **Rate limiting on `/auth/staff/{login,setup,change}`** (`rateLimiter.js`) — mitigates brute-force of the 4-digit PIN; counts only failed attempts so normal use isn't penalized.
@@ -212,7 +227,8 @@ Server/
 - **Flat structure** (`/imagesBotoes/`, no subdirs) — upload destination is singular; category is in Botao.categoria.
 - **Upload separate from create/edit** — POST /upload returns `{ path }`, path goes into form, then JSON post to create/update (controllers unchanged).
 - **Deletion doesn't destroy botões** — `imagem: allowNull` → DELETE nullifies imagem in affected botões, sends socket broadcast.
-- **Cache-busting with query param** — on replace (same URL, new content), add `?v=timestamp` to force refresh in browser. **Pattern confined to EditBotoes; reusable for future profile photos.**
+- **Cache-busting with query param** — on replace (same URL, new content), add `?v=timestamp` to force refresh in browser.
+- **Patient avatars (`/imagesUtentes/`) are a separate pipeline from `imagesBotoes`, not a reuse of it** — own subfolder, `requireStaff` on both upload and delete (vs. open reads elsewhere), and confidentiality-driven filenames: uploads get a random non-sequential name (`utente-{timestamp}-{random}.ext`), never the original filename, so personal photos can't be enumerated or guessed. A `predefinidos/` subfolder holds stock avatars, which are exempt from the personal-upload rules (`ehUploadPessoalUtente` in `route.js` gates on this) — they can't be deleted via `DELETE /imagesUtentes` and aren't auto-replaced on upload. Uploading a new personal photo auto-deletes the previous one (`previousPath` in the request body) unless it was a predefined avatar. `Utente.imagem` (path or null) + `Utente.corAvatar` (background color) — when there's no photo, the initials/icon fallback renders in `corAvatar`. Added via migration `20260714120000-add-imagem-cor-to-utentes.js` (this table is in the migrated group, not `sync()`'d — see Schema management above).
 
 ### 3. Real-time Sync
 - **Socket.io broadcast** (`notificarAlteracaoBD`) — any mutating endpoint notifies clients of DB state change; ContextProvider re-fetches.
@@ -289,12 +305,13 @@ There is no automated test suite for either `Server` or `Client` (`Server`'s `np
 - **Safe-area inset for iPhone** — bottom nav could include `env(safe-area-inset-bottom)` in height for cleaner spacing near home indicator.
 - **Orphaned components** — `Home.jsx`, `UtenteHome.jsx`, `AbrirUtente.jsx`, `BindUtente.jsx`, `EscreverMensagem.jsx` not in router (kept for reference).
 - **Production HTTPS** — cookie `secure` flag now reads `COOKIE_SECURE` env var (opt-in), since the Pi currently serves plain HTTP with no TLS anywhere in `install.sh`. Set `COOKIE_SECURE=true` once a reverse proxy with a certificate sits in front.
-- **Known security gaps** — `SECURITY_CHECKLIST.md` (PT, internal) has a severity-ranked list from a manual audit. All 🔴 Critical items are now fixed (rate limiting on staff login, real revocable sessions replacing the old static `"ok"` cookie, `COOKIE_SECRET` fallback removed/required in production, `secure` cookie flag wired up). Still open (🟠 High/🟡 Medium): patient data endpoints (`/utentes`, `/pedidos`) reachable with no auth (biggest GDPR risk), `PUT /pedidos/:id` doesn't verify request ownership, mass assignment in a few controllers (`req.body` passed straight to Sequelize), the utente URL token is reversible obfuscation (key lives in the client bundle) not real access control, open CORS reflecting any origin + no CSRF protection, weak image upload validation (mimetype/extension only, no size limits). Check this file before touching auth, CORS, uploads, or the patient-data endpoints.
+- **Stale SQLite file** — `Server/database/apcm.sqlite` is a leftover from the pre-MariaDB era; nothing reads it anymore. Safe to delete.
+- **Known security gaps** — from a manual audit (originally tracked in a now-removed `SECURITY_CHECKLIST.md`; see the 2026-07 entries in `DEVELOPMENT_LOG.md` for fix history). All 🔴 Critical items are fixed (rate limiting on staff login, real revocable sessions replacing the old static `"ok"` cookie, `COOKIE_SECRET` fallback removed/required in production, `secure` cookie flag wired up). Partially fixed (🟠 High, 2026-07-14): the *aggregated* patient-data GETs (`/utentes`, `/pedidos`, `/pedidos/ativos/*`, `/pedidos/:id`, `/tabelas`, `/tabelas-padrao`) are now `requireStaff`, so the patient tablet no longer downloads the whole roster — but per-id enumeration (`GET /utentes/:id` by reversing the URL token) is still possible and needs real per-utente authz. Still open (🟠 High): `PUT /pedidos/:id` doesn't verify request ownership; mass assignment in a few controllers (`Pedido.create(req.body)`/`Pedido.update(req.body, ...)`/`Utente.update(req.body, ...)` pass the body straight to Sequelize with no field whitelist); the utente URL token is reversible obfuscation (key lives in the client bundle), not real access control. Still open (🟡 Medium): CORS reflects any origin with credentials on + no CSRF protection; image upload validates only mimetype/extension (client-supplied, spoofable), no file-size/count limits, silently overwrites same-named files outside the rename flow; an orphaned `multer` config writing to `Server/uploads/` in `main.js` isn't wired to any route; `GET /localIP` leaks internal network topology with no auth; no request-body schema validation layer; error responses return `erro.message` directly (potential internal detail leakage). Still open (🟢 Low): `/auth/staff/setup` has a reset race window (anyone on the network can claim the PIN first after a reset); 4-digit minimum PIN is a small search space even with rate limiting.
 
 ---
 
 ## Memory & Context
 
-See `DEVELOPMENT_LOG.md` for chronological decision log (authentication design, responsive mobile, image upload with cache-busting, kiosk flow, MariaDB migration, Raspberry Pi deployment, etc.). Key entries: 2026-06-09 (deployment unification), 2026-06-09 (staff auth), 2026-06-17 (image management), 2026-06-17 (responsive mobile), 2026-07-03 (MariaDB migration + Pi deployment, table-casing bug, ContextProvider refetch-on-navigation fix).
+See `DEVELOPMENT_LOG.md` for chronological decision log (authentication design, responsive mobile, image upload with cache-busting, kiosk flow, MariaDB migration, Raspberry Pi deployment, etc.). Key entries: 2026-06-09 (deployment unification), 2026-06-09 (staff auth), 2026-06-17 (image management), 2026-06-17 (responsive mobile), 2026-07-03 (MariaDB migration + Pi deployment, table-casing bug, ContextProvider refetch-on-navigation fix), 2026-07-14 (closing aggregated patient-data GETs).
 
-`OPEN_SOURCE_CHECKLIST.md` (PT, internal) tracks prep work for making the repo public and writing an accompanying paper (git-history secret scan, license, CONTRIBUTING.md, generalizing the nursing-home-specific vocabulary, CI). Not part of the architecture, but relevant if asked to work on repo hygiene, licensing, or genericizing button/category naming.
+`README.md` / `README.pt.md` are the public-facing overview (bilingual EN/PT) — architecture diagram, features, setup, usage. The project is being prepared for open-source release alongside an academic paper; no license is chosen yet (see README's License section).
