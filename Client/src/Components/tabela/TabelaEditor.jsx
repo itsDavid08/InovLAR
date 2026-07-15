@@ -277,7 +277,6 @@ const TabelaEditor = ({
     setDispositivo,
     cols,
     setCols,
-    size,
     setSize,
     cells,
     setCells,
@@ -289,6 +288,7 @@ const TabelaEditor = ({
     saving,
     onSave,
     onVoltar,
+    // `size` também chega nos props mas o editor usa a escala derivada de `cols`
 }) => {
     const [activeId, setActiveId] = useState(null);
     const [busca, setBusca] = useState("");
@@ -611,7 +611,7 @@ const TabelaEditor = ({
     // do dnd-kit: o retângulo do próprio nó a ser arrastado, já seguindo o "grab point" original,
     // exatamente o que se vê no ecrã (ghost). Sem isto, a colocação usava a célula sob o cursor,
     // que não corresponde ao canto do botão quando este é maior que 1x1.
-    const ancoraDoArrasto = (rect, w, h) => {
+    const ancoraDoArrasto = (rect, w) => {
         const el = gridRef.current;
         if (!el || !rect) return null;
         const gridRect = el.getBoundingClientRect();
@@ -628,7 +628,7 @@ const TabelaEditor = ({
         const a = active.data.current;
         if (!a) return;
         const { w, h } = a.tipo === "slot" ? getSpan(spans, a.pos) : { w: 1, h: 1 };
-        const anchor = ancoraDoArrasto(active.rect.current.translated, w, h);
+        const anchor = ancoraDoArrasto(active.rect.current.translated, w);
         if (anchor != null) setDragPreview({ pos: anchor, w, h });
     };
 

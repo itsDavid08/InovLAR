@@ -3154,3 +3154,35 @@ por sinal do delta — elimina a ambiguidade da 1ª versão. `resizePreview`/`sp
   different component (TabelaEditor)`) — confirmado que ocorre só no mount inicial (mesma contagem
   antes e depois de qualquer interação de resize/drag), não é introduzido por estas alterações; fica
   por investigar à parte se necessário.
+
+---
+
+## 2026-07-15 — Refactor SOLID/Clean Code: Fase 0 (fundações)
+
+### Contexto
+Auditoria completa ao Client e Server identificou "god files" (TabelaEditor.jsx com 1138 linhas e 6
+componentes), duplicação entre páginas, mistura PT/EN/ES no código e inconsistências de contrato.
+Plano de refactor em 6 fases; esta é a Fase 0 (fundações + quick wins).
+
+### Decisões de convenção (aplicam-se a todas as fases seguintes)
+- **Código interno em inglês** (variáveis, funções, hooks, comentários, ficheiros novos).
+- **Nomes de domínio ficam em PT nas fronteiras**: endpoints REST (`/utentes`, `/botoes`, `/pedidos`)
+  e modelos/tabelas/colunas Sequelize não mudam — protege os dados existentes e os Pi já instalados.
+- **Texto da UI em pt-PT via módulo i18n** (`Client/src/i18n/pt.js`); o JSX referencia chaves em
+  inglês (`t.common.save`). Prepara outras línguas para o open-source release.
+
+### Alterações
+- **Bug corrigido** — `pedidoController.criarPedido`: no caso de pedido duplicado fazia
+  `return res.status(201)` sem enviar resposta → o request ficava pendurado até timeout do browser
+  (fácil de disparar com duplo-toque no tabuleiro). Agora devolve `200` + o pedido existente.
+- **ESLint v9 configurado** — `Client/eslint.config.js` (flat config; plugins já estavam nas
+  devDependencies). `no-unused-vars` ignora Maiúsculas (componentes JSX, sem eslint-plugin-react)
+  e prefixo `_`. Corrigidos 2 erros reais no TabelaEditor (`size` e `h` não usados). Ficam 6
+  warnings legítimos (exhaustive-deps, fast-refresh) que as Fases 3–4 resolvem.
+- **Código morto removido** — Pages órfãs (`Home`, `UtenteHome`, `AbrirUtente`, `BindUtente`,
+  `EscreverMensagem`), `Server/views/` + `viewController` + rota `/` (o `express.static(DIST)` já
+  sombreava a rota em produção), config multer órfã em `main.js` (escrevia para `uploads/` sem rota),
+  `Server/database/apcm.sqlite` (pré-MariaDB), classes CSS `.edit-container`/`.new-container`/
+  `.sos-button`/`.aac-section` (sem referências em JSX).
+- **Esqueleto i18n criado** — `Client/src/i18n/{pt.js,index.js}`; as strings migram gradualmente
+  à medida que cada fase toca nos componentes.

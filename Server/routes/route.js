@@ -6,7 +6,6 @@ const os = require('os');
 const utenteController = require('../controller/utenteController');
 const botaoController = require('../controller/botaoController');
 const pedidoController = require('../controller/pedidoController');
-const viewController = require('../controller/viewController');
 const authController = require('../controller/authController');
 const tabelaController = require('../controller/tabelaController');
 const tabelaPadraoController = require('../controller/tabelaPadraoController');
@@ -198,7 +197,5 @@ router.get('/pedidos/utente/:utenteId', pedidoController.getPedidosAtivosPorUten
 router.post('/pedidos', pedidoController.criarPedido);
 router.put('/pedidos/:id', pedidoController.atualizarPedido);
 router.delete('/pedidos/:id', requireStaff, pedidoController.eliminarPedido);
-
-router.get('/', (req,res) => viewController.renderIndexView(res));
 
 module.exports = router;

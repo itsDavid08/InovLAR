@@ -10,7 +10,6 @@ const app = express();
 const port = 3000;
 const router = require('./routes/route.js');
 const imagesRouter = require('./routes/images');
-const multer = require('multer');
 const path = require('path');
 const DIST = path.join(__dirname, '../Client/dist');
 
@@ -23,17 +22,6 @@ const { seedDefaults } = require('./Util/seedDefaults');
     await TabelaPadrao.sync();
     await seedDefaults();            // cria a "Predefinida" (1ª vez) + aplica a utentes sem tabela
 })().catch((e) => console.error('Erro no arranque/seed:', e));
-
-// Configuração do armazenamento
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, 'uploads/');
-    },
-    filename: (req, file, cb) => {
-        cb(null, Date.now() + '-' + file.originalname);
-    }
-});
-const upload = multer({ storage });
 
 app.use(express.json());
 // CORS com credenciais: reflete a origem do pedido (não pode ser "*" quando há cookies).

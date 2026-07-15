@@ -100,7 +100,7 @@ const pedidoController = {
 
             if (pedidoExistente) {
                 notificarAlteracaoBD();
-                return res.status(201);
+                return res.status(200).json(pedidoExistente);
             }
 
             const pedidoCriado = await Pedido.create(req.body);
