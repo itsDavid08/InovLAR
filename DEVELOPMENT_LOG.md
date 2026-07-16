@@ -3186,3 +3186,38 @@ Plano de refactor em 6 fases; esta é a Fase 0 (fundações + quick wins).
   `.sos-button`/`.aac-section` (sem referências em JSX).
 - **Esqueleto i18n criado** — `Client/src/i18n/{pt.js,index.js}`; as strings migram gradualmente
   à medida que cada fase toca nos componentes.
+
+---
+
+## 2026-07-16 — Refactor SOLID/Clean Code: Fase 1 (Server)
+
+### Alterações
+- **Tratamento central de erros** — `middleware/errorHandler.js` registado como último middleware
+  no `main.js`. O Express 5 encaminha promises rejeitadas dos handlers async para lá, por isso os
+  controllers perderam todo o boilerplate try/catch. Respostas de erro uniformizadas em
+  `{ mensagem }` (o campo que o Client já mostrava nos ecrãs de auth) e sem `erro.message` a vazar
+  detalhes internos (fecha um item 🟡 da auditoria). ValidationError→400, FK→400, Multer→400,
+  `err.status` respeitado, resto→500 genérico.
+- **Whitelists (mass assignment fechado, item 🟠 da auditoria)** — `createPedido` só aceita
+  `{ emergencia, utenteId, botaoId }`; `updatePedido` só `{ estado }` (validado contra o ENUM);
+  `create/updateBotao` só `{ nome, mensagem, imagem, categoria }`. Updates passaram ao padrão
+  `findByPk` + `instance.update()` — evita a ambiguidade do `affectedRows` do MariaDB (update
+  sem alteração de valores contava 0 e dava falso 404).
+- **Uploads extraídos** — `middleware/uploads.js` (2 configs multer + `imageFileFilter` partilhado
+  + `isPersonalUtentePhoto`) e `controller/imageController.js` (handlers que estavam inline no
+  route.js + o GET /imagesBotoes que vivia em `routes/images.js`, agora eliminado). O `route.js`
+  ficou só com routing e deixou de importar modelos.
+- **Endpoints removidos** — `GET /localIP` (sem uso no Client; expunha topologia da rede — item 🟡)
+  e `GET /botoes/utente/:utenteId` (sem uso E partido: o modelo Botao não tem coluna `utenteId`,
+  a associação é belongsToMany via UtenteBotoes; a query rebentava com "unknown column").
+- **DRY** — `Util/applyTemplate.js` (aplicar template a utente, usado na criação de utente e no
+  `/tabelas-padrao/:id/aplicar`); `config/constants.js` (`PEDIDO_STATES`, `DEVICES` — o array de
+  dispositivos estava duplicado em 2 controllers); `MIN_PASSWORD_DIGITS` movido para `config/auth.js`;
+  `PEDIDO_INCLUDES` no pedidoController.
+- **Internals em inglês** — handlers renomeados (verbos EN + substantivos de domínio PT:
+  `getAllUtentes`, `createPedido`, `associateBotao`, `tabelaPadraoController.list/create/update/
+  remove/apply`); comentários traduzidos. Rotas e campos da API/BD inalterados.
+
+### Nota
+`CLAUDE.md` tem a lista de endpoints desatualizada (os 2 removidos + `GET /localIP`); fica para
+atualizar no fim (tem alterações locais do autor por commitar).

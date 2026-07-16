@@ -18,4 +18,7 @@ if (!COOKIE_SECRET) {
     COOKIE_SECRET = 'dev-only-cookie-secret-inseguro-nao-usar-em-producao';
 }
 
-module.exports = { COOKIE_SECRET };
+// Tamanho mínimo do PIN do staff (nº de dígitos).
+const MIN_PASSWORD_DIGITS = 4;
+
+module.exports = { COOKIE_SECRET, MIN_PASSWORD_DIGITS };

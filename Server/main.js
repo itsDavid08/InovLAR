@@ -9,7 +9,7 @@ const { StaffAuth, StaffSession, TabelaLayout, TabelaPadrao } = require('./model
 const app = express();
 const port = 3000;
 const router = require('./routes/route.js');
-const imagesRouter = require('./routes/images');
+const { errorHandler } = require('./middleware/errorHandler');
 const path = require('path');
 const DIST = path.join(__dirname, '../Client/dist');
 
@@ -35,11 +35,15 @@ app.use(express.static('public'));
 app.use(express.static(DIST));
 
 app.use(router);
-app.use(imagesRouter);
 
+// SPA fallback: qualquer rota não-API devolve o index do React.
 app.use((req, res) => {
   res.sendFile(path.join(DIST, 'index.html'));
 });
+
+// Tratamento central de erros (tem de ser o último middleware). O Express 5
+// encaminha para aqui as promises rejeitadas dos handlers async.
+app.use(errorHandler);
 
 // Criação do servidor HTTP e integração com socket.io
 const server = http.createServer(app);

@@ -1,81 +1,45 @@
-const { Botao, Utente } = require('../models');
+const { Botao } = require("../models");
 const { notificarAlteracaoBD } = require("../Util/socketIO");
 
-// Definir os métodos como propriedades do objeto botaoController
+// Whitelist: only these fields ever reach the model (no mass assignment).
+const pickBotaoFields = (body) => {
+    const { nome, mensagem, imagem, categoria } = body;
+    const fields = { nome, mensagem, imagem, categoria };
+    Object.keys(fields).forEach((k) => fields[k] === undefined && delete fields[k]);
+    return fields;
+};
+
 const botaoController = {
-    // Obter todos os botões
+    // GET /botoes — the shared button catalog (open: the board needs it).
     getAllBotoes: async (req, res) => {
-        try {
-            const botoes = await Botao.findAll();
-            res.json(botoes);
-        } catch (error) {
-            console.error("Erro ao obter botões:", error);
-            res.status(500).json({ erro: 'Erro ao obter os botões' });
-        }
+        const botoes = await Botao.findAll();
+        res.json(botoes);
     },
 
-    // Procurar botões por ID de utente
-    getBotoesByUtenteId: async (req, res) => {
-        const utenteId = req.params.utenteId;
-        try {
-            const botoes = await Botao.findAll({
-                where: { utenteId }
-            });
-            res.json(botoes);
-        } catch (error) {
-            res.status(500).json({ erro: 'Erro ao procurar os botões do utente' });
-        }
-    },
-
-    // Criar um novo botão
+    // POST /botoes
     createBotao: async (req, res) => {
-        try {
-
-            const botao = await Botao.create(req.body);
-            notificarAlteracaoBD();
-            res.status(201).json(botao);
-        } catch (error) {
-            res.status(500).json({ erro: 'Erro ao criar o botão' });
-        }
+        const botao = await Botao.create(pickBotaoFields(req.body));
+        notificarAlteracaoBD();
+        res.status(201).json(botao);
     },
 
-    // Atualizar um botão
+    // PUT /botoes/:id
     updateBotao: async (req, res) => {
-        const botaoId = req.params.id;
-        try {
-            const [updated] = await Botao.update(req.body, {
-                where: { id: botaoId }
-            });
-            if (updated) {
-                const botaoAtualizado = await Botao.findByPk(botaoId);
-                notificarAlteracaoBD();
-                res.json(botaoAtualizado);
-            } else {
-                res.status(404).json({ erro: 'Botão não encontrado' });
-            }
-        } catch (error) {
-            res.status(500).json({ erro: 'Erro ao atualizar o botão' });
-        }
+        const botao = await Botao.findByPk(req.params.id);
+        if (!botao) return res.status(404).json({ mensagem: "Botão não encontrado" });
+
+        await botao.update(pickBotaoFields(req.body));
+        notificarAlteracaoBD();
+        res.json(botao);
     },
 
-    // Eliminar um botão
+    // DELETE /botoes/:id
     deleteBotao: async (req, res) => {
-        const botaoId = req.params.id;
-        try {
-            const deleted = await Botao.destroy({
-                where: { id: botaoId }
-            });
-            if (deleted) {
-                notificarAlteracaoBD();
-                res.json({ mensagem: 'Botão eliminado com sucesso' });
-            } else {
-                res.status(404).json({ erro: 'Botão não encontrado' });
-            }
-        } catch (error) {
-            res.status(500).json({ erro: 'Erro ao eliminar o botão' });
-            console.log("Erro ao eliminar o botão:", error);
-        }
-    }
+        const deleted = await Botao.destroy({ where: { id: req.params.id } });
+        if (!deleted) return res.status(404).json({ mensagem: "Botão não encontrado" });
+        notificarAlteracaoBD();
+        res.json({ mensagem: "Botão eliminado com sucesso" });
+    },
 };
 
 module.exports = botaoController;

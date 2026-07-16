@@ -1,157 +1,106 @@
-const { Pedido, Botao, Utente } = require('../models');
+const { Pedido, Botao, Utente } = require("../models");
 const { notificarAlteracaoBD } = require("../Util/socketIO");
+const { PEDIDO_STATES } = require("../config/constants");
 
+// Every pedido read joins its botão and utente — the clients render both.
+const PEDIDO_INCLUDES = [
+    { model: Botao, as: "botao" },
+    { model: Utente, as: "utente" },
+];
+
+// Errors thrown here (invalid data, DB failures) are handled by the central
+// errorHandler middleware — Express 5 forwards rejected promises to it.
 const pedidoController = {
-    // Buscar pedidos ativos ordenados por hora de criação (mais recentes primeiro)
-    getPedidosAtivosPorHora: async (req, res) => {
-        try {
-            const pedidos = await Pedido.findAll({
-                where: { estado: 'pendente' },
-                order: [['hora', 'DESC']],
-                include: [
-                    { model: Botao, as: 'botao' },
-                    { model: Utente, as: 'utente' }
-                ]
-
-            });
-            res.json(pedidos);
-        } catch (error) {
-            res.status(500).json({ erro: 'Erro ao obter os pedidos ativos por hora' });
-        }
+    // GET /pedidos/ativos/hora — pending, newest first.
+    getActivePedidosByTime: async (req, res) => {
+        const pedidos = await Pedido.findAll({
+            where: { estado: PEDIDO_STATES.PENDING },
+            order: [["hora", "DESC"]],
+            include: PEDIDO_INCLUDES,
+        });
+        res.json(pedidos);
     },
 
-    // Buscar pedidos ativos ordenados por emergência e hora (emergências primeiro, depois mais recentes)
-    getPedidosAtivosPorEmergencia: async (req, res) => {
-        try {
-            const pedidos = await Pedido.findAll({
-                where: { estado: 'pendente' },
-                order: [
-                    ['emergencia', 'DESC'],
-                    ['hora', 'ASC']
-                ],
-                include: [
-                    { model: Botao, as: 'botao' },
-                    { model: Utente, as: 'utente' }
-                ]
-            });
-            res.json(pedidos);
-        } catch (error) {
-            res.status(500).json({ erro: 'Erro ao obter os pedidos ativos por emergência' });
-        }
+    // GET /pedidos/ativos/emergencia — pending, emergencies first, then oldest first.
+    getActivePedidosByEmergency: async (req, res) => {
+        const pedidos = await Pedido.findAll({
+            where: { estado: PEDIDO_STATES.PENDING },
+            order: [
+                ["emergencia", "DESC"],
+                ["hora", "ASC"],
+            ],
+            include: PEDIDO_INCLUDES,
+        });
+        res.json(pedidos);
     },
 
-    // Obter todos os pedidos
-    getTodosPedidos: async (req, res) => {
-        try {
-            const pedidos = await Pedido.findAll({
-                include: [
-                { model: Botao, as: 'botao' },
-                { model: Utente, as: 'utente' }
-            ]
-            });
-            res.json(pedidos);
-        } catch (error) {
-            res.status(500).json({ erro: 'Erro ao obter os pedidos' });
-        }
+    // GET /pedidos
+    getAllPedidos: async (req, res) => {
+        const pedidos = await Pedido.findAll({ include: PEDIDO_INCLUDES });
+        res.json(pedidos);
     },
 
-    // Obter pedido por ID
-    getPedidoPorId: async (req, res) => {
-        try {
-            const pedido = await Pedido.findByPk(req.params.id);
-            if (!pedido) return res.status(404).json({ erro: 'Pedido não encontrado' });
-            res.json(pedido);
-        } catch (error) {
-            res.status(500).json({ erro: 'Erro ao obter o pedido' });
-        }
+    // GET /pedidos/:id
+    getPedidoById: async (req, res) => {
+        const pedido = await Pedido.findByPk(req.params.id);
+        if (!pedido) return res.status(404).json({ mensagem: "Pedido não encontrado" });
+        res.json(pedido);
     },
 
-    // Obter pedidos por ID de utente
-    getPedidosAtivosPorUtenteId: async (req, res) => {
-        try {
-            const pedidos = await Pedido.findAll({
-                where: { utenteId: req.params.utenteId, estado: 'pendente' },
-                include: [
-                    { model: Botao, as: 'botao' },
-                    { model: Utente, as: 'utente' }
-                ],
-                order: [
-                    ['emergencia', 'DESC'],
-                    ['hora', 'ASC']
-                ]
-            });
-            res.json(pedidos);
-        } catch (error) {
-            res.status(500).json({ erro: 'Erro ao obter os pedidos do utente' });
-        }
+    // GET /pedidos/utente/:utenteId — the board's own pending pedidos (open route).
+    getActivePedidosByUtenteId: async (req, res) => {
+        const pedidos = await Pedido.findAll({
+            where: { utenteId: req.params.utenteId, estado: PEDIDO_STATES.PENDING },
+            include: PEDIDO_INCLUDES,
+            order: [
+                ["emergencia", "DESC"],
+                ["hora", "ASC"],
+            ],
+        });
+        res.json(pedidos);
     },
 
-    // Criar um novo pedido
-    criarPedido: async (req, res) => {
-        try {
-            // Verifica se já existe um pedido pendente para o mesmo utente e botão
-            const pedidoExistente = await Pedido.findOne({
-                where: {
-                    utenteId: req.body.utenteId,
-                    botaoId: req.body.botaoId,
-                    estado: 'pendente'
-                }
-            });
+    // POST /pedidos — open route (the board creates pedidos without auth), so the
+    // body is whitelisted: only these three fields ever reach the model.
+    createPedido: async (req, res) => {
+        const { emergencia, utenteId, botaoId } = req.body;
 
-            if (pedidoExistente) {
-                notificarAlteracaoBD();
-                return res.status(200).json(pedidoExistente);
-            }
-
-            const pedidoCriado = await Pedido.create(req.body);
-            const pedido = await Pedido.findByPk(pedidoCriado.id, {
-                include: [
-                    { model: Botao, as: 'botao' },
-                    { model: Utente, as: 'utente' }
-                ]
-            });
+        // Double-tap guard: an identical pending pedido already exists → return it.
+        const existing = await Pedido.findOne({
+            where: { utenteId, botaoId, estado: PEDIDO_STATES.PENDING },
+        });
+        if (existing) {
             notificarAlteracaoBD();
-            res.status(201).json(pedido);
-        } catch (error) {
-            res.status(400).json({ erro: 'Erro ao criar o pedido' });
+            return res.status(200).json(existing);
         }
+
+        const created = await Pedido.create({ emergencia, utenteId, botaoId });
+        const pedido = await Pedido.findByPk(created.id, { include: PEDIDO_INCLUDES });
+        notificarAlteracaoBD();
+        res.status(201).json(pedido);
     },
 
-    // Atualizar um pedido
-    atualizarPedido: async (req, res) => {
-        try {
-            const updated = await Pedido.update(req.body, {
-                where: { id: req.params.id }
-            });
-            if (updated) {
-                const pedidoAtualizado = await Pedido.findByPk(req.params.id);
-                notificarAlteracaoBD();
-                res.json(pedidoAtualizado);
-            } else {
-                res.status(404).json({ erro: 'Pedido não encontrado' });
-            }
-        } catch (error) {
-            console.error("Erro ao atualizar pedido:", error);
-            res.status(400).json({ erro: 'Erro ao atualizar o pedido' });
+    // PUT /pedidos/:id — open route; only the state can change (whitelist).
+    updatePedido: async (req, res) => {
+        const { estado } = req.body;
+        if (!Object.values(PEDIDO_STATES).includes(estado)) {
+            return res.status(400).json({ mensagem: "Estado inválido" });
         }
+        const pedido = await Pedido.findByPk(req.params.id);
+        if (!pedido) return res.status(404).json({ mensagem: "Pedido não encontrado" });
+
+        await pedido.update({ estado });
+        notificarAlteracaoBD();
+        res.json(pedido);
     },
 
-    // Eliminar um pedido
-    eliminarPedido: async (req, res) => {
-        try {
-            const deleted = await Pedido.destroy({
-                where: { id: req.params.id }
-            });
-            if (deleted) {
-                notificarAlteracaoBD();
-                res.json({ mensagem: 'Pedido eliminado com sucesso' });
-            } else {
-                res.status(404).json({ erro: 'Pedido não encontrado' });
-            }
-        } catch (error) {
-            res.status(500).json({ erro: 'Erro ao eliminar o pedido' });
-        }
-    }
+    // DELETE /pedidos/:id
+    deletePedido: async (req, res) => {
+        const deleted = await Pedido.destroy({ where: { id: req.params.id } });
+        if (!deleted) return res.status(404).json({ mensagem: "Pedido não encontrado" });
+        notificarAlteracaoBD();
+        res.json({ mensagem: "Pedido eliminado com sucesso" });
+    },
 };
 
 module.exports = pedidoController;
