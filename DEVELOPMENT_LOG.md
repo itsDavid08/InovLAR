@@ -3221,3 +3221,30 @@ Plano de refactor em 6 fases; esta é a Fase 0 (fundações + quick wins).
 ### Nota
 `CLAUDE.md` tem a lista de endpoints desatualizada (os 2 removidos + `GET /localIP`); fica para
 atualizar no fim (tem alterações locais do autor por commitar).
+
+---
+
+## 2026-07-16 — Refactor SOLID/Clean Code: Fase 2 (infra partilhada do Client)
+
+### Alterações
+- **`api/client.js`** — a base da API passa a poder vir de `VITE_API_URL` (fallback: host atual
+  na porta 3000, como antes); `get` passou a lançar em resposta não-2xx, ficando com o mesmo
+  contrato do `mutate` (antes devolvia silenciosamente o JSON de uma página de erro). Todos os
+  chamadores já tratavam erros (try/catch ou `.catch`), por isso não há mudança de comportamento
+  nos fluxos felizes. Corrigido também o `//imagesBotoes` (barra dupla) no `fetchImagensBotoes`.
+- **Hooks partilhados** — `hooks/useFeedback.js` (toast com auto-dismiss de 3s; estava copiado em
+  3 páginas) e `hooks/useButtonById.js` (mapa id→botão memoizado; copiado em 3 ficheiros).
+- **Componentes partilhados** — `FeedbackToast` (o JSX do toast, copiado em 3 páginas), `Modal`
+  (backdrop + stopPropagation, copiado em 2), `SearchInput` (input com ícone, copiado em 2).
+- **`tabela/constants.js`** — novos `isSOS(botao)` (a regra `categoria==="SOS" || nome==="SOS"`
+  estava em 4 sítios), `defaultConfig(dispositivo)` (copiado em GerirTabela/GerirTemplate),
+  `hasCells(config)` e `devicesWithLayout(configs)` (copiados em TabuleiroComunicacao/TabelasView).
+- **`tabela/useGridGeometry.js`** — geometria da grelha (rows/slots/ocupação/matriz de categorias)
+  num único hook; já adotado no `TabelaPreview`, o editor e o tabuleiro adotam nas Fases 3–4.
+- **`src/constants.js`** — `PEDIDO_STATES` (os literais "pendente"/"concluido"/"cancelado"
+  estavam espalhados); aplicado em RequestListDrawer e PedidosPendentes.
+- **Consistência visual** — TabelasView passou a usar `UtenteAvatar` (foto/cor real do utente)
+  em vez de um círculo de iniciais próprio, ficando igual ao StaffHome.
+- **i18n** — strings das páginas tocadas (GerirTabela, GerirTemplate, TabelasView, StaffHome,
+  TabelaPreview) extraídas para `i18n/pt.js` em secções `common`/`tabelaEditor`/`tabelasView`/
+  `staffHome`; mensagens com interpolação são funções (ex.: `deleteConfirm(nome)`).

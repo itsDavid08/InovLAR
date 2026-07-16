@@ -6,6 +6,7 @@ import { split } from "../Components/pedidos/decorate";
 import { useViewportMode } from "../Components/pedidos/useViewportMode";
 import PedidosTV from "../Components/pedidos/PedidosTV";
 import PedidosPhone from "../Components/pedidos/PedidosPhone";
+import { PEDIDO_STATES } from "../constants";
 import "../index.css";
 
 // Container: mantém o estado/áudio/teclado e escolhe o layout por tamanho de ecrã
@@ -72,7 +73,7 @@ function PedidosPendentes() {
     const handleResolver = (id) => {
         const pedido = pedidosPendentes.find((p) => p.id === id);
         if (!pedido) return;
-        updatePedido(pedido, "concluido");
+        updatePedido(pedido, PEDIDO_STATES.COMPLETED);
     };
 
     const { all } = split(pedidosPendentes, now);

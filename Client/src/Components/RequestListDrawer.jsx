@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useContext } from "react";
 import { Context } from "../ContextProvider";
+import { PEDIDO_STATES } from "../constants";
 
 const RequestListDrawer = ({ visible, onClose }) => {
     const [isOpen, setIsOpen] = useState(false);
@@ -17,15 +18,14 @@ const RequestListDrawer = ({ visible, onClose }) => {
     };
 
     const handleCancel = (pedido) => {
-        updatePedido(pedido, "cancelado");
+        updatePedido(pedido, PEDIDO_STATES.CANCELLED);
     };
     const handleDone = (pedido) => {
-        updatePedido(pedido, "concluido");
+        updatePedido(pedido, PEDIDO_STATES.COMPLETED);
     };
 
-    // Definição da função para concluir todos os pedidos
     const resolveTodosPedidos = () => {
-        pedidosUtilizador.forEach((pedido) => updatePedido(pedido, "concluido"));
+        pedidosUtilizador.forEach((pedido) => updatePedido(pedido, PEDIDO_STATES.COMPLETED));
     };
 
     return (

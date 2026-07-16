@@ -6,6 +6,8 @@ import StaffSidebar from "../Components/layout/StaffSidebar";
 import ItemMenu from "../Components/layout/ItemMenu";
 import { tokenDoUtente } from "../utils/utenteToken";
 import UtenteAvatar from "../Components/utentes/UtenteAvatar";
+import SearchInput from "../Components/SearchInput";
+import { t } from "../i18n";
 
 const StaffHome = () => {
     const { utentes, setUtente, deleteUtente, apiUrl } = useContext(Context);
@@ -33,7 +35,7 @@ const StaffHome = () => {
     };
 
     const handleDelete = async (utente) => {
-        if (window.confirm(`Tens certeza que pretendes eliminar ${utente.nome}?`)) {
+        if (window.confirm(t.staffHome.deleteConfirm(utente.nome))) {
             await deleteUtente(utente.id);
         }
     };
@@ -51,26 +53,19 @@ const StaffHome = () => {
         <StaffShell sidebar={<StaffSidebar />}>
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4 mb-6">
                 <div>
-                    <h2 className="font-display-lg text-3xl md:text-2xl font-bold text-on-surface mb-1">Visão Geral dos Utentes</h2>
-                    <p className="font-body-md text-body-md text-on-surface-variant">Aceda ao perfil de um residente ou adicione um novo.</p>
+                    <h2 className="font-display-lg text-3xl md:text-2xl font-bold text-on-surface mb-1">{t.staffHome.title}</h2>
+                    <p className="font-body-md text-body-md text-on-surface-variant">{t.staffHome.subtitle}</p>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
-                    <div className="relative flex-1 sm:flex-none">
-                        <span className="material-symbols-outlined absolute left-3 top-1/2 transform -translate-y-1/2 text-on-surface-variant text-[20px]">search</span>
-                        <input
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full sm:w-56 pl-10 pr-4 py-2 rounded-full bg-surface-container border-none focus:ring-2 focus:ring-primary font-body-md text-body-md text-on-surface placeholder-on-surface-variant"
-                            placeholder="Procurar utente..."
-                            type="text"
-                        />
-                    </div>
+                    <SearchInput value={searchQuery} onChange={setSearchQuery}
+                        placeholder={t.common.searchUtentePlaceholder}
+                        className="flex-1 sm:flex-none" inputClassName="sm:w-56" />
                     <button
                         onClick={handleNew}
                         className="flex items-center gap-2 px-4 py-2 rounded-full bg-primary text-on-primary font-staff-mono text-staff-mono hover:bg-primary-container hover:text-on-primary-container transition-colors shrink-0"
                     >
                         <span className="material-symbols-outlined">add</span>
-                        Novo Utente
+                        {t.staffHome.newUtente}
                     </button>
                 </div>
             </div>
@@ -121,7 +116,7 @@ const StaffHome = () => {
                                 className="flex-1 py-2 rounded-full font-staff-mono text-staff-mono transition-colors bg-surface-container-high text-on-surface hover:bg-surface-variant"
                                 onClick={(e) => { e.stopPropagation(); handleOpen(utente); }}
                             >
-                                Tabela InovLAR
+                                {t.staffHome.openBoard}
                             </button>
                         </div>
                     </div>

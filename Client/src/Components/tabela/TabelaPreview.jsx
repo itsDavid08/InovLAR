@@ -1,17 +1,16 @@
 import { DISPOSITIVOS } from "./constants";
-import { getSpan, buildOcupacao, extentRows } from "./gridSpans";
+import { getSpan } from "./gridSpans";
+import { useGridGeometry } from "./useGridGeometry";
+import { t } from "../../i18n";
 
-// Pré-visualização read-only de uma tabela (mesma lógica de linhas e spans do editor).
+// Pré-visualização read-only de uma tabela (mesma geometria do editor, via useGridGeometry).
 const TabelaPreview = ({ config, dispositivo, botaoPorId, apiUrl }) => {
     const dev = DISPOSITIVOS[dispositivo];
     const cells = Array.isArray(config?.cells) ? config.cells : [];
     const spans = config?.spans || {};
     const cols = config?.cols || dev.colsDefault;
-    const [aspW, aspH] = dev.aspect.split("/").map((n) => parseFloat(n));
     const temBotoes = cells.some((v) => v != null);
-    const rows = Math.max(Math.round((cols * aspH) / aspW), extentRows(cells, spans, cols), 1);
-    const slots = rows * cols;
-    const ocupacao = buildOcupacao(cells, spans, cols);
+    const { rows, slots, ocupacao } = useGridGeometry({ cells, spans, cols, dispositivo });
 
     // Slot do cartão: tamanho fixo, igual para os 3 dispositivos — não é o `dev.aspect`
     // que dita o tamanho do cartão (um smartphone em retrato faria o cartão da grelha
@@ -29,7 +28,7 @@ const TabelaPreview = ({ config, dispositivo, botaoPorId, apiUrl }) => {
     if (!temBotoes) {
         return slot(
             <div className="w-full h-full flex items-center justify-center text-on-surface-variant">
-                <span className="font-staff-mono text-staff-mono">Sem botões</span>
+                <span className="font-staff-mono text-staff-mono">{t.tabelaEditor.noButtons}</span>
             </div>
         );
     }

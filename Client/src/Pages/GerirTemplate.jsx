@@ -3,10 +3,13 @@ import { useParams, useNavigate } from "react-router-dom";
 import { Context } from "../ContextProvider";
 import { fetchTabelasPadrao, saveTabelaPadrao } from "../api/tabelasPadrao";
 import TabelaEditor from "../Components/tabela/TabelaEditor";
-import { DISPOSITIVOS } from "../Components/tabela/constants";
+import { DISPOSITIVOS, defaultConfig } from "../Components/tabela/constants";
+import { useFeedback } from "../hooks/useFeedback";
+import FeedbackToast from "../Components/FeedbackToast";
+import { t } from "../i18n";
 
-const defaultConfig = (d) => ({ cols: DISPOSITIVOS[d].colsDefault, size: "M", cells: [], spans: {}, coresCategoria: {} });
-const configsVazias = () => ({ smartphone: defaultConfig("smartphone"), tablet: defaultConfig("tablet"), pc: defaultConfig("pc") });
+const configsVazias = () =>
+    Object.fromEntries(Object.keys(DISPOSITIVOS).map((d) => [d, defaultConfig(d)]));
 
 const GerirTemplate = () => {
     const { id } = useParams();
@@ -18,7 +21,7 @@ const GerirTemplate = () => {
     const [configs, setConfigs] = useState(configsVazias());
     const [dirty, setDirty] = useState(false);
     const [saving, setSaving] = useState(false);
-    const [feedback, setFeedback] = useState(null);
+    const [feedback, setFeedback] = useFeedback();
     const [carregado, setCarregado] = useState(false);
 
     useEffect(() => {
@@ -38,12 +41,6 @@ const GerirTemplate = () => {
         return () => { vivo = false; };
     }, [id]);
 
-    useEffect(() => {
-        if (!feedback) return;
-        const tt = setTimeout(() => setFeedback(null), 3000);
-        return () => clearTimeout(tt);
-    }, [feedback]);
-
     const cfg = configs[dispositivo];
     const patch = (p) => { setConfigs((prev) => ({ ...prev, [dispositivo]: { ...prev[dispositivo], ...p } })); setDirty(true); };
 
@@ -52,20 +49,20 @@ const GerirTemplate = () => {
         try {
             await saveTabelaPadrao(id, { nome, configs });
             setDirty(false);
-            setFeedback({ tipo: "ok", texto: "Template guardado" });
+            setFeedback({ tipo: "ok", texto: t.tabelaEditor.templateSaved });
         } catch {
-            setFeedback({ tipo: "erro", texto: "Erro ao guardar. Tenta novamente." });
+            setFeedback({ tipo: "erro", texto: t.tabelaEditor.saveError });
         } finally {
             setSaving(false);
         }
     };
 
-    if (!carregado) return <div className="min-h-screen flex items-center justify-center text-on-surface-variant font-body-md">A carregar template…</div>;
+    if (!carregado) return <div className="min-h-screen flex items-center justify-center text-on-surface-variant font-body-md">{t.tabelaEditor.loadingTemplate}</div>;
 
     return (
         <>
             <TabelaEditor
-                titulo="Gerir Template"
+                titulo={t.tabelaEditor.manageTemplateTitle}
                 utenteNome={nome}
                 botoes={botoes}
                 apiUrl={apiUrl}
@@ -86,13 +83,7 @@ const GerirTemplate = () => {
                 onSave={onSave}
                 onVoltar={() => navigate("/staff/tabelas")}
             />
-            {feedback && (
-                <div role="status"
-                    className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-5 py-3 rounded-full shadow-lg text-staff-mono font-semibold ${feedback.tipo === "ok" ? "bg-primary text-on-primary" : "bg-error text-on-error"}`}>
-                    <span className="material-symbols-outlined text-[20px]">{feedback.tipo === "ok" ? "check_circle" : "error"}</span>
-                    {feedback.texto}
-                </div>
-            )}
+            <FeedbackToast feedback={feedback} />
         </>
     );
 };

@@ -4,7 +4,7 @@ import { get, mutate, apiUrl } from "./client";
 export const fetchBotoes = () => get("botoes");
 
 // Lista de imagens disponíveis (usada no editor de botões).
-export const fetchImagensBotoes = () => get("/imagesBotoes");
+export const fetchImagensBotoes = () => get("imagesBotoes");
 
 export async function updateBotao(botao) {
     const res = await mutate(`botoes/${botao.id}`, {

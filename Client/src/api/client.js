@@ -1,13 +1,17 @@
 // Base e helpers partilhados das chamadas à API.
-// A base é a mesma origem em produção e :3000 em desenvolvimento (Vite).
-export const apiUrl = `${window.location.protocol}//${window.location.hostname}:3000/`;
+// A base pode ser definida por VITE_API_URL (tem de terminar em "/"); por omissão
+// é o host atual na porta 3000 (mesma origem em produção, :3000 em dev/Vite).
+export const apiUrl =
+    import.meta.env.VITE_API_URL ||
+    `${window.location.protocol}//${window.location.hostname}:3000/`;
 
-// GET simples — devolve o JSON. Não verifica o estado de propósito: espelha o
-// comportamento original dos `fetch` de leitura do ContextProvider.
+// GET simples — devolve o JSON; lança se a resposta não for 2xx (contrato igual
+// ao do `mutate`). Quem chama trata o erro (try/catch ou .catch).
 //  - `auth: true` envia o cookie de sessão (leituras só-staff: roster, agregados de pedidos,
 //    layouts, templates). Os endpoints abertos (tabuleiro do utente) ficam sem credenciais.
 export async function get(path, { auth = false } = {}) {
     const res = await fetch(apiUrl + path, auth ? { credentials: "include" } : {});
+    if (!res.ok) throw new Error(`GET ${path} falhou (${res.status})`);
     return res.json();
 }
 

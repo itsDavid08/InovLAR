@@ -39,6 +39,28 @@ export const TAMANHOS = {
 
 export const COL_OPCOES = [2, 3, 4, 5, 6];
 
+// SOS é especial em todo o lado (sem cor de categoria, sem fusão, estilo próprio).
+// Regra única — antes estava copiada em 4 sítios.
+export const isSOS = (botao) =>
+    !!botao && (botao.categoria === "SOS" || botao.nome === "SOS");
+
+// Config vazia de um dispositivo (estado inicial dos editores).
+export const defaultConfig = (dispositivo) => ({
+    cols: DISPOSITIVOS[dispositivo].colsDefault,
+    size: "M",
+    cells: [],
+    spans: {},
+    coresCategoria: {},
+});
+
+// True se a config tem pelo menos um botão colocado.
+export const hasCells = (config) =>
+    !!config && Array.isArray(config.cells) && config.cells.some((v) => v != null);
+
+// Dispositivos de um mapa de configs { dispositivo: config } com layout preenchido.
+export const devicesWithLayout = (configs) =>
+    Object.keys(DISPOSITIVOS).filter((d) => hasCells(configs?.[d]));
+
 // escala do ícone/texto consoante a densidade (menos colunas = botões maiores)
 export const escalaPorColunas = (cols) =>
     cols <= 4 ? "G" : cols <= 6 ? "M" : "P";
@@ -75,7 +97,7 @@ export const matrizCategorias = (cells, spans, cols, rows, botaoPorId) => {
     const grid = Array.from({ length: rows }, () => Array(cols).fill(null));
     cells.forEach((botaoId, pos) => {
         const b = botaoPorId[botaoId];
-        if (!b || b.categoria === "SOS" || b.nome === "SOS") return;
+        if (!b || isSOS(b)) return;
         const { w, h } = getSpan(spans, pos);
         for (const p of footprint(pos, w, h, cols) || [pos]) {
             const r = Math.floor(p / cols),
