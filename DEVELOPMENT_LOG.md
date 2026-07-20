@@ -3287,3 +3287,28 @@ exercita. A lógica foi extraída preservando-a linha a linha, mas uma regressã
 cair uma célula ao lado, resize a inverter a meio, fusão de cores dessincronizada) só aparece a
 interagir. Testar no browser: colocar/mover/remover botões (1×1 e >1×1), redimensionar pelos 8
 puxadores, pinch-zoom em touch, cores por categoria, trocar de dispositivo, guardar/descartar.
+
+---
+
+## 2026-07-16 — Refactor SOLID/Clean Code: Fase 4a (TabuleiroComunicacao)
+
+### Alterações — `Client/src/`
+- **`Components/tabela/GrelhaTabuleiro.jsx`** (novo) — a função `renderTabela` (~100 linhas) do
+  tabuleiro era um componente disfarçado; extraída, passou a usar o `useGridGeometry` partilhado
+  (mesma geometria do editor e do preview) e o `isSOS`. Markup dos botões (Bootstrap) inalterado.
+- **`Components/tabela/useTipoDispositivo.js`** (novo) — deteção de dispositivo por largura de ecrã
+  (breakpoints próprios que mapeiam para as chaves de DISPOSITIVOS; distintos do `useViewportMode`
+  dos Pedidos Pendentes).
+- **`hooks/useAlarmeEmergencia.js`** (novo) — o alarme sonoro era um `useEffect` **sem array de
+  dependências** (corria em todos os renders, fazendo pause+play a cada mudança de estado). Agora
+  reage só à transição de `ativo` (`[ativo]`), mantendo o som contínuo entre re-renders.
+- **`Pages/TabuleiroComunicacao.jsx`** — 407 → ~215 linhas. Adota os 3 hooks acima + o
+  `GrelhaTabuleiro`; literais de estado trocados por `PEDIDO_STATES`; SOS por `isSOS`; strings para
+  `i18n/pt.js` (secção `tabuleiro`). Os overlays (SuccessModal/Drawer/PinPrompt) deixaram de estar
+  agrupados numa variável e ficam inline no fim do JSX.
+
+### Nota
+A propagação de erro do `postPedido` (hoje o modal de sucesso aparece mesmo se o POST falhar, porque
+o ContextProvider engole o erro) fica para a Fase 4b, onde as funções do contexto passam a propagar.
+Os 2 warnings de exhaustive-deps no ficheiro (efeitos "correr ao mudar de id / à montagem") também se
+resolvem melhor em 4b, ao estabilizar as funções do contexto.

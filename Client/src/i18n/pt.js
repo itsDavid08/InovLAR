@@ -83,4 +83,12 @@ export default {
         openBoard: "Tabela InovLAR",
         deleteConfirm: (nome) => `Tens certeza que pretendes eliminar ${nome}?`,
     },
+    tabuleiro: {
+        requestList: "Lista de Pedidos",
+        imOk: "Estou Bem",
+        staff: "Staff",
+        staffAccess: "Acesso staff",
+        noTable: "Sem tabela configurada",
+        noTableHint: "Peça ao staff para configurar a tabela deste utente.",
+    },
 };

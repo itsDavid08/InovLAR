@@ -1,20 +1,16 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { useContext, useEffect, useState, useRef, useMemo } from "react";
+import { useContext, useEffect, useState } from "react";
 import { Context } from "../ContextProvider";
 import { staffLogout } from "../api/auth";
 import { fetchTabela } from "../api/tabela";
 import { idDoToken } from "../utils/utenteToken";
-import {
-    DISPOSITIVOS,
-    resolverCorCategoria,
-    matrizCategorias,
-    raioFusao,
-} from "../Components/tabela/constants";
-import {
-    getSpan,
-    buildOcupacao,
-    extentRows,
-} from "../Components/tabela/gridSpans";
+import { DISPOSITIVOS, isSOS, hasCells } from "../Components/tabela/constants";
+import { useTipoDispositivo } from "../Components/tabela/useTipoDispositivo";
+import GrelhaTabuleiro from "../Components/tabela/GrelhaTabuleiro";
+import { useButtonById } from "../hooks/useButtonById";
+import { useAlarmeEmergencia } from "../hooks/useAlarmeEmergencia";
+import { PEDIDO_STATES } from "../constants";
+import { t } from "../i18n";
 import RequestListDrawer from "../Components/RequestListDrawer.jsx";
 import SuccessModal from "../Components/SuccessModal.jsx";
 import PinPrompt from "../Components/PinPrompt.jsx";
@@ -33,33 +29,20 @@ const TabuleiroComunicacao = () => {
         setStaffUnlocked,
         apiUrl,
     } = useContext(Context);
-    const audioRef = useRef(null);
+    const navigate = useNavigate();
 
-    const SOS_BUTTON = botoes.find((b) => b.nome === "SOS");
+    const SOS_BUTTON = botoes.find((b) => isSOS(b));
+    const botaoPorId = useButtonById(botoes);
 
     const [isDrawerVisible, setDrawerVisible] = useState(false);
     const [isModalVisible, setModalVisible] = useState(false);
     const [isPinVisible, setPinVisible] = useState(false);
-    const navigate = useNavigate();
 
-    const botaoPorId = useMemo(
-        () => Object.fromEntries(botoes.map((b) => [b.id, b])),
-        [botoes],
-    );
+    // Alarme sonoro enquanto houver uma emergência pendente deste utente.
+    useAlarmeEmergencia(!!utente?.pedidos?.some((p) => p.emergencia));
 
-    // Dispositivo pelo tamanho do ecrã (responsivo)
-    const tipoDispositivo = () => {
-        const w = window.innerWidth;
-        return w < 600 ? "smartphone" : w < 1024 ? "tablet" : "pc";
-    };
-    const [dispositivo, setDispositivo] = useState(tipoDispositivo);
-    useEffect(() => {
-        const onResize = () => setDispositivo(tipoDispositivo());
-        window.addEventListener("resize", onResize);
-        return () => window.removeEventListener("resize", onResize);
-    }, []);
-
-    // Layouts guardados deste utente, por dispositivo
+    // Dispositivo pelo tamanho do ecrã, e layouts guardados deste utente por dispositivo.
+    const dispositivo = useTipoDispositivo();
     const [configs, setConfigs] = useState({});
     const [carregado, setCarregado] = useState(false);
     useEffect(() => {
@@ -80,12 +63,10 @@ const TabuleiroComunicacao = () => {
         };
     }, [id]);
 
-    const temCells = (c) =>
-        c && Array.isArray(c.cells) && c.cells.some((v) => v != null);
     // dispositivo do ecrã detetado; se vazio, o primeiro configurado; senão null (→ estado "sem tabela")
-    const dispositivoAtivo = temCells(configs[dispositivo])
+    const dispositivoAtivo = hasCells(configs[dispositivo])
         ? dispositivo
-        : Object.keys(DISPOSITIVOS).find((k) => temCells(configs[k])) || null;
+        : Object.keys(DISPOSITIVOS).find((k) => hasCells(configs[k])) || null;
     const configAtiva = dispositivoAtivo ? configs[dispositivoAtivo] : null;
 
     // Saída da gaiola: o PIN correto reabre o console de staff; cancelar/errar
@@ -115,224 +96,48 @@ const TabuleiroComunicacao = () => {
         staffLogout().catch(() => {});
     }, []);
 
-    useEffect(() => {
-        if (!audioRef.current) {
-            audioRef.current = new Audio("/Warning-alarm-tone.mp3");
-            audioRef.current.loop = true;
-        }
-        const existeEmergencia = utente?.pedidos?.some((p) => p.emergencia);
-        if (existeEmergencia) {
-            audioRef.current.play().catch(() => {});
-        } else {
-            audioRef.current.pause();
-            audioRef.current.currentTime = 0;
-        }
-        return () => {
-            if (audioRef.current) {
-                audioRef.current.pause();
-                audioRef.current.currentTime = 0;
-            }
-        };
-    });
-
     const handleButtonClick = (button) => {
-        const audio = new Audio("/Check-mark-ding-sound-effect.mp3");
-        audio.play().catch(() => {});
-        showModal();
-        setTimeout(() => hideModal(), 1000);
-        const novoPedido = {
-            emergencia: false,
-            utenteId: utente.id,
-            botaoId: button.id,
-        };
-        postPedido(novoPedido);
+        new Audio("/Check-mark-ding-sound-effect.mp3").play().catch(() => {});
+        showModalBriefly();
+        postPedido({ emergencia: false, utenteId: utente.id, botaoId: button.id });
     };
 
     const handleButtonSOS = () => {
-        showModal();
-        setTimeout(() => hideModal(), 1000);
-
-        // Verifica se já existe um pedido de emergência pendente para este utente e botão
+        showModalBriefly();
+        // Alterna: se já existir uma emergência pendente deste utente, cancela-a; senão cria.
         const pedidoEmergencia = utente?.pedidos?.find(
-            (p) =>
-                p.botaoId === SOS_BUTTON.id &&
-                p.emergencia &&
-                p.estado === "pendente",
+            (p) => p.botaoId === SOS_BUTTON.id && p.emergencia && p.estado === PEDIDO_STATES.PENDING,
         );
-
         if (pedidoEmergencia) {
-            // Cancela o pedido de emergência existente
-            updatePedido(
-                { ...pedidoEmergencia, estado: "cancelado" },
-                "cancelado",
-            );
+            updatePedido(pedidoEmergencia, PEDIDO_STATES.CANCELLED);
         } else {
-            // Cria novo pedido de emergência
-            const novoPedido = {
-                emergencia: true,
-                utenteId: utente.id,
-                botaoId: SOS_BUTTON.id,
-            };
-            postPedido(novoPedido);
+            postPedido({ emergencia: true, utenteId: utente.id, botaoId: SOS_BUTTON.id });
         }
     };
 
     const cancelarTodosPedidos = () => {
-        utente?.pedidos.forEach((pedido) => updatePedido(pedido, "cancelado"));
+        utente?.pedidos.forEach((pedido) => updatePedido(pedido, PEDIDO_STATES.CANCELLED));
     };
 
-    const showDrawer = () => setDrawerVisible(true);
-    const hideDrawer = () => setDrawerVisible(false);
-    const showModal = () => setModalVisible(true);
-    const hideModal = () => setModalVisible(false);
-
-    const overlays = (
-        <>
-            <SuccessModal visible={isModalVisible} onClose={hideModal} />
-            <RequestListDrawer
-                visible={isDrawerVisible}
-                onClose={hideDrawer}
-                utente={utente}
-            />
-            {isPinVisible && (
-                <PinPrompt
-                    onSuccess={handleSairGaiola}
-                    onCancel={() => setPinVisible(false)}
-                />
-            )}
-        </>
-    );
-
-    const renderTabela = (config, disp) => {
-        const cols = config.cols || 4;
-        const cells = config.cells || [];
-        const spans = config.spans || {};
-        const coresCategoria = config.coresCategoria || {};
-        const [aspW, aspH] = (DISPOSITIVOS[disp]?.aspect || "16 / 10")
-            .split("/")
-            .map((n) => parseFloat(n));
-        // mesmas linhas que o editor (geométrico) → reproduz o desenho, não estica os botões
-        const rows = Math.max(
-            Math.round((cols * aspH) / aspW),
-            extentRows(cells, spans, cols),
-            1,
-        );
-        const slots = rows * cols;
-        // mapa posição → âncora, para saltar as células cobertas por um botão maior
-        const ocupacao = buildOcupacao(cells, spans, cols);
-        // matriz de categorias do quadro, para a fusão visual dos cantos (raioFusao) —
-        // exige gap 0 na grelha, senão os fundos não "encostam" e a ilusão não resulta.
-        const grid = matrizCategorias(cells, spans, cols, rows, botaoPorId);
-        return (
-            <div
-                className="flex-grow-1"
-                style={{
-                    display: "grid",
-                    gridTemplateColumns: `repeat(${cols}, 1fr)`,
-                    gridTemplateRows: `repeat(${rows}, 1fr)`,
-                    gap: 0,
-                    minHeight: 0,
-                }}
-            >
-                {Array.from({ length: slots }).map((_, pos) => {
-                    const anchor = ocupacao.get(pos);
-                    if (anchor !== undefined && anchor !== pos) return null; // coberta por um botão maior
-                    const b = anchor === pos ? botaoPorId[cells[pos]] : null;
-                    const r = Math.floor(pos / cols),
-                        c = pos % cols;
-                    const { w, h } =
-                        anchor === pos ? getSpan(spans, pos) : { w: 1, h: 1 };
-                    const posStyle = {
-                        gridColumn: `${c + 1} / span ${w}`,
-                        gridRow: `${r + 1} / span ${h}`,
-                    };
-                    if (!b)
-                        return (
-                            <div
-                                key={pos}
-                                style={posStyle}
-                                className="rounded-2xl border-2 border-dashed border-outline-variant bg-surface-container-low"
-                            />
-                        );
-                    const isSOS = b.categoria === "SOS" || b.nome === "SOS";
-                    const cor = !isSOS
-                        ? resolverCorCategoria(b.categoria, coresCategoria)
-                        : null;
-                    return (
-                        <div
-                            key={pos}
-                            className="transition-all"
-                            style={{
-                                ...posStyle,
-                                minHeight: 0,
-                                padding: "4%",
-                                background: cor || "transparent",
-                                ...raioFusao(grid, r, c, w, h),
-                            }}
-                        >
-                            <button
-                                onClick={() =>
-                                    isSOS
-                                        ? handleButtonSOS()
-                                        : handleButtonClick(b)
-                                }
-                                aria-label={b.nome}
-                                className={`btn d-flex flex-column align-items-center justify-content-center rounded overflow-hidden w-100 h-100 ${isSOS ? "btn-danger" : "btn-light border border-secondary"}`}
-                                style={{ minHeight: 0, padding: "2%" }}
-                            >
-                                <img
-                                    src={
-                                        apiUrl +
-                                        (b.imagem ||
-                                            "/imagesBotoes/default.png")
-                                    }
-                                    alt={b.nome}
-                                    style={{
-                                        flex: "1 1 0",
-                                        minHeight: 0,
-                                        maxWidth: "100%",
-                                        objectFit: "contain",
-                                    }}
-                                />
-                                <span
-                                    className="fw-bold text-center text-truncate w-100"
-                                    style={{ fontSize: "min(2.5vw, 16px)" }}
-                                >
-                                    {b.nome}
-                                </span>
-                            </button>
-                        </div>
-                    );
-                })}
-            </div>
-        );
+    const showModalBriefly = () => {
+        setModalVisible(true);
+        setTimeout(() => setModalVisible(false), 1000);
     };
 
     return (
-        <div
-            className="container-fluid p-2 d-flex flex-column"
-            style={{ height: "100vh" }}
-        >
+        <div className="container-fluid p-2 d-flex flex-column" style={{ height: "100vh" }}>
             <div className="d-flex justify-content-between align-items-center mb-2">
                 <div className="d-flex align-items-center gap-2">
-                    <div
-                        style={{
-                            position: "relative",
-                            display: "inline-block",
-                        }}
-                    >
+                    <div style={{ position: "relative", display: "inline-block" }}>
                         <button
-                            onClick={showDrawer}
+                            onClick={() => setDrawerVisible(true)}
                             className="btn-outline-light border d-flex align-items-center gap-2"
                             style={{ fontSize: "14px", padding: "8px 16px" }}
                         >
-                            <span
-                                className="material-symbols-outlined"
-                                style={{ fontSize: "20px" }}
-                            >
+                            <span className="material-symbols-outlined" style={{ fontSize: "20px" }}>
                                 list_alt
                             </span>
-                            Lista de Pedidos
+                            {t.tabuleiro.requestList}
                         </button>
                         {utente?.pedidos?.length > 0 && (
                             <span
@@ -350,56 +155,56 @@ const TabuleiroComunicacao = () => {
                         )}
                     </div>
                     {utente?.pedidos?.length > 0 && (
-                        <button
-                            className="btn btn-success fw-bold"
-                            onClick={cancelarTodosPedidos}
-                        >
-                            Estou Bem
+                        <button className="btn btn-success fw-bold" onClick={cancelarTodosPedidos}>
+                            {t.tabuleiro.imOk}
                         </button>
                     )}
                 </div>
                 <button
                     className="btn btn-outline-light text-muted border"
-                    style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "4px",
-                    }}
+                    style={{ display: "flex", alignItems: "center", gap: "4px" }}
                     onClick={() => setPinVisible(true)}
-                    aria-label="Acesso staff"
+                    aria-label={t.tabuleiro.staffAccess}
                 >
-                    <span
-                        className="material-symbols-outlined"
-                        style={{ fontSize: "20px" }}
-                    >
+                    <span className="material-symbols-outlined" style={{ fontSize: "20px" }}>
                         key
                     </span>
-                    Staff
+                    {t.tabuleiro.staff}
                 </button>
             </div>
 
             {!carregado ? (
                 <div className="flex-grow-1 d-flex align-items-center justify-content-center text-muted">
-                    A carregar…
+                    {t.common.loading}
                 </div>
             ) : configAtiva ? (
-                renderTabela(configAtiva, dispositivoAtivo)
+                <GrelhaTabuleiro
+                    config={configAtiva}
+                    dispositivo={dispositivoAtivo}
+                    botaoPorId={botaoPorId}
+                    apiUrl={apiUrl}
+                    onButtonClick={handleButtonClick}
+                    onSOS={handleButtonSOS}
+                />
             ) : (
                 <div className="flex-grow-1 d-flex flex-column align-items-center justify-content-center text-center text-muted">
-                    <span
-                        className="material-symbols-outlined"
-                        style={{ fontSize: 48 }}
-                    >
+                    <span className="material-symbols-outlined" style={{ fontSize: 48 }}>
                         grid_off
                     </span>
-                    <p className="mt-3 mb-1 fw-bold">Sem tabela configurada</p>
-                    <p className="small">
-                        Peça ao staff para configurar a tabela deste utente.
-                    </p>
+                    <p className="mt-3 mb-1 fw-bold">{t.tabuleiro.noTable}</p>
+                    <p className="small">{t.tabuleiro.noTableHint}</p>
                 </div>
             )}
 
-            {overlays}
+            <SuccessModal visible={isModalVisible} onClose={() => setModalVisible(false)} />
+            <RequestListDrawer
+                visible={isDrawerVisible}
+                onClose={() => setDrawerVisible(false)}
+                utente={utente}
+            />
+            {isPinVisible && (
+                <PinPrompt onSuccess={handleSairGaiola} onCancel={() => setPinVisible(false)} />
+            )}
         </div>
     );
 };
