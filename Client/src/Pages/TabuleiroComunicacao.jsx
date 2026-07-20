@@ -80,12 +80,13 @@ const TabuleiroComunicacao = () => {
     // Força dados frescos ao entrar nesta página — mesmo revisitando o mesmo utente. O
     // ContextProvider sobrevive à navegação da SPA, por isso `utente` pode já estar em
     // contexto (de uma visita anterior) com `pedidos` desatualizados; sem isto só um F5
-    // os atualizava.
+    // os atualizava. (As funções do contexto são estáveis — useCallback — logo o efeito
+    // só corre ao mudar de `id`.)
     useEffect(() => {
         setUtenteId(id);
         fetchUtente(id);
         fetchPedidosUtilizador(id);
-    }, [id]);
+    }, [id, setUtenteId, fetchUtente, fetchPedidosUtilizador]);
 
     // Estar no tabuleiro = estar na "gaiola": fecha o gate de staff E limpa o
     // cookie do dispositivo — entrar no tabuleiro do utente revoga o acesso de
@@ -94,24 +95,34 @@ const TabuleiroComunicacao = () => {
     useEffect(() => {
         setStaffUnlocked(false);
         staffLogout().catch(() => {});
-    }, []);
+    }, [setStaffUnlocked]);
+
+    // Mostra o modal de sucesso só depois de o envio resolver — antes aparecia
+    // sempre, mesmo se o POST falhasse (o erro era engolido no contexto).
+    const enviarPedido = async (pedido) => {
+        try {
+            await postPedido(pedido);
+            showModalBriefly();
+        } catch (err) {
+            console.error("Erro ao enviar pedido:", err);
+        }
+    };
 
     const handleButtonClick = (button) => {
         new Audio("/Check-mark-ding-sound-effect.mp3").play().catch(() => {});
-        showModalBriefly();
-        postPedido({ emergencia: false, utenteId: utente.id, botaoId: button.id });
+        enviarPedido({ emergencia: false, utenteId: utente.id, botaoId: button.id });
     };
 
     const handleButtonSOS = () => {
-        showModalBriefly();
         // Alterna: se já existir uma emergência pendente deste utente, cancela-a; senão cria.
         const pedidoEmergencia = utente?.pedidos?.find(
             (p) => p.botaoId === SOS_BUTTON.id && p.emergencia && p.estado === PEDIDO_STATES.PENDING,
         );
         if (pedidoEmergencia) {
+            showModalBriefly();
             updatePedido(pedidoEmergencia, PEDIDO_STATES.CANCELLED);
         } else {
-            postPedido({ emergencia: true, utenteId: utente.id, botaoId: SOS_BUTTON.id });
+            enviarPedido({ emergencia: true, utenteId: utente.id, botaoId: SOS_BUTTON.id });
         }
     };
 

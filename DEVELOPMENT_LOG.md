@@ -3312,3 +3312,42 @@ A propagação de erro do `postPedido` (hoje o modal de sucesso aparece mesmo se
 o ContextProvider engole o erro) fica para a Fase 4b, onde as funções do contexto passam a propagar.
 Os 2 warnings de exhaustive-deps no ficheiro (efeitos "correr ao mudar de id / à montagem") também se
 resolvem melhor em 4b, ao estabilizar as funções do contexto.
+
+---
+
+## 2026-07-16 — Refactor SOLID/Clean Code: Fase 4b (dividir o ContextProvider)
+
+### Decisão de âmbito
+Contextos separados por domínio (ISP puro) obrigariam a tocar nos 14 consumidores de `useContext`,
+em código sem testes, e o único ganho — evitar re-renders — é teórico aqui (o tabuleiro do utente e
+o monitor do staff nunca estão no mesmo ecrã). Optou-se por **dividir a lógica interna em hooks por
+domínio, mantendo um único `Context`** — ganha-se SRP e testabilidade, zero alterações nos
+consumidores. Separação total de contextos fica para se algum dia houver problema de performance real.
+
+### Alterações — `Client/src/`
+- **`state/useBotoesState.js`, `useUtentesState.js`, `usePedidosState.js`, `useStaffAuthState.js`**
+  (novos) — cada um detém o estado e as operações do seu domínio. O `ContextProvider.jsx` passou de
+  256 linhas (monólito) a ~90, compondo os 4 hooks (`{...botoesState, ...utentesState, ...}`) e
+  mantendo só a orquestração transversal: gating das leituras só-staff, refetch ao mudar de utente,
+  e a integração socket.io.
+- **Mutações propagam o erro (throw)** — as funções deixaram de fazer `catch → console.error` e
+  devolver `undefined`. Quem chama trata o erro. Concretamente fecha o bug do tabuleiro: o
+  `SuccessModal` aparecia **mesmo se o POST falhasse**; agora `enviarPedido` faz `await` e só mostra
+  o modal quando o envio resolve (`TabuleiroComunicacao`).
+- **Callbacks estáveis (`useCallback`)** — as operações dos hooks são estáveis, o que (a) permitiu
+  listar as funções nas dependências dos efeitos do provider sem causar re-execuções/reconexão do
+  socket, e (b) **limpou os 2 warnings de exhaustive-deps** do `TabuleiroComunicacao` (as funções
+  entram agora nas deps dos efeitos `[id]`/montagem sem os fazer re-correr).
+- **Estratégia de atualização uniformizada** — todas as mutações confiam no broadcast `bd_alterado`
+  do socket para re-sincronizar; as atualizações otimistas locais mantêm-se só onde já existiam e são
+  baratas (listas de botões/utentes), por consistência com o código anterior.
+
+### Estado
+`npm run lint`: 0 erros, 4 warnings (todos pré-existentes e alheios: PedidosTV/`fila`,
+PedidosPendentes/`handleVoltar`, e os 2 fast-refresh de UtenteAvatar/ContextProvider — este último
+exigiria mover o `Context` para ficheiro próprio e tocar nos 14 imports). `vite build` OK.
+
+### ⚠️ Verificação pendente
+Testar no browser os fluxos que passam pelo contexto: login/kiosk (entrar/sair da gaiola com PIN,
+reload mantém sessão), criar/editar/eliminar utente e botão, tabuleiro (enviar pedido, SOS on/off,
+"Estou Bem"), monitor de pedidos, e a sincronização em tempo real entre dois dispositivos (socket).
