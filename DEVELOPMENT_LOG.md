@@ -3248,3 +3248,42 @@ atualizar no fim (tem alterações locais do autor por commitar).
 - **i18n** — strings das páginas tocadas (GerirTabela, GerirTemplate, TabelasView, StaffHome,
   TabelaPreview) extraídas para `i18n/pt.js` em secções `common`/`tabelaEditor`/`tabelasView`/
   `staffHome`; mensagens com interpolação são funções (ex.: `deleteConfirm(nome)`).
+
+---
+
+## 2026-07-16 — Refactor SOLID/Clean Code: Fase 3 (partir o TabelaEditor)
+
+### Contexto
+`TabelaEditor.jsx` tinha 1138 linhas com 6 componentes definidos inline + toda a lógica de 3
+gestos distintos (pinch-zoom, resize por arrasto, drag-and-drop de colocação). Era o pior "god
+file" do projeto e a origem apontada pelo utilizador no início do refactor.
+
+### Alterações — `Client/src/Components/tabela/`
+- **Componentes extraídos** (um por ficheiro): `MarchingAnts`, `LibraryTile`, `Segment`, `LibDrop`,
+  `TrashZone`, `GridCell`, e três maiores — `EditorTopBar` (barra + seletor de dispositivo),
+  `PainelCoresCategoria` (painel colapsável de cores), `BibliotecaBotoes` (pesquisa + grupos).
+- **Hooks de gesto** (`hooks/`): `usePinchZoom` (zoom 1–3x por pinça), `useGridResize` (resize
+  WYSIWYG de 8 puxadores com pivô fixo + os `spansEfetivos`/`cellsEfetivas` da pré-visualização),
+  `useDragPlacement` (colocar/mover/remover via dnd-kit + `dragFootprint`). Cada hook expõe
+  `onPlace(cells, spans)`; o editor liga-os a um único `commitPlacement` que faz o `trim` e chama
+  `onPatch` — antes o `trim` estava repetido em cada callback de gesto.
+- **8 puxadores de resize → data-driven** — eram 8 blocos JSX quase idênticos em `GridCell`; agora
+  um `.map` sobre `RESIZE_HANDLES` (`{ handle, pos, cursor }`), com o aria-label a vir do i18n.
+- **Geometria unificada** — o editor passou a usar o `useGridGeometry` da Fase 2 (rows/slots/
+  ocupação/matriz de categorias), em vez do cálculo inline; mesma lógica agora partilhada com o
+  TabelaPreview (e o tabuleiro, na Fase 4).
+- **Interface `config`/`onPatch`** — o editor recebia ~20 props (5 pares valor/setter + flags).
+  Passou a receber um objeto `config` (cols/size/cells/spans/coresCategoria) e um `onPatch(parcial)`.
+  `useTabelaConfigs` (novo) centraliza o estado dos 3 layouts, o `patch` parcial e o conjunto de
+  dispositivos "sujos" — GerirTabela e GerirTemplate deixaram de duplicar esse wiring (~20 linhas
+  cada) e o `defaultConfig`/`configsVazias` local desapareceu.
+
+### Resultado
+`TabelaEditor.jsx`: 1138 → ~340 linhas. `npm run lint` 0 erros; `vite build` OK.
+
+### ⚠️ Verificação pendente (importante)
+Os gestos são pixel-geometry puro e **não há testes automatizados** — o build compila mas não os
+exercita. A lógica foi extraída preservando-a linha a linha, mas uma regressão subtil (botão >1×1 a
+cair uma célula ao lado, resize a inverter a meio, fusão de cores dessincronizada) só aparece a
+interagir. Testar no browser: colocar/mover/remover botões (1×1 e >1×1), redimensionar pelos 8
+puxadores, pinch-zoom em touch, cores por categoria, trocar de dispositivo, guardar/descartar.

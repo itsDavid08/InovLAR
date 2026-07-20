@@ -3,7 +3,8 @@ import { useParams, useNavigate } from "react-router-dom";
 import { Context } from "../ContextProvider";
 import { fetchTabela, saveTabela } from "../api/tabela";
 import TabelaEditor from "../Components/tabela/TabelaEditor";
-import { DISPOSITIVOS, defaultConfig } from "../Components/tabela/constants";
+import { DISPOSITIVOS } from "../Components/tabela/constants";
+import { useTabelaConfigs } from "../Components/tabela/useTabelaConfigs";
 import { useFeedback } from "../hooks/useFeedback";
 import FeedbackToast from "../Components/FeedbackToast";
 import Modal from "../Components/Modal";
@@ -15,18 +16,13 @@ const GerirTabela = () => {
     const { utentes, botoes, apiUrl } = useContext(Context);
     const utente = utentes.find((u) => String(u.id) === String(id));
 
-    const [dispositivo, setDispositivo] = useState("pc");
-    const [configs, setConfigs] = useState({
-        smartphone: defaultConfig("smartphone"),
-        tablet: defaultConfig("tablet"),
-        pc: defaultConfig("pc"),
-    });
-    const [dirty, setDirty] = useState({});
+    const { configs, setConfigs, dispositivo, setDispositivo, cfg, patch, dirtyDevices, dirty, markClean } =
+        useTabelaConfigs();
     const [saving, setSaving] = useState(false);
     const [feedback, setFeedback] = useFeedback();
     const [confirmarSaida, setConfirmarSaida] = useState(false);
 
-    // Carrega os três layouts ao abrir.
+    // Carrega os três layouts ao abrir (não marca dirty — escreve direto no estado).
     useEffect(() => {
         let vivo = true;
         (async () => {
@@ -45,20 +41,14 @@ const GerirTabela = () => {
             });
         })();
         return () => { vivo = false; };
-    }, [id]);
-
-    const cfg = configs[dispositivo];
-    const patch = (p) => {
-        setConfigs((prev) => ({ ...prev, [dispositivo]: { ...prev[dispositivo], ...p } }));
-        setDirty((d) => ({ ...d, [dispositivo]: true }));
-    };
+    }, [id, setConfigs]);
 
     const onSave = async () => {
         setSaving(true);
         try {
-            const alterados = Object.keys(dirty).filter((d) => dirty[d]);
+            const alterados = [...dirtyDevices];
             await Promise.all(alterados.map((d) => saveTabela(id, d, configs[d])));
-            setDirty({});
+            markClean();
             setFeedback({ tipo: "ok", texto: alterados.length > 1 ? t.tabelaEditor.tabelasSaved : t.tabelaEditor.tabelaSaved });
             return true;
         } catch {
@@ -69,8 +59,7 @@ const GerirTabela = () => {
         }
     };
 
-    const dirtyAtivo = Object.values(dirty).some(Boolean);
-    const handleVoltar = () => { if (dirtyAtivo) setConfirmarSaida(true); else navigate("/staff"); };
+    const handleVoltar = () => { if (dirty) setConfirmarSaida(true); else navigate("/staff"); };
     const guardarESair = async () => { if (await onSave()) navigate("/staff"); else setConfirmarSaida(false); };
     const descartarESair = () => { setConfirmarSaida(false); navigate("/staff"); };
 
@@ -86,17 +75,9 @@ const GerirTabela = () => {
                 apiUrl={apiUrl}
                 dispositivo={dispositivo}
                 setDispositivo={setDispositivo}
-                cols={cfg.cols}
-                setCols={(v) => patch({ cols: v })}
-                size={cfg.size}
-                setSize={(v) => patch({ size: v })}
-                cells={cfg.cells}
-                setCells={(fn) => patch({ cells: typeof fn === "function" ? fn(cfg.cells) : fn })}
-                spans={cfg.spans || {}}
-                setSpans={(fn) => patch({ spans: typeof fn === "function" ? fn(cfg.spans || {}) : fn })}
-                coresCategoria={cfg.coresCategoria || {}}
-                setCoresCategoria={(fn) => patch({ coresCategoria: typeof fn === "function" ? fn(cfg.coresCategoria || {}) : fn })}
-                dirty={dirtyAtivo}
+                config={cfg}
+                onPatch={patch}
+                dirty={dirty}
                 saving={saving}
                 onSave={onSave}
                 onVoltar={handleVoltar}

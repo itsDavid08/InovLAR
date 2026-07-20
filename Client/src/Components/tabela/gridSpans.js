@@ -4,6 +4,13 @@
 // da pegada ficam a `null` (reservadas). Ausência de entrada em `spans` = 1x1 (retrocompatível
 // com tabelas guardadas antes desta funcionalidade existir).
 
+// remove nulls finais de um array de cells (mantém-no compacto)
+export const trim = (arr) => {
+    let e = arr.length;
+    while (e > 0 && arr[e - 1] == null) e--;
+    return arr.slice(0, e);
+};
+
 // tamanho de um botão ancorado em `pos` (default 1x1)
 export const getSpan = (spans, pos) => spans?.[pos] || { w: 1, h: 1 };
 
