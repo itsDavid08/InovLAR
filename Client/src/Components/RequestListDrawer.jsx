@@ -5,7 +5,7 @@ import { t } from "../i18n";
 
 const RequestListDrawer = ({ visible, onClose }) => {
     const [isOpen, setIsOpen] = useState(false);
-    const { pedidosUtilizador, updatePedido, apiUrl } = useContext(Context);
+    const { pedidosUtilizador, updatePedidoBoard, apiUrl } = useContext(Context);
 
     useEffect(() => {
         setIsOpen(visible);
@@ -17,14 +17,14 @@ const RequestListDrawer = ({ visible, onClose }) => {
     };
 
     const handleCancel = (pedido) => {
-        updatePedido(pedido, PEDIDO_STATES.CANCELLED);
+        updatePedidoBoard(pedido, PEDIDO_STATES.CANCELLED);
     };
     const handleDone = (pedido) => {
-        updatePedido(pedido, PEDIDO_STATES.COMPLETED);
+        updatePedidoBoard(pedido, PEDIDO_STATES.COMPLETED);
     };
 
     const resolveTodosPedidos = () => {
-        pedidosUtilizador.forEach((pedido) => updatePedido(pedido, PEDIDO_STATES.COMPLETED));
+        pedidosUtilizador.forEach((pedido) => updatePedidoBoard(pedido, PEDIDO_STATES.COMPLETED));
     };
 
     return (

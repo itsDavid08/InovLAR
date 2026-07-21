@@ -2,8 +2,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useContext, useEffect, useState } from "react";
 import { Context } from "../ContextProvider";
 import { staffLogout } from "../api/auth";
-import { fetchTabela } from "../api/tabela";
-import { idDoToken } from "../utils/utenteToken";
+import { bootstrapBoard, fetchBoardTabela } from "../api/board";
 import { DISPOSITIVOS, isSOS, hasCells } from "../Components/tabela/constants";
 import { useTipoDispositivo } from "../Components/tabela/useTipoDispositivo";
 import GrelhaTabuleiro from "../Components/tabela/GrelhaTabuleiro";
@@ -16,13 +15,12 @@ import SuccessModal from "../Components/SuccessModal.jsx";
 import PinPrompt from "../Components/PinPrompt.jsx";
 
 const TabuleiroComunicacao = () => {
-    const { token } = useParams();
-    const id = idDoToken(token);
+    const { accessToken } = useParams();
     const {
         utente,
         botoes,
         postPedido,
-        updatePedido,
+        updatePedidoBoard,
         setUtenteId,
         fetchUtente,
         fetchPedidosUtilizador,
@@ -37,6 +35,7 @@ const TabuleiroComunicacao = () => {
     const [isDrawerVisible, setDrawerVisible] = useState(false);
     const [isModalVisible, setModalVisible] = useState(false);
     const [isPinVisible, setPinVisible] = useState(false);
+    const [bootstrapped, setBootstrapped] = useState(false);
 
     // Alarme sonoro enquanto houver uma emergência pendente deste utente.
     useAlarmeEmergencia(!!utente?.pedidos?.some((p) => p.emergencia));
@@ -46,11 +45,12 @@ const TabuleiroComunicacao = () => {
     const [configs, setConfigs] = useState({});
     const [carregado, setCarregado] = useState(false);
     useEffect(() => {
+        if (!bootstrapped) return;
         let vivo = true;
         Promise.all(
             Object.keys(DISPOSITIVOS).map(async (d) => [
                 d,
-                await fetchTabela(id, d).catch(() => null),
+                await fetchBoardTabela(d).catch(() => null),
             ]),
         ).then((entradas) => {
             if (vivo) {
@@ -61,7 +61,7 @@ const TabuleiroComunicacao = () => {
         return () => {
             vivo = false;
         };
-    }, [id]);
+    }, [bootstrapped]);
 
     // dispositivo do ecrã detetado; se vazio, o primeiro configurado; senão null (→ estado "sem tabela")
     const dispositivoAtivo = hasCells(configs[dispositivo])
@@ -77,16 +77,23 @@ const TabuleiroComunicacao = () => {
         navigate("/staff");
     };
 
-    // Força dados frescos ao entrar nesta página — mesmo revisitando o mesmo utente. O
-    // ContextProvider sobrevive à navegação da SPA, por isso `utente` pode já estar em
-    // contexto (de uma visita anterior) com `pedidos` desatualizados; sem isto só um F5
-    // os atualizava. (As funções do contexto são estáveis — useCallback — logo o efeito
-    // só corre ao mudar de `id`.)
+    // Ao entrar: troca o accessToken da URL por uma sessão de tabuleiro (cookie) e só
+    // então carrega os dados do utente (que vêm da sessão, /board/*). Corre a cada
+    // entrada para garantir dados frescos (o ContextProvider sobrevive à navegação SPA).
     useEffect(() => {
-        setUtenteId(id);
-        fetchUtente(id);
-        fetchPedidosUtilizador(id);
-    }, [id, setUtenteId, fetchUtente, fetchPedidosUtilizador]);
+        let vivo = true;
+        setBootstrapped(false);
+        bootstrapBoard(accessToken)
+            .then(({ id }) => {
+                if (!vivo) return;
+                setUtenteId(id);
+                fetchUtente();
+                fetchPedidosUtilizador();
+                setBootstrapped(true);
+            })
+            .catch((e) => console.error("Erro no bootstrap do tabuleiro:", e));
+        return () => { vivo = false; };
+    }, [accessToken, setUtenteId, fetchUtente, fetchPedidosUtilizador]);
 
     // Estar no tabuleiro = estar na "gaiola": fecha o gate de staff E limpa o
     // cookie do dispositivo — entrar no tabuleiro do utente revoga o acesso de
@@ -110,7 +117,7 @@ const TabuleiroComunicacao = () => {
 
     const handleButtonClick = (button) => {
         new Audio("/Check-mark-ding-sound-effect.mp3").play().catch(() => {});
-        enviarPedido({ emergencia: false, utenteId: utente.id, botaoId: button.id });
+        enviarPedido({ emergencia: false, botaoId: button.id });
     };
 
     const handleButtonSOS = () => {
@@ -120,14 +127,14 @@ const TabuleiroComunicacao = () => {
         );
         if (pedidoEmergencia) {
             showModalBriefly();
-            updatePedido(pedidoEmergencia, PEDIDO_STATES.CANCELLED);
+            updatePedidoBoard(pedidoEmergencia, PEDIDO_STATES.CANCELLED);
         } else {
-            enviarPedido({ emergencia: true, utenteId: utente.id, botaoId: SOS_BUTTON.id });
+            enviarPedido({ emergencia: true, botaoId: SOS_BUTTON.id });
         }
     };
 
     const cancelarTodosPedidos = () => {
-        utente?.pedidos.forEach((pedido) => updatePedido(pedido, PEDIDO_STATES.CANCELLED));
+        utente?.pedidos.forEach((pedido) => updatePedidoBoard(pedido, PEDIDO_STATES.CANCELLED));
     };
 
     const showModalBriefly = () => {

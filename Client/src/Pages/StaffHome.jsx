@@ -4,7 +4,6 @@ import { Context } from "../ContextProvider";
 import StaffShell from "../Components/layout/StaffShell";
 import StaffSidebar from "../Components/layout/StaffSidebar";
 import ItemMenu from "../Components/layout/ItemMenu";
-import { tokenDoUtente } from "../utils/utenteToken";
 import UtenteAvatar from "../Components/utentes/UtenteAvatar";
 import SearchInput from "../Components/SearchInput";
 import { t } from "../i18n";
@@ -23,7 +22,7 @@ const StaffHome = () => {
     // montado em /staff) redirecionaria para o bloqueio durante a navegação.
     const handleOpen = (utente) => {
         setUtente(utente);
-        navigate("/" + tokenDoUtente(utente.id));
+        navigate("/board/" + utente.accessToken);
     };
 
     const handleEdit = (utente) => {

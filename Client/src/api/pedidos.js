@@ -1,9 +1,6 @@
-// Chamadas à API dos pedidos. Devolvem dados; o estado vive no ContextProvider.
-// Nota: criar/atualizar pedidos NÃO envia credenciais — são as rotas abertas que
-// o tablet do utente usa (ver DEVELOPMENT_LOG.md). Só o staff mutila com cookie.
-import { apiUrl, get, mutate } from "./client";
-
-export const fetchPedidosUtente = (id) => get(`pedidos/utente/${id}`);
+// Chamadas à API dos pedidos usadas pelo STAFF. As leituras/escritas do tabuleiro
+// do utente vivem em api/board.js (sessão de tabuleiro, não estas rotas).
+import { apiUrl, mutate } from "./client";
 
 export async function fetchPedidosPendentesEmergencia() {
     // Agregado de todos os pedidos pendentes -> só staff (envia o cookie de sessão).
@@ -12,18 +9,12 @@ export async function fetchPedidosPendentesEmergencia() {
     return res.json();
 }
 
-export function createPedido(pedido) {
-    return mutate("pedidos", {
-        method: "POST",
-        body: pedido,
-        errorMsg: "Failed to create pedido",
-    });
-}
-
+// Monitor de staff: resolve qualquer pedido pendente (sessão de staff).
 export function updatePedido(pedido, novoEstado) {
     return mutate(`pedidos/${pedido.id}`, {
         method: "PUT",
         body: { ...pedido, estado: novoEstado },
+        auth: true,
         errorMsg: "Erro ao atualizar pedido",
     });
 }

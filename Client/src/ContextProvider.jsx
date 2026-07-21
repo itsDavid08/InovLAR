@@ -45,8 +45,9 @@ export const ContextProvider = ({ children }) => {
     useEffect(() => {
         utenteIdRef.current = utenteId;
         if (utenteId) {
-            fetchUtente(utenteId);
-            fetchPedidosUtilizador(utenteId);
+            // Dados do tabuleiro vêm da sessão (/board/*), não de um id na URL.
+            fetchUtente();
+            fetchPedidosUtilizador();
         }
     }, [utenteId, fetchUtente, fetchPedidosUtilizador]);
 
@@ -62,8 +63,8 @@ export const ContextProvider = ({ children }) => {
                 fetchPedidosPendentesByEmergencia();
             }
             if (utenteIdRef.current) {
-                fetchUtente(utenteIdRef.current);
-                fetchPedidosUtilizador(utenteIdRef.current);
+                fetchUtente();
+                fetchPedidosUtilizador();
             }
         });
         return () => socket.disconnect();

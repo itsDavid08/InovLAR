@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import * as pedidosApi from "../api/pedidos";
+import * as boardApi from "../api/board";
 
 // Estado + operações dos pedidos: os pendentes do utente atual (tabuleiro) e os
 // agregados para o monitor do staff. As mutações propagam o erro (throw) — o
@@ -9,8 +10,9 @@ export function usePedidosState() {
     const [pedidosUtilizador, setPedidosUtilizador] = useState([]);
     const [pedidosPendentes, setPedidosPendentes] = useState([]);
 
-    const fetchPedidosUtilizador = useCallback(async (id) => {
-        setPedidosUtilizador(await pedidosApi.fetchPedidosUtente(id));
+    // Pedidos do tabuleiro (utente da sessão) — via /board/*.
+    const fetchPedidosUtilizador = useCallback(async () => {
+        setPedidosUtilizador(await boardApi.fetchBoardPedidos());
     }, []);
 
     // Pendentes de todos os utentes, ordenados por urgência (só-staff).
@@ -18,8 +20,14 @@ export function usePedidosState() {
         setPedidosPendentes(await pedidosApi.fetchPedidosPendentesEmergencia());
     }, []);
 
-    const postPedido = useCallback((pedido) => pedidosApi.createPedido(pedido), []);
+    // Tabuleiro: cria/atualiza pedidos do próprio utente (sessão de tabuleiro).
+    const postPedido = useCallback((pedido) => boardApi.createBoardPedido(pedido), []);
+    const updatePedidoBoard = useCallback(
+        (pedido, novoEstado) => boardApi.updateBoardPedido(pedido, novoEstado),
+        [],
+    );
 
+    // Staff (monitor): resolve qualquer pedido pendente (sessão de staff).
     const updatePedido = useCallback(
         (pedido, novoEstado) => pedidosApi.updatePedido(pedido, novoEstado),
         [],
@@ -33,6 +41,7 @@ export function usePedidosState() {
         fetchPedidosUtilizador,
         fetchPedidosPendentesByEmergencia,
         postPedido,
+        updatePedidoBoard,
         updatePedido,
     };
 }

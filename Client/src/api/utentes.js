@@ -3,12 +3,6 @@ import { apiUrl, get, mutate } from "./client";
 
 export const fetchUtentes = () => get("utentes", { auth: true }); // roster -> só staff
 
-export async function fetchUtente(id) {
-    const res = await fetch(apiUrl + `utentes/${id}`);
-    if (!res.ok) throw new Error("Utente not found");
-    return res.json();
-}
-
 export function createUtente(utente) {
     return mutate("utentes/create", {
         method: "POST",

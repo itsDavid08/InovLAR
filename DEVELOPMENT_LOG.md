@@ -3495,3 +3495,49 @@ Cliente: bootstrap da sessão ao abrir o tabuleiro, `api/board` a usar `/board/*
 navegar para `/board/<accessToken>`, remover a cifra de Feistel (`utils/utenteToken.js`) e ajustar a
 rota do `App.jsx`. (O staff — GerirTabela, PedidosPendentes — passa a enviar credenciais nas leituras
 que serão fechadas na Fase 4.)
+
+---
+
+## 2026-07-21 — Autorização por-utente — Fase 3: cliente migra para a sessão de tabuleiro
+
+### Feito
+O tabuleiro do utente deixa de derivar o id de um token na URL — passa a fazer *bootstrap* de uma
+sessão (cookie) e a ler/escrever pelas rotas `/board/*`. A cifra de Feistel desapareceu.
+
+- **`api/board.js` (novo)** — `bootstrapBoard(accessToken)` (troca o segredo da URL por uma sessão),
+  `fetchBoardUtente`/`fetchBoardPedidos`/`fetchBoardTabela`, `createBoardPedido`, `updateBoardPedido`.
+  Todas com credenciais.
+- **`Pages/TabuleiroComunicacao.jsx`** — lê `:accessToken` da URL, faz `bootstrapBoard` ao entrar e só
+  depois carrega os dados (via `/board/*`); largou `idDoToken` e o `utenteId: utente.id` na criação de
+  pedidos (o servidor força-o). `updatePedido` → `updatePedidoBoard`.
+- **`state/usePedidosState.js`** — `fetchPedidosUtilizador`/`postPedido` passam a `/board/*`; separa
+  `updatePedidoBoard` (tabuleiro) de `updatePedido` (monitor de staff, agora com credenciais).
+  **`state/useUtentesState.js`** — `fetchUtente()` passa a `/board/utente` (sem id).
+- **`ContextProvider.jsx`** — as buscas do tabuleiro deixam de passar id.
+- **`Components/RequestListDrawer.jsx`** — usa `updatePedidoBoard`.
+- **`api/pedidos.js`** — removidas `fetchPedidosUtente`/`createPedido` (agora no board); `updatePedido`
+  passa a enviar credenciais (staff). **`api/tabela.js`** — `fetchTabela` (editor de staff) passa a
+  enviar credenciais. **`api/utentes.js`** — removida `fetchUtente`.
+- **`Pages/StaffHome.jsx`** — `handleOpen` navega para `/board/<utente.accessToken>` (sem Feistel).
+  **Servidor `utenteController.getAllUtentes`** — `Utente.unscoped()` para o roster (staff) incluir o
+  `accessToken` que o `StaffHome` precisa para construir a URL.
+- **`App.jsx`** — rota `/:token` → `/board/:accessToken`. **`state/useStaffAuthState.js`** — o check
+  de "estou na gaiola" passa de `/main` para `/board` (agora bate certo).
+- **Removido** `utils/utenteToken.js` (a cifra de Feistel).
+
+### Teste
+`vite build` OK. No browser (build servido pelo Express :3000), tabuleiro real via
+`/board/<accessToken>`:
+- rede confirma o novo fluxo — `POST /board/session` → `GET /board/utente`+`/board/pedidos`+
+  `/board/tabela/{smartphone,tablet,pc}` (todos 200) e **nenhuma** rota antiga (`/utentes/:id`,
+  `/pedidos/utente/:id`, `/utentes/:id/tabela/:disp`);
+- clicar num botão → `POST /board/pedidos` → **201**; "Estou Bem" → `PUT /board/pedidos/:id` deixa o
+  utente com **0 pedidos pendentes** (confirmado na BD);
+- roster de staff (`GET /utentes`, sessão forjada) inclui o `accessToken` e continua **401** sem
+  sessão. (A posse do `PUT /board/pedidos/:id` — 403 entre utentes — foi provada no script da Fase 2.)
+
+### Próximo (Fase 4)
+Fechar as rotas antigas por-id com `requireStaff` (`GET /utentes/:id`, `/pedidos/utente/:id`,
+`/utentes/:id/tabela/:disp`, `PUT /pedidos/:id`) e remover `POST /pedidos` — o cliente já não as usa.
+Depois, docs (CLAUDE.md, SECURITY_CHECKLIST) e nota operacional da Pi (migration + URLs dos tablets
+mudam).

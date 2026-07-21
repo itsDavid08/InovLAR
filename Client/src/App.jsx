@@ -42,9 +42,9 @@ function App() {
                         <Route path="/staff/pedidos" element={<RequireStaff><PedidosPendentes /></RequireStaff>} />
                         <Route path="/editBotoes" element={<RequireStaff><EditBotoes /></RequireStaff>} />
 
-                        {/* Tabuleiro do utente — a "gaiola" (só se sai com PIN). URL ofuscada e fixa
-                            por utente (token). No fim: as rotas estáticas têm prioridade. */}
-                        <Route path="/:token" element={<TabuleiroComunicacao />} />
+                        {/* Tabuleiro do utente — a "gaiola" (só se sai com PIN). A URL leva o
+                            accessToken (segredo real, verificado no servidor), sob o prefixo /board. */}
+                        <Route path="/board/:accessToken" element={<TabuleiroComunicacao />} />
                     </Routes>
                 </div>
 

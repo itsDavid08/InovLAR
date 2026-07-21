@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import * as utentesApi from "../api/utentes";
+import { fetchBoardUtente } from "../api/board";
 
 // Estado + operações dos utentes: a lista completa (só-staff) e o utente atual
 // (o do tabuleiro). As mutações propagam o erro para quem chama; o socket
@@ -13,8 +14,10 @@ export function useUtentesState() {
         setUtentes(await utentesApi.fetchUtentes());
     }, []);
 
-    const fetchUtente = useCallback(async (id) => {
-        setUtente(await utentesApi.fetchUtente(id));
+    // O utente atual é o do tabuleiro — vem da sessão de tabuleiro (/board/utente),
+    // não de um id na URL.
+    const fetchUtente = useCallback(async () => {
+        setUtente(await fetchBoardUtente());
     }, []);
 
     // Devolve o utente criado (JSON) — o "Criar do zero" usa o id para navegar.

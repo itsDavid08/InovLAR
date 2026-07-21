@@ -12,9 +12,10 @@ const pickUtenteFields = (body) => {
 };
 
 const utenteController = {
-    // GET /utentes — full roster (staff only, RGPD).
+    // GET /utentes — full roster (staff only, RGPD). unscoped(): inclui o accessToken
+    // para o StaffHome construir a URL do tabuleiro (/board/<accessToken>).
     getAllUtentes: async (req, res) => {
-        const utentes = await Utente.findAll();
+        const utentes = await Utente.unscoped().findAll();
         res.json(utentes);
     },
 

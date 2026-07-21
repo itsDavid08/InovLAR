@@ -3,7 +3,7 @@ import { staffStatus } from "../api/auth";
 
 // Gate de "kiosk": staffUnlocked = true quando o staff tem acesso ao console.
 // O acesso é restaurado do cookie do dispositivo ao arrancar (um reload mantém
-// a sessão). Exceção: entrar na "gaiola" (/main) não restaura — o próprio
+// a sessão). Exceção: entrar na "gaiola" (/board) não restaura — o próprio
 // tabuleiro revoga o acesso. `staffChecked` fica false até a verificação inicial
 // terminar, para o RequireStaff mostrar um esqueleto em vez de piscar o login.
 //
@@ -19,7 +19,7 @@ export function useStaffAuthState() {
     }, [staffUnlocked]);
 
     useEffect(() => {
-        if (window.location.pathname.startsWith("/main")) {
+        if (window.location.pathname.startsWith("/board")) {
             setStaffChecked(true);
             return;
         }
