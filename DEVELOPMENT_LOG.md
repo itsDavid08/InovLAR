@@ -3447,3 +3447,51 @@ todas PASS:
 Rotas `/board/*` de dados (utente, pedidos, tabela — o utente vem da sessão), fechar as rotas antigas
 por-id com `requireStaff`, e autorização no `updatePedido` (`req.isStaff` OU
 `req.utenteId === pedido.utenteId`).
+
+---
+
+## 2026-07-21 — Autorização por-utente — Fase 2: rotas `/board/*` de dados (aditivo)
+
+### Refinamento ao plano
+Para cada commit ficar sempre funcional (melhor para rollback por fase), a Fase 2 é **puramente
+aditiva**: adiciona as rotas `/board/*` de dados sem tocar nas antigas. O **fechar** das rotas antigas
+por-id passou para a Fase 4 — depois de o cliente (Fase 3) já não as usar. Assim nenhum commit
+intermédio parte a app.
+
+### Feito
+Handlers novos em `controller/boardController.js` + rotas em `routes/route.js`, todos atrás de
+`identifyUtente` + `requireUtente` (o `utenteId` vem **da sessão**, nunca da URL):
+
+| Rota | O quê |
+|---|---|
+| `GET /board/utente` | O utente da sessão + os seus pedidos pendentes (com botão) |
+| `GET /board/pedidos` | Os pedidos pendentes do utente da sessão |
+| `GET /board/tabela/:dispositivo` | O layout do utente da sessão (valida o dispositivo contra `DEVICES`) |
+| `POST /board/pedidos` | Cria pedido com `utenteId` **forçado pela sessão** (corpo whitelisted a `botaoId`/`emergencia`) |
+| `PUT /board/pedidos/:id` | Muda o estado **só se `pedido.utenteId === req.utenteId`** (senão 403); estado validado |
+
+### Mapa de consumidores no cliente (para as fases 3/4)
+- `GET /utentes/:id` → só board → `/board/utente`
+- `GET /pedidos/utente/:id` → só board → `/board/pedidos`
+- `GET /utentes/:id/tabela/:disp` → board **e** staff (GerirTabela) → board migra p/ `/board/tabela`;
+  o staff mantém a antiga (passará a enviar credenciais quando for fechada com `requireStaff`)
+- `POST /pedidos` → só board → `/board/pedidos`
+- `PUT /pedidos/:id` → board (drawer + tabuleiro) **e** staff (PedidosPendentes) → board migra p/
+  `/board/pedidos/:id`; o monitor mantém `/pedidos/:id` (com credenciais)
+
+### Teste
+Servidor reiniciado; script node (contra a BD/servidor reais, com 2 utentes A/B, depois apagado e
+sessões limpas) — 18 asserções, todas PASS:
+- sem sessão, todas as `/board/*` → **401**;
+- com a sessão do A → `/board/utente`/`/board/pedidos`/`/board/tabela` devolvem só dados do A; o
+  `accessToken` **não** vaza;
+- `POST /board/pedidos` cria com o `utenteId` da sessão mesmo tentando **injetar** outro no corpo;
+- **posse:** A atualiza o pedido do A (200); A tenta o pedido do B → **403** e o pedido do B fica
+  intacto; estado/dispositivo inválidos → 400;
+- rotas antigas (`GET /botoes`, `GET /utentes/:id`) continuam a responder — a fase é aditiva.
+
+### Próximo (Fase 3)
+Cliente: bootstrap da sessão ao abrir o tabuleiro, `api/board` a usar `/board/*`, `StaffHome` a
+navegar para `/board/<accessToken>`, remover a cifra de Feistel (`utils/utenteToken.js`) e ajustar a
+rota do `App.jsx`. (O staff — GerirTabela, PedidosPendentes — passa a enviar credenciais nas leituras
+que serão fechadas na Fase 4.)

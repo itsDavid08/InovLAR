@@ -7,7 +7,7 @@ const boardController = require("../controller/boardController");
 const tabelaController = require("../controller/tabelaController");
 const tabelaPadraoController = require("../controller/tabelaPadraoController");
 const imageController = require("../controller/imageController");
-const { requireStaff } = require("../middleware/auth");
+const { requireStaff, identifyUtente, requireUtente } = require("../middleware/auth");
 const { staffAuthLimiter } = require("../middleware/rateLimiter");
 const { uploadBotaoImage, uploadUtentePhoto } = require("../middleware/uploads");
 
@@ -21,9 +21,16 @@ router.post("/auth/staff/change", requireStaff, staffAuthLimiter, authController
 router.post("/auth/staff/logout", authController.logout);
 
 // Board (tabuleiro do utente): bootstrap da sessão a partir do accessToken da URL.
-// As rotas de dados /board/* (ler/criar/atualizar) entram na Fase 2.
 router.post("/board/session", boardController.createSession);
 router.post("/board/logout", boardController.logout);
+
+// Dados do tabuleiro — o utente vem sempre da sessão (identifyUtente + requireUtente),
+// nunca de um id na URL, por isso o board só acede aos seus próprios dados.
+router.get("/board/utente", identifyUtente, requireUtente, boardController.getUtente);
+router.get("/board/pedidos", identifyUtente, requireUtente, boardController.getPedidos);
+router.get("/board/tabela/:dispositivo", identifyUtente, requireUtente, boardController.getTabela);
+router.post("/board/pedidos", identifyUtente, requireUtente, boardController.createPedido);
+router.put("/board/pedidos/:id", identifyUtente, requireUtente, boardController.updatePedido);
 
 // Utentes
 router.get("/utentes", requireStaff, utenteController.getAllUtentes); // full roster → staff only (RGPD)
