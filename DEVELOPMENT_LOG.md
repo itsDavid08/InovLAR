@@ -3589,3 +3589,31 @@ no browser que o tabuleiro real carrega sem 401 (usa só `/board/*` + `/botoes`)
 ### Próximo (Fase 5, commit isolado p/ rollback fácil)
 UI de staff: copiar a URL do tabuleiro + rotacionar o `accessToken` (endpoint `POST
 /utentes/:id/rotate-token` + ação no `StaffHome`).
+
+---
+
+## 2026-07-21 — Autorização por-utente — evitar acumulação de sessões de tabuleiro
+
+### Problema
+O tabuleiro faz *bootstrap* (`POST /board/session`) a **cada carregamento** da página (é assim que
+fica autenticado indefinidamente a partir do `accessToken` no URL). Como o bootstrap criava sempre
+uma linha nova em `UtenteSession`, as antigas ficavam órfãs — o seu cookie era substituído, por isso
+`validarSessaoUtente` nunca era chamado sobre elas e a limpeza preguiçosa nunca disparava. Num tablet
+reaberto muitas vezes, as linhas acumulavam sem limite.
+
+### Correção (mantém o fluxo — utente autenticado indefinidamente)
+- **Reutilização + renovação deslizante** (`boardController.createSession`): se o pedido já traz um
+  cookie `utente_session` válido e do **mesmo** utente, reutiliza essa sessão e estende o `expiraEm`
+  (`renovarSessaoUtente`, +30 dias) em vez de criar linha nova. Só cria nova no 1º acesso ou se o
+  cookie estiver ausente/expirado/inválido. Efeito: 1 linha por tablet, e enquanto o tablet for usado
+  dentro de qualquer janela de 30 dias **nunca expira**. Multi-tablet no mesmo utente continua a
+  funcionar (a reutilização é por-cookie).
+- **Varrimento no arranque** (`main.js`): `purgarExpiradas()` (novo em `Util/sessions.js` e
+  `Util/utenteSessions.js`) apaga as sessões já expiradas — limpa a acumulação histórica e o caso raro
+  de cookie limpo. Aplicado a `StaffSession` e `UtenteSession` por simetria.
+
+### Teste
+Script node (BD/servidor reais) — 10 asserções, todas PASS: 1º bootstrap cria 1 sessão; 2º bootstrap
+com o cookie **reutiliza** (continua 1, mesmo `tokenHash`, `expiraEm` renovado); sem cookie ou com
+cookie inválido cria nova; `purgarExpiradas` remove a expirada e mantém as válidas. Confirmado no
+browser: 2 carregamentos do tabuleiro → **1** linha em `UtenteSession` (antes seriam 2).

@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const { Op } = require("sequelize");
 const { UtenteSession } = require("../models");
 
 const hashToken = (t) => crypto.createHash("sha256").update(t).digest("hex");
@@ -21,6 +22,20 @@ async function validarSessaoUtente(token) {
     return sessao;
 }
 
+// Estende a validade de uma sessão (janela deslizante). O bootstrap chama isto ao
+// reutilizar a sessão existente, para o tabuleiro nunca expirar enquanto for usado.
+async function renovarSessaoUtente(sessao, dias = 30) {
+    sessao.expiraEm = new Date(Date.now() + dias * 24 * 60 * 60 * 1000);
+    await sessao.save();
+}
+
+// Apaga sessões já expiradas. A limpeza preguiçosa (em validarSessaoUtente) só
+// apanha as que voltam a ser validadas; como o bootstrap reutiliza a sessão, as
+// antigas não reaparecem — este varrimento (no arranque) trata delas.
+async function purgarExpiradas() {
+    await UtenteSession.destroy({ where: { expiraEm: { [Op.lt]: new Date() } } });
+}
+
 // Revoga uma sessão específica (logout do tabuleiro).
 async function revogarSessaoUtente(token) {
     if (token) await UtenteSession.destroy({ where: { tokenHash: hashToken(token) } });
@@ -34,6 +49,8 @@ async function revogarSessoesDoUtente(utenteId) {
 module.exports = {
     criarSessaoUtente,
     validarSessaoUtente,
+    renovarSessaoUtente,
+    purgarExpiradas,
     revogarSessaoUtente,
     revogarSessoesDoUtente,
 };

@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const { Op } = require("sequelize");
 const { StaffSession } = require("../models");
 
 const hashToken = (t) => crypto.createHash("sha256").update(t).digest("hex");
@@ -26,4 +27,10 @@ async function revogarSessao(token) {
     if (token) await StaffSession.destroy({ where: { tokenHash: hashToken(token) } });
 }
 
-module.exports = { criarSessao, validarSessao, revogarSessao };
+// Apaga sessões de staff já expiradas (varrimento no arranque; a limpeza
+// preguiçosa só apanha as que voltam a ser validadas).
+async function purgarExpiradas() {
+    await StaffSession.destroy({ where: { expiraEm: { [Op.lt]: new Date() } } });
+}
+
+module.exports = { criarSessao, validarSessao, revogarSessao, purgarExpiradas };

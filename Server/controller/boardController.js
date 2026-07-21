@@ -1,5 +1,10 @@
 const { Utente, Pedido, Botao, TabelaLayout } = require("../models");
-const { criarSessaoUtente, revogarSessaoUtente } = require("../Util/utenteSessions");
+const {
+    criarSessaoUtente,
+    validarSessaoUtente,
+    renovarSessaoUtente,
+    revogarSessaoUtente,
+} = require("../Util/utenteSessions");
 const { COOKIE_NAME_UTENTE } = require("../middleware/auth");
 const { notificarAlteracaoBD } = require("../Util/socketIO");
 const { PEDIDO_STATES, DEVICES } = require("../config/constants");
@@ -32,6 +37,17 @@ const boardController = {
 
         const utente = await Utente.findOne({ where: { accessToken } });
         if (!utente) return res.status(404).json({ mensagem: "Utente não encontrado" });
+
+        // Reutiliza a sessão existente se o cookie ainda for válido e do mesmo utente
+        // (evita acumular linhas a cada recarga), renovando a validade (janela
+        // deslizante → nunca expira enquanto o tablet for usado). Senão, cria uma nova.
+        const existing = req.signedCookies && req.signedCookies[COOKIE_NAME_UTENTE];
+        const sessao = await validarSessaoUtente(existing);
+        if (sessao && sessao.utenteId === utente.id) {
+            await renovarSessaoUtente(sessao);
+            res.cookie(COOKIE_NAME_UTENTE, existing, cookieOptions); // atualiza o maxAge no browser
+            return res.json({ id: utente.id });
+        }
 
         const token = await criarSessaoUtente(utente.id);
         res.cookie(COOKIE_NAME_UTENTE, token, cookieOptions);

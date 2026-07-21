@@ -15,12 +15,16 @@ const DIST = path.join(__dirname, '../Client/dist');
 
 // Garante que as tabelas existem (cria só se não existirem, não mexe nas outras).
 const { seedDefaults } = require('./Util/seedDefaults');
+const { purgarExpiradas: purgarStaffSessions } = require('./Util/sessions');
+const { purgarExpiradas: purgarUtenteSessions } = require('./Util/utenteSessions');
 (async () => {
     await StaffAuth.sync();
     await StaffSession.sync();
     await UtenteSession.sync();
     await TabelaLayout.sync();
     await TabelaPadrao.sync();
+    await purgarStaffSessions();     // limpa sessões expiradas (as tabelas já existem)
+    await purgarUtenteSessions();
     await seedDefaults();            // cria a "Predefinida" (1ª vez) + aplica a utentes sem tabela
 })().catch((e) => console.error('Erro no arranque/seed:', e));
 
