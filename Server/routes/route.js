@@ -34,7 +34,7 @@ router.put("/board/pedidos/:id", identifyUtente, requireUtente, boardController.
 
 // Utentes
 router.get("/utentes", requireStaff, utenteController.getAllUtentes); // full roster → staff only (RGPD)
-router.get("/utentes/:id", utenteController.getUtenteById);
+router.get("/utentes/:id", requireStaff, utenteController.getUtenteById); // o tabuleiro usa /board/utente
 router.post("/utentes/create", requireStaff, utenteController.createUtente);
 router.put("/utentes/:id", requireStaff, utenteController.updateUtente);
 router.delete("/utentes/:id", requireStaff, utenteController.deleteUtente);
@@ -43,7 +43,7 @@ router.delete("/utentes/:utenteId/botoes/:botaoId", requireStaff, utenteControll
 
 // Table layouts (per utente + device)
 router.get("/tabelas", requireStaff, tabelaController.listTabelas); // all layouts → staff only
-router.get("/utentes/:id/tabela/:dispositivo", tabelaController.getTabela);
+router.get("/utentes/:id/tabela/:dispositivo", requireStaff, tabelaController.getTabela); // o tabuleiro usa /board/tabela
 router.put("/utentes/:id/tabela/:dispositivo", requireStaff, tabelaController.saveTabela);
 
 // Table templates ("defaults")
@@ -74,9 +74,10 @@ router.get("/pedidos", requireStaff, pedidoController.getAllPedidos);
 router.get("/pedidos/ativos/hora", requireStaff, pedidoController.getActivePedidosByTime);
 router.get("/pedidos/ativos/emergencia", requireStaff, pedidoController.getActivePedidosByEmergency);
 router.get("/pedidos/:id", requireStaff, pedidoController.getPedidoById);
-router.get("/pedidos/utente/:utenteId", pedidoController.getActivePedidosByUtenteId);
-router.post("/pedidos", pedidoController.createPedido);
-router.put("/pedidos/:id", pedidoController.updatePedido);
+router.get("/pedidos/utente/:utenteId", requireStaff, pedidoController.getActivePedidosByUtenteId); // o tabuleiro usa /board/pedidos
+// Criar/atualizar pedidos do tabuleiro é feito em /board/pedidos (sessão de tabuleiro).
+// O PUT aqui fica só para o monitor de staff (resolver qualquer pedido).
+router.put("/pedidos/:id", requireStaff, pedidoController.updatePedido);
 router.delete("/pedidos/:id", requireStaff, pedidoController.deletePedido);
 
 module.exports = router;

@@ -3541,3 +3541,51 @@ Fechar as rotas antigas por-id com `requireStaff` (`GET /utentes/:id`, `/pedidos
 `/utentes/:id/tabela/:disp`, `PUT /pedidos/:id`) e remover `POST /pedidos` — o cliente já não as usa.
 Depois, docs (CLAUDE.md, SECURITY_CHECKLIST) e nota operacional da Pi (migration + URLs dos tablets
 mudam).
+
+---
+
+## 2026-07-21 — Autorização por-utente — Fase 4: fechar rotas antigas + docs
+
+### Feito (servidor)
+Com o cliente já a usar `/board/*` (Fase 3), fecharam-se as rotas antigas por-id em `routes/route.js`:
+- `GET /utentes/:id`, `GET /pedidos/utente/:utenteId`, `GET /utentes/:id/tabela/:dispositivo` →
+  `requireStaff` (o tabuleiro usa `/board/utente`, `/board/pedidos`, `/board/tabela`; o editor de
+  staff mantém as antigas, com credenciais).
+- `PUT /pedidos/:id` → `requireStaff` (fica só para o monitor de staff resolver qualquer pedido).
+- `POST /pedidos` **removido** (o tabuleiro cria em `/board/pedidos`); o handler morto
+  `pedidoController.createPedido` foi apagado.
+- **Higiene:** o *SPA fallback* (`main.js`) passa a servir o `index.html` só em `GET` — pedidos
+  não-GET a caminhos desconhecidos (ex.: o `POST /pedidos` agora inexistente) dão **404** em vez de
+  devolver HTML com 200.
+
+Com isto, **não sobra nenhum endpoint aberto por-id** — a enumeração por reversão do token deixa de
+existir, e o `PUT` cross-utente é bloqueado (403). Os dois itens 🟠 High (posse do `PUT /pedidos/:id`
+e token-como-obfuscação) ficam fechados.
+
+### Feito (docs)
+- **CLAUDE.md** — "Two Authentication Paths" reescrito (agora descreve a sessão de tabuleiro real);
+  nova secção de endpoints **Board**; tags de auth atualizadas (`/utentes/:id`, `/pedidos/utente/:id`,
+  `/utentes/:id/tabela/:d`, `PUT /pedidos/:id` → `requireStaff`; `POST /pedidos` removido); estrutura
+  de ficheiros (add `UtenteSession.js`, `boardController`, `Util/utenteSessions.js`, `api/board.js`;
+  removido `utils/utenteToken.js`); "Known security gaps" — os dois High marcados como fixos + nota
+  operacional.
+- **README.md / README.pt.md** — o tabuleiro passa a descrever-se como `/board/:accessToken` (token de
+  acesso real trocado por sessão), não `/main/:token` ofuscado (diagrama + texto).
+
+### Teste
+Servidor reiniciado; script node (com sessões de staff e de tabuleiro forjadas, depois limpas):
+- sem sessão → `GET /utentes/:id`, `/pedidos/utente/:id`, `/utentes/:id/tabela/:d` e `PUT /pedidos/:id`
+  dão **401**; `POST /pedidos` dá **404**;
+- com sessão de **staff** → essas rotas respondem (o `PUT` resolve um pedido → 200);
+- com sessão de **tabuleiro** → `GET /board/utente` → 200; `GET /botoes` (aberto) → 200.
+Confirmado ainda por `curl` que a navegação SPA `GET /board/<token>` continua a servir o index (200) e
+no browser que o tabuleiro real carrega sem 401 (usa só `/board/*` + `/botoes`).
+
+### Operacional (Pi) — obrigatório no deploy
+1. Correr a migration (`npx sequelize-cli db:migrate`) — adiciona `accessToken` + backfill.
+2. **As URLs dos tablets mudam** (token Feistel → `/board/<accessToken>`): reabrir/rebookmarkar cada
+   tablet a partir do console de staff depois do deploy.
+
+### Próximo (Fase 5, commit isolado p/ rollback fácil)
+UI de staff: copiar a URL do tabuleiro + rotacionar o `accessToken` (endpoint `POST
+/utentes/:id/rotate-token` + ação no `StaffHome`).

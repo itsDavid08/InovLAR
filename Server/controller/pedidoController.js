@@ -60,27 +60,9 @@ const pedidoController = {
         res.json(pedidos);
     },
 
-    // POST /pedidos — open route (the board creates pedidos without auth), so the
-    // body is whitelisted: only these three fields ever reach the model.
-    createPedido: async (req, res) => {
-        const { emergencia, utenteId, botaoId } = req.body;
-
-        // Double-tap guard: an identical pending pedido already exists → return it.
-        const existing = await Pedido.findOne({
-            where: { utenteId, botaoId, estado: PEDIDO_STATES.PENDING },
-        });
-        if (existing) {
-            notificarAlteracaoBD();
-            return res.status(200).json(existing);
-        }
-
-        const created = await Pedido.create({ emergencia, utenteId, botaoId });
-        const pedido = await Pedido.findByPk(created.id, { include: PEDIDO_INCLUDES });
-        notificarAlteracaoBD();
-        res.status(201).json(pedido);
-    },
-
-    // PUT /pedidos/:id — open route; only the state can change (whitelist).
+    // PUT /pedidos/:id — staff monitor resolves any pending pedido (requireStaff).
+    // The board updates its own pedidos via /board/pedidos/:id. Only the state
+    // can change (whitelist + validation).
     updatePedido: async (req, res) => {
         const { estado } = req.body;
         if (!Object.values(PEDIDO_STATES).includes(estado)) {

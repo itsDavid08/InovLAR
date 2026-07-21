@@ -37,8 +37,10 @@ app.use(express.static(DIST));
 
 app.use(router);
 
-// SPA fallback: qualquer rota não-API devolve o index do React.
-app.use((req, res) => {
+// SPA fallback: navegações (GET) a caminhos não-API devolvem o index do React.
+// Métodos não-GET a caminhos desconhecidos caem no 404 do Express (não devolvem HTML).
+app.use((req, res, next) => {
+  if (req.method !== 'GET') return next();
   res.sendFile(path.join(DIST, 'index.html'));
 });
 

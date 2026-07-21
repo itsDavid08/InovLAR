@@ -30,7 +30,7 @@ Foi construído para o contexto de um lar de idosos, mas o padrão de base — u
 
 ## Duas interfaces
 
-- **Tabuleiro do Utente (Paciente)** — uma grelha de botões de pedido adaptada a tablet, uma gaveta de histórico de pedidos anteriores, e um botão de emergência SOS. Acedida através de um token de URL ofuscado (`/main/:token`), não de um login.
+- **Tabuleiro do Utente (Paciente)** — uma grelha de botões de pedido adaptada a tablet, uma gaveta de histórico de pedidos anteriores, e um botão de emergência SOS. Acedida através de um token de acesso por-utente no URL (`/board/:accessToken`) — um segredo real, verificado no servidor e trocado por uma sessão restrita, não um login.
 - **Consola de Staff** — perfis de utentes, gestão de botões/categorias, painéis de monitorização de pedidos, e o editor de disposições de tabuleiro/template. Protegida por um PIN partilhado (ver [Como Começar](#como-começar)).
 
 ## Arquitetura
@@ -38,7 +38,7 @@ Foi construído para o contexto de um lar de idosos, mas o padrão de base — u
 ```mermaid
 flowchart LR
     subgraph Client["Client — React + Vite"]
-        A["Tabuleiro do Utente (/main/:token)"]
+        A["Tabuleiro do Utente (/board/:accessToken)"]
         B["Consola de Staff"]
     end
     subgraph Server["Server — Express + Sequelize"]
@@ -125,7 +125,7 @@ Ver os comentários no topo do script e o `DEVELOPMENT_LOG.md` (entradas da Fase
 
 1. **Primeira vez** — abre a app; como ainda não existe password de staff, vais ser convidado a definir uma. É um único PIN partilhado para todo o dispositivo (não contas por pessoa), alinhado com o deployment em modo kiosk.
 2. **Consola de staff** — insere o PIN para gerir utentes, botões de pedido, categorias e disposições de tabuleiro, e para monitorizar pedidos recebidos.
-3. **Tabuleiro do utente** — cada utente tem um URL ofuscado (`/main/:token`) que aponta diretamente para o seu tabuleiro configurado. Abri-lo bloqueia o dispositivo em modo kiosk; só o PIN da equipa (via um prompt de saída escondido) reabre a consola de gestão.
+3. **Tabuleiro do utente** — cada utente tem um URL com um token de acesso único (`/board/:accessToken`) que aponta diretamente para o seu tabuleiro configurado. Abri-lo inicia uma sessão de tabuleiro restrita e bloqueia o dispositivo em modo kiosk; só o PIN da equipa (via um prompt de saída escondido) reabre a consola de gestão.
 4. **Pedidos** — um toque do utente cria um pedido instantaneamente visível (via Socket.io) em qualquer vista de monitorização de staff aberta, com cor conforme o tempo de espera, e emergências sempre prioritárias.
 
 ## Documentação

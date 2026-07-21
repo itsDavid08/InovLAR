@@ -30,7 +30,7 @@ It was built for a nursing home (*lar de idosos*) context, but the core pattern 
 
 ## Two interfaces
 
-- **Utente (Patient) board** — a tablet-friendly grid of request buttons, a history drawer of past requests, and an emergency SOS button. Accessed through an obfuscated URL token (`/main/:token`), not a login.
+- **Utente (Patient) board** — a tablet-friendly grid of request buttons, a history drawer of past requests, and an emergency SOS button. Accessed through a per-utente access token in the URL (`/board/:accessToken`) — a real, server-verified secret exchanged for a scoped session, not a login.
 - **Staff console** — patient profiles, button/category management, request monitoring dashboards, and the table/template layout editor. Protected by a shared PIN (see [Getting Started](#getting-started)).
 
 ## Architecture
@@ -38,7 +38,7 @@ It was built for a nursing home (*lar de idosos*) context, but the core pattern 
 ```mermaid
 flowchart LR
     subgraph Client["Client — React + Vite"]
-        A["Utente Board (/main/:token)"]
+        A["Utente Board (/board/:accessToken)"]
         B["Staff Console"]
     end
     subgraph Server["Server — Express + Sequelize"]
@@ -125,7 +125,7 @@ See the script's header comments and `DEVELOPMENT_LOG.md` (Phase 3 entries) for 
 
 1. **First run** — open the app; since no staff password exists yet, you'll be prompted to define one. This is a single shared PIN for the whole device (not per-user accounts), matching the kiosk-style deployment.
 2. **Staff console** — enter the PIN to manage patients, request buttons, categories, and table layouts, and to monitor incoming requests.
-3. **Patient board** — each patient gets an obfuscated URL (`/main/:token`) pointing straight at their configured board. Opening it locks the device into kiosk mode; only the staff PIN (via a hidden exit prompt) reopens the management console.
+3. **Patient board** — each patient gets a URL carrying a unique access token (`/board/:accessToken`) pointing straight at their configured board. Opening it starts a scoped board session and locks the device into kiosk mode; only the staff PIN (via a hidden exit prompt) reopens the management console.
 4. **Requests** — a patient tap creates a request instantly visible (via Socket.io) on every open staff monitoring view, color-coded by wait time, with emergencies always prioritized.
 
 ## Documentation
