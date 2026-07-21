@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { staffChange } from "../api/auth";
 import Keypad from "../Components/Keypad";
+import { t } from "../i18n";
 
 // Alterar a palavra-passe do staff em 3 passos: atual -> nova -> confirmar.
 // Exige saber a palavra-passe atual (e o servidor também a confirma).
@@ -25,16 +26,16 @@ export default function ChangePassword() {
 
     const avancar = async () => {
         if (passo === "atual") {
-            if (atual.length < 4) return setErro("Mínimo 4 dígitos");
+            if (atual.length < 4) return setErro(t.auth.minDigits);
             return setPasso("nova");
         }
         if (passo === "nova") {
-            if (nova.length < 4) return setErro("Mínimo 4 dígitos");
+            if (nova.length < 4) return setErro(t.auth.minDigits);
             return setPasso("confirmar");
         }
         // passo "confirmar"
         if (nova !== confirmar) {
-            setErro("As palavras-passe não coincidem");
+            setErro(t.auth.mismatch);
             setNova("");
             setConfirmar("");
             setPasso("nova");
@@ -45,7 +46,7 @@ export default function ChangePassword() {
             setPasso("sucesso");
         } else {
             // ex.: palavra-passe atual incorreta (401)
-            setErro(data.mensagem || "Não foi possível alterar");
+            setErro(data.mensagem || t.auth.changeError);
             setAtual("");
             setNova("");
             setConfirmar("");
@@ -56,10 +57,10 @@ export default function ChangePassword() {
     if (passo === "sucesso") {
         return (
             <div className="login-screen">
-                <h1>Palavra-passe alterada ✓</h1>
-                <p className="login-sucesso">A nova palavra-passe já está ativa.</p>
+                <h1>{t.auth.changed}</h1>
+                <p className="login-sucesso">{t.auth.changedHint}</p>
                 <button className="login-botao-grande" onClick={() => navigate("/staff")}>
-                    Voltar
+                    {t.common.back}
                 </button>
             </div>
         );
@@ -67,15 +68,15 @@ export default function ChangePassword() {
 
     const titulo =
         passo === "atual"
-            ? "Palavra-passe atual"
+            ? t.auth.currentPassword
             : passo === "nova"
-            ? "Nova palavra-passe"
-            : "Confirmar nova palavra-passe";
+            ? t.auth.newPassword
+            : t.auth.confirmNewPassword;
 
     return (
         <div className="login-screen">
             <button className="login-voltar" onClick={() => navigate("/staff")}>
-                ← Voltar
+                {t.common.backArrow}
             </button>
 
             <h1>{titulo}</h1>

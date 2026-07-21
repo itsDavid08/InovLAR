@@ -5,6 +5,7 @@ import { fetchTabelasPadrao } from "../../api/tabelasPadrao";
 import { uploadImagemUtente, deleteImagemUtente } from "../../api/utentes";
 import UtenteForm from "./UtenteForm";
 import { ICONE_PESSOA } from "./UtenteAvatar";
+import { t } from "../../i18n";
 
 const NewUtente = () => {
     const navigate = useNavigate();
@@ -28,7 +29,7 @@ const NewUtente = () => {
             setFormData(prev => ({ ...prev, imagem: path }));
         } catch (err) {
             console.error("Erro ao carregar foto:", err);
-            window.alert("Não foi possível carregar a foto. Verifique que é um ficheiro de imagem válido.");
+            window.alert(t.utentes.photoUploadError);
         }
     };
 
@@ -53,7 +54,7 @@ const NewUtente = () => {
     };
 
     const handleCriarDoZero = async () => {
-        if (!formData.nome.trim() || !formData.quarto.trim()) { window.alert("Preenche o nome e o quarto primeiro."); return; }
+        if (!formData.nome.trim() || !formData.quarto.trim()) { window.alert(t.utentes.fillNameAndRoom); return; }
         try {
             const novo = await postUtente({
                 nome: formData.nome, quarto: formData.quarto,
@@ -65,14 +66,14 @@ const NewUtente = () => {
 
     return (
         <UtenteForm
-            title="Novo Utente"
+            title={t.utentes.newTitle}
             formData={formData}
             setFormData={setFormData}
             templates={templates}
             onCriarNovo={handleCriarDoZero}
             onSubmit={handleSubmit}
             onCancel={() => navigate('/staff')}
-            submitLabel="Criar Utente"
+            submitLabel={t.utentes.createSubmit}
             quartoRequired
             apiUrl={apiUrl}
             onUploadFoto={handleUploadFoto}

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { COR_CATEGORIA } from "../tabela/constants";
+import { t } from "../../i18n";
 
 // Dropdown de categoria do formulário de botão.
 // - Lista as categorias disponíveis (escolher fecha o menu).
@@ -43,7 +44,7 @@ const CategoriaDropdown = ({ value, categorias, onChange, onAddCategoria }) => {
                 className="w-full flex items-center justify-between px-4 py-3 rounded-lg bg-surface-container border border-outline-variant focus:border-primary focus:ring-2 focus:ring-primary focus:outline-none transition-all text-left"
             >
                 <span className={value ? "text-on-surface" : "text-on-surface-variant"}>
-                    {value || "Selecione uma categoria"}
+                    {value || t.categoria.select}
                 </span>
                 <span className="material-symbols-outlined text-on-surface-variant">
                     {open ? "arrow_drop_up" : "arrow_drop_down"}
@@ -66,7 +67,7 @@ const CategoriaDropdown = ({ value, categorias, onChange, onAddCategoria }) => {
                             </button>
                         ))}
                         {categorias.length === 0 && (
-                            <p className="px-4 py-2.5 text-sm text-on-surface-variant">Sem categorias.</p>
+                            <p className="px-4 py-2.5 text-sm text-on-surface-variant">{t.categoria.empty}</p>
                         )}
                     </div>
 
@@ -82,13 +83,13 @@ const CategoriaDropdown = ({ value, categorias, onChange, onAddCategoria }) => {
                                         if (e.key === "Enter") { e.preventDefault(); confirmarNova(); }
                                         if (e.key === "Escape") { setACriar(false); setNova(""); }
                                     }}
-                                    placeholder="Nome da categoria"
+                                    placeholder={t.categoria.namePlaceholder}
                                     className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-surface-container border border-outline-variant focus:border-primary focus:ring-2 focus:ring-primary focus:outline-none text-on-surface"
                                 />
-                                <button type="button" onClick={confirmarNova} className="p-2 rounded-full text-primary hover:bg-surface-container transition-colors" title="Adicionar">
+                                <button type="button" onClick={confirmarNova} className="p-2 rounded-full text-primary hover:bg-surface-container transition-colors" title={t.common.add}>
                                     <span className="material-symbols-outlined">check</span>
                                 </button>
-                                <button type="button" onClick={() => { setACriar(false); setNova(""); }} className="p-2 rounded-full text-on-surface-variant hover:bg-surface-container transition-colors" title="Cancelar">
+                                <button type="button" onClick={() => { setACriar(false); setNova(""); }} className="p-2 rounded-full text-on-surface-variant hover:bg-surface-container transition-colors" title={t.common.cancel}>
                                     <span className="material-symbols-outlined">close</span>
                                 </button>
                             </div>
@@ -99,7 +100,7 @@ const CategoriaDropdown = ({ value, categorias, onChange, onAddCategoria }) => {
                                 className="w-full flex items-center gap-3 px-4 py-2.5 text-left text-primary hover:bg-surface-container transition-colors font-semibold"
                             >
                                 <span className="material-symbols-outlined text-[20px]">add</span>
-                                <span className="font-staff-mono">Nova categoria</span>
+                                <span className="font-staff-mono">{t.categoria.new}</span>
                             </button>
                         )}
                     </div>

@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { Context } from "../../ContextProvider";
 import { staffLogout } from "../../api/auth";
 import { NAV_ITEMS } from "./navItems";
+import { t } from "../../i18n";
 
 // Sidebar partilhado das páginas de staff (StaffHome, EditBotoes, …).
 // Estrutura fixa: header + nav links (com highlight da página ativa) + slot de
@@ -32,8 +33,8 @@ const StaffSidebar = ({ children }) => {
                     IS
                 </div>
                 <div>
-                    <h2 className="font-headline-md text-headline-md font-bold text-primary dark:text-inverse-primary text-xl">InovLAR Staff</h2>
-                    <p className="font-body-md text-body-md text-on-surface-variant text-sm">Medical Center</p>
+                    <h2 className="font-headline-md text-headline-md font-bold text-primary dark:text-inverse-primary text-xl">{t.nav.staffTitle}</h2>
+                    <p className="font-body-md text-body-md text-on-surface-variant text-sm">{t.nav.staffSubtitle}</p>
                 </div>
             </div>
 
@@ -68,7 +69,7 @@ const StaffSidebar = ({ children }) => {
                     onClick={handleLogout}
                 >
                     <span className="material-symbols-outlined text-sm">logout</span>
-                    <span className="font-staff-mono text-staff-mono">Terminar Sessão</span>
+                    <span className="font-staff-mono text-staff-mono">{t.nav.logout}</span>
                 </button>
             </div>
         </>

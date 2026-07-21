@@ -4,6 +4,7 @@ import { Context } from "../../ContextProvider";
 import { uploadImagemUtente, deleteImagemUtente } from "../../api/utentes";
 import UtenteForm from "./UtenteForm";
 import { ICONE_PESSOA } from "./UtenteAvatar";
+import { t } from "../../i18n";
 
 const EditUtente = () => {
     const { id } = useParams();
@@ -33,7 +34,7 @@ const EditUtente = () => {
             setFormData(prev => ({ ...prev, imagem: path }));
         } catch (err) {
             console.error("Erro ao carregar foto:", err);
-            window.alert("Não foi possível carregar a foto. Verifique que é um ficheiro de imagem válido.");
+            window.alert(t.utentes.photoUploadError);
         }
     };
 
@@ -56,16 +57,16 @@ const EditUtente = () => {
         }
     };
 
-    if (!utente) return <div>Loading...</div>;
+    if (!utente) return <div>{t.common.loading}</div>;
 
     return (
         <UtenteForm
-            title="Editar Utente"
+            title={t.utentes.editTitle}
             formData={formData}
             setFormData={setFormData}
             onSubmit={handleSubmit}
             onCancel={() => navigate('/staff')}
-            submitLabel="Atualizar Utente"
+            submitLabel={t.utentes.updateSubmit}
             hiddenId={utente.id}
             apiUrl={apiUrl}
             onUploadFoto={handleUploadFoto}

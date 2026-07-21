@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { usePagedRotation } from "./usePagedRotation";
+import { t } from "../../i18n";
 
 // Altura mínima de um cartão (px) para o texto (nome/quarto/pedido) não
 // cortar; abaixo disto passa a rodar mais páginas em vez de espremer.
@@ -57,38 +58,38 @@ export default function PedidosTV({ all, onResolver, onVoltar }) {
             <div style={{ flex: "0 0 auto", display: "flex", alignItems: "center", justifyContent: "space-between",
                 flexWrap: "wrap", gap: "clamp(10px,1vw,18px)" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "clamp(10px,1vw,18px)" }}>
-                    <button onClick={onVoltar} title="Voltar" style={{ cursor: "pointer", border: "none", display: "inline-flex",
+                    <button onClick={onVoltar} title={t.common.back} style={{ cursor: "pointer", border: "none", display: "inline-flex",
                         alignItems: "center", gap: 8, background: "#e2e8f0", color: "#334155",
                         font: "800 clamp(14px,1.2vw,22px) system-ui", padding: "8px clamp(12px,1.4vw,20px)", borderRadius: 999 }}>
-                        ← Voltar
+                        {t.common.backArrow}
                     </button>
-                    <span style={{ font: "900 clamp(20px,1.6vw,30px) system-ui", color: "#334155" }}>PEDIDOS PENDENTES</span>
+                    <span style={{ font: "900 clamp(20px,1.6vw,30px) system-ui", color: "#334155" }}>{t.pedidos.titleUpper}</span>
                     {numEmergencias > 0 && (
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#dc2626", color: "#fff",
                             padding: "6px 16px", borderRadius: 999, font: "800 clamp(14px,1.2vw,22px) system-ui",
                             animation: "emgFlash 1.1s ease-in-out infinite" }}>
                             <span style={{ display: "inline-block", animation: "bell .9s ease-in-out infinite" }}>🔔</span>
-                            {numEmergencias} EMERGÊNCIA{numEmergencias > 1 ? "S" : ""}
+                            {t.pedidos.emergencies(numEmergencias)}
                         </span>
                     )}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "clamp(8px,0.8vw,14px)" }}>
                     {fila.pageCount > 1 && (
                         <div style={{ display: "inline-flex", alignItems: "center", gap: "clamp(6px,0.6vw,10px)" }}>
-                            <button onClick={fila.prev} title="Página anterior" style={{ cursor: "pointer", border: "none",
+                            <button onClick={fila.prev} title={t.pedidos.prevPage} style={{ cursor: "pointer", border: "none",
                                 background: "#e2e8f0", color: "#334155", font: "900 clamp(14px,1.3vw,24px) system-ui",
                                 width: "clamp(32px,2.6vw,44px)", height: "clamp(32px,2.6vw,44px)", borderRadius: 999 }}>‹</button>
                             <span style={{ font: "800 clamp(13px,1.1vw,20px) system-ui", color: "#64748b" }}>
                                 {fila.page + 1}/{fila.pageCount}
                             </span>
-                            <button onClick={fila.next} title="Página seguinte" style={{ cursor: "pointer", border: "none",
+                            <button onClick={fila.next} title={t.pedidos.nextPage} style={{ cursor: "pointer", border: "none",
                                 background: "#e2e8f0", color: "#334155", font: "900 clamp(14px,1.3vw,24px) system-ui",
                                 width: "clamp(32px,2.6vw,44px)", height: "clamp(32px,2.6vw,44px)", borderRadius: 999 }}>›</button>
                         </div>
                     )}
                     <span style={{ font: "800 clamp(14px,1.3vw,24px) system-ui", color: "#64748b", background: "#e2e8f0",
                         padding: "6px 18px", borderRadius: 999 }}>
-                        {all.length} a aguardar
+                        {t.pedidos.waiting(all.length)}
                     </span>
                 </div>
             </div>
@@ -113,7 +114,7 @@ export default function PedidosTV({ all, onResolver, onVoltar }) {
                         </div>
                         <span style={{ flex: "0 0 auto", display: "inline-block", font: "900 clamp(14px,1.7vw,34px) system-ui",
                             color: r.accent, background: r.accentSoft, padding: "8px clamp(10px,1.6vw,24px)", borderRadius: 999 }}>{r.ago}</span>
-                        <button onClick={() => onResolver(r.id)} title="Concluir pedido"
+                        <button onClick={() => onResolver(r.id)} title={t.pedidos.resolve}
                             style={{ flex: "0 0 auto", cursor: "pointer", border: "none", borderRadius: 999,
                                 background: "#15803d", color: "#fff", font: "900 clamp(16px,1.6vw,28px) system-ui",
                                 padding: "8px clamp(12px,1.4vw,22px)" }}>✔</button>
@@ -121,7 +122,7 @@ export default function PedidosTV({ all, onResolver, onVoltar }) {
                 ))}
                 {all.length === 0 && (
                     <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", justifyContent: "center", color: "#94a3b8",
-                        font: "700 clamp(16px,1.4vw,26px) system-ui", border: "2px dashed #cbd5e1", borderRadius: 20 }}>Sem pedidos pendentes</div>
+                        font: "700 clamp(16px,1.4vw,26px) system-ui", border: "2px dashed #cbd5e1", borderRadius: 20 }}>{t.pedidos.empty}</div>
                 )}
             </div>
         </div>

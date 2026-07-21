@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Context } from "../ContextProvider";
 import { staffStatus, staffSetup, staffLogin } from "../api/auth";
 import Keypad from "../Components/Keypad";
+import { t } from "../i18n";
 
 // Ecrã de bloqueio do tablet (kiosk). Serve para DEFINIR a palavra-passe (1ª vez)
 // e para DESBLOQUEAR o console de staff. Vive em /login: chega-se aqui pelo botão
@@ -52,7 +53,7 @@ export default function StaffLogin() {
             const { ok } = await staffLogin(pin);
             if (ok) entrar();
             else {
-                setErro("Palavra-passe incorreta");
+                setErro(t.auth.wrongPassword);
                 setPin("");
             }
             return;
@@ -60,14 +61,14 @@ export default function StaffLogin() {
         // modo "definir"
         if (passo === 1) {
             if (pin.length < 4) {
-                setErro("Mínimo 4 dígitos");
+                setErro(t.auth.minDigits);
                 return;
             }
             setPasso(2);
             return;
         }
         if (pin !== pinConfirm) {
-            setErro("As palavras-passe não coincidem");
+            setErro(t.auth.mismatch);
             setPin("");
             setPinConfirm("");
             setPasso(1);
@@ -75,33 +76,30 @@ export default function StaffLogin() {
         }
         const { ok, data } = await staffSetup(pin);
         if (ok) entrar();
-        else setErro(data.mensagem || "Erro ao definir a palavra-passe");
+        else setErro(data.mensagem || t.auth.setupError);
     };
 
     if (modo === "carregando") {
         return (
             <div className="login-screen">
-                <h1>A carregar…</h1>
+                <h1>{t.common.loading}</h1>
             </div>
         );
     }
 
     const titulo =
         modo === "login"
-            ? "Acesso Staff"
+            ? t.auth.staffAccess
             : passo === 1
-            ? "Definir palavra-passe"
-            : "Confirmar palavra-passe";
+            ? t.auth.setPassword
+            : t.auth.confirmPassword;
 
-    const subtitulo =
-        modo === "definir" && passo === 1
-            ? "Primeira utilização — escolha uma palavra-passe"
-            : null;
+    const subtitulo = modo === "definir" && passo === 1 ? t.auth.firstUse : null;
 
     return (
         <div className="login-screen">
             <button className="login-voltar" onClick={() => navigate("/")}>
-                ← Voltar
+                {t.common.backArrow}
             </button>
             <h1>{titulo}</h1>
             {subtitulo && <p className="login-subtitulo">{subtitulo}</p>}

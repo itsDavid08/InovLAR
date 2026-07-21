@@ -92,14 +92,14 @@ const StaffHome = () => {
                             />
                             <div className="flex items-center gap-1">
                                 <div className="px-2 py-1 rounded text-xs font-staff-mono font-bold text-status-green flex items-center gap-1">
-                                    <span className="material-symbols-outlined text-[14px]">check_circle</span> Estável
+                                    <span className="material-symbols-outlined text-[14px]">check_circle</span> {t.utentes.stable}
                                 </div>
                                 <ItemMenu
                                     open={openMenuId === utente.id}
                                     onOpenChange={(v) => setOpenMenuId(v ? utente.id : null)}
                                     boundaryRef={openCardRef}
                                     title={utente.nome}
-                                    subtitle="Quarto Geral"
+                                    subtitle={utente.quarto || t.utentes.room}
                                     thumbnail={<UtenteAvatar imagem={utente.imagem} corAvatar={utente.corAvatar} nome={utente.nome} apiUrl={apiUrl} className="w-full h-full text-[16px]" />}
                                     onManage={() => handleManage(utente)}
                                     onEdit={() => handleEdit(utente)}
@@ -109,7 +109,7 @@ const StaffHome = () => {
                         </div>
                         <h3 className="font-body-xl text-body-xl font-semibold text-on-surface mb-1 truncate" title={utente.nome}>{utente.nome}</h3>
                         <p className="font-body-md text-body-md text-on-surface-variant mb-3 flex items-center gap-1">
-                            <span className="material-symbols-outlined text-[16px]">meeting_room</span> Quarto Geral
+                            <span className="material-symbols-outlined text-[16px]">meeting_room</span> {utente.quarto || t.utentes.roomPreview}
                         </p>
                         <div className="flex gap-2">
                             <button

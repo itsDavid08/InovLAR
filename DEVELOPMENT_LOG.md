@@ -3347,7 +3347,49 @@ consumidores. Separação total de contextos fica para se algum dia houver probl
 PedidosPendentes/`handleVoltar`, e os 2 fast-refresh de UtenteAvatar/ContextProvider — este último
 exigiria mover o `Context` para ficheiro próprio e tocar nos 14 imports). `vite build` OK.
 
-### ⚠️ Verificação pendente
+### ⚠️ Verificação pendente (4b)
 Testar no browser os fluxos que passam pelo contexto: login/kiosk (entrar/sair da gaiola com PIN,
 reload mantém sessão), criar/editar/eliminar utente e botão, tabuleiro (enviar pedido, SOS on/off,
 "Estou Bem"), monitor de pedidos, e a sincronização em tempo real entre dois dispositivos (socket).
+
+---
+
+## 2026-07-16 — Refactor SOLID/Clean Code: Fase 5 (varredura final)
+
+### Alterações
+- **i18n completo** — extraídas as strings de todos os ficheiros que as fases 1–4 não tinham tocado:
+  `BotaoForm`, `BotoesList`, `CategoriaDropdown`, `ConflitoImagemModal`, `EditBotoes`, `UtenteForm`,
+  `EditUtente`, `NewUtente`, `StaffLogin`, `ChangePassword`, `Welcome`, `StaffSidebar`, `navItems`,
+  `RequestListDrawer`, `PedidosPhone`, `PedidosTV`, `StaffHome`. O `i18n/pt.js` passou a ter 191
+  linhas em secções por funcionalidade (`common`, `welcome`, `auth`, `nav`, `tabelaEditor`,
+  `tabelasView`, `staffHome`, `botoes`, `categoria`, `conflitoImagem`, `utentes`, `pedidos`,
+  `tabuleiro`). **Zero strings PT hardcoded em JSX** (verificado por grep).
+- **Bug encontrado e corrigido** — o `StaffHome` mostrava a string literal **"Quarto Geral"** em
+  todos os cartões (no cartão e no subtítulo do menu ⋮), em vez do `utente.quarto` real — que já era
+  mostrado corretamente no `TabelasView` e na pré-visualização do formulário. Era texto de
+  placeholder que ficou por substituir.
+- **Reutilização** — `BotoesList` passou a usar o `SearchInput` partilhado (era o 3.º sítio com o
+  mesmo input+ícone); `EditBotoes` extraiu `CATEGORIAS_BASE`/`FORM_VAZIO` para constantes;
+  `RequestListDrawer` deixou de ter dois `useContext(Context)` separados.
+- **`CLAUDE.md` atualizado** — estrutura de ficheiros do Client (i18n/, state/, hooks/, constants.js,
+  primitivos partilhados) e do Server (errorHandler, uploads, imageController, applyTemplate;
+  `routes/images.js` e `views/` removidos); nova secção "Table editor structure"; nova secção
+  "Error handling (Server)"; nova secção **"Code Conventions"** (inglês no código, PT nas fronteiras
+  API/BD, texto via i18n, preferir partilhados); endpoints removidos documentados; limitações
+  conhecidas reescritas (ESLint agora configurado; mass assignment, leak de `erro.message` e
+  `/localIP` marcados como corrigidos).
+
+### Estado final do refactor (Fases 0–5)
+| Ficheiro | Antes | Depois |
+|---|---|---|
+| `TabelaEditor.jsx` | 1138 | 342 |
+| `TabuleiroComunicacao.jsx` | 407 | 223 |
+| `ContextProvider.jsx` | 256 | 87 |
+| `route.js` | 203 | ~70 (só routing) |
+
+`npm run lint`: 0 erros, 4 warnings conhecidos. `vite build` OK. Módulos do Server carregam OK.
+
+### ⚠️ Nota final
+Continua sem testes automatizados — toda a verificação deste refactor foi estática (lint, build,
+carregamento de módulos) + revisão. Os fluxos de UI (sobretudo gestos do editor, kiosk/PIN e
+sincronização por socket) precisam de ser exercitados no browser antes de ir para o Pi.

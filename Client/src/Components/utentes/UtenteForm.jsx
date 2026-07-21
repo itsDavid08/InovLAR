@@ -5,6 +5,7 @@
 // baixo; em desktop (lg:flex-row) form à esquerda, preview à direita.
 import { useRef } from "react";
 import UtenteAvatar, { ICONE_PESSOA } from "./UtenteAvatar";
+import { t } from "../../i18n";
 
 // Paleta de cores de fundo do avatar (recolore iniciais e ícone). Pastéis legíveis.
 const CORES_AVATAR = ["#c7dbff", "#c9ecd3", "#ffe0c2", "#e6d6f7", "#ffd6e0", "#d6f0f5", "#f5e6c2"];
@@ -49,7 +50,7 @@ const UtenteForm = ({
 
                     <div>
                         <label className="block text-on-surface-variant font-label-xl text-sm font-semibold mb-2">
-                            Nome
+                            {t.utentes.name}
                         </label>
                         <input
                             type="text"
@@ -57,13 +58,13 @@ const UtenteForm = ({
                             onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
                             required
                             className="w-full px-4 py-3 rounded-lg bg-surface-container border border-outline-variant focus:border-primary focus:ring-2 focus:ring-primary focus:outline-none transition-all text-on-surface"
-                            placeholder="Nome do utente"
+                            placeholder={t.utentes.namePlaceholder}
                         />
                     </div>
 
                     <div>
                         <label className="block text-on-surface-variant font-label-xl text-sm font-semibold mb-2">
-                            Quarto
+                            {t.utentes.room}
                         </label>
                         <input
                             type="text"
@@ -71,21 +72,21 @@ const UtenteForm = ({
                             onChange={(e) => setFormData({ ...formData, quarto: e.target.value })}
                             required={quartoRequired}
                             className="w-full px-4 py-3 rounded-lg bg-surface-container border border-outline-variant focus:border-primary focus:ring-2 focus:ring-primary focus:outline-none transition-all text-on-surface"
-                            placeholder="Ex.: A112"
+                            placeholder={t.utentes.roomPlaceholder}
                         />
                     </div>
 
                     {/* Avatar: escolher O QUE mostrar (iniciais, ícone, foto atual, ou carregar). */}
                     <div>
                         <label className="block text-on-surface-variant font-label-xl text-sm font-semibold mb-2">
-                            Avatar
+                            {t.utentes.avatar}
                         </label>
                         <div className="flex flex-wrap gap-3 p-3 bg-surface-container rounded-lg border border-outline-variant">
                             {/* Iniciais (imagem vazia) — recolorida pela cor de fundo. */}
                             <button
                                 type="button"
                                 onClick={() => setFormData({ ...formData, imagem: '' })}
-                                title="Usar iniciais"
+                                title={t.utentes.useInitials}
                                 className="flex flex-col items-center gap-1 w-16"
                             >
                                 <UtenteAvatar
@@ -94,14 +95,14 @@ const UtenteForm = ({
                                     nome={formData.nome}
                                     className={`w-14 h-14 text-[18px] transition-all ${!formData.imagem ? 'ring-4 ring-primary scale-95' : 'hover:scale-105'}`}
                                 />
-                                <span className="text-[11px] text-on-surface-variant leading-tight text-center">Iniciais</span>
+                                <span className="text-[11px] text-on-surface-variant leading-tight text-center">{t.utentes.initials}</span>
                             </button>
 
                             {/* Ícone de pessoa — recolorido pela cor de fundo. */}
                             <button
                                 type="button"
                                 onClick={() => setFormData({ ...formData, imagem: ICONE_PESSOA })}
-                                title="Usar ícone"
+                                title={t.utentes.useIcon}
                                 className="flex flex-col items-center gap-1 w-16"
                             >
                                 <UtenteAvatar
@@ -109,7 +110,7 @@ const UtenteForm = ({
                                     corAvatar={formData.corAvatar}
                                     className={`w-14 h-14 text-[20px] transition-all ${formData.imagem === ICONE_PESSOA ? 'ring-4 ring-primary scale-95' : 'hover:scale-105'}`}
                                 />
-                                <span className="text-[11px] text-on-surface-variant leading-tight text-center">Ícone</span>
+                                <span className="text-[11px] text-on-surface-variant leading-tight text-center">{t.utentes.icon}</span>
                             </button>
 
                             {/* Foto atual: upload pessoal (só aparece quando existe). */}
@@ -118,19 +119,19 @@ const UtenteForm = ({
                                     <div className="relative group/foto">
                                         <img
                                             src={`${apiUrl}${formData.imagem}`}
-                                            alt="Foto pessoal"
+                                            alt={t.utentes.personalPhoto}
                                             className="w-14 h-14 rounded-full object-cover ring-4 ring-primary scale-95"
                                         />
                                         <button
                                             type="button"
                                             onClick={() => onRemoverFoto && onRemoverFoto()}
-                                            title="Remover foto"
+                                            title={t.utentes.removePhoto}
                                             className="absolute -top-1 -right-1 bg-error text-on-error rounded-full p-0.5 shadow flex"
                                         >
                                             <span className="material-symbols-outlined text-[14px] leading-none">close</span>
                                         </button>
                                     </div>
-                                    <span className="text-[11px] text-on-surface-variant leading-tight text-center">Foto atual</span>
+                                    <span className="text-[11px] text-on-surface-variant leading-tight text-center">{t.utentes.currentPhoto}</span>
                                 </div>
                             )}
 
@@ -138,13 +139,13 @@ const UtenteForm = ({
                             <button
                                 type="button"
                                 onClick={() => uploadInputRef.current?.click()}
-                                title="Carregar foto"
+                                title={t.utentes.uploadPhoto}
                                 className="flex flex-col items-center gap-1 w-16"
                             >
                                 <div className="w-14 h-14 rounded-full border-2 border-dashed border-outline-variant flex items-center justify-center text-on-surface-variant hover:border-primary hover:text-primary transition-colors">
                                     <span className="material-symbols-outlined">add_a_photo</span>
                                 </div>
-                                <span className="text-[11px] text-on-surface-variant leading-tight text-center">Carregar</span>
+                                <span className="text-[11px] text-on-surface-variant leading-tight text-center">{t.utentes.upload}</span>
                             </button>
                             <input
                                 ref={uploadInputRef}
@@ -159,15 +160,15 @@ const UtenteForm = ({
                     {/* Cor de fundo — recolore as iniciais e o ícone (não afeta fotos). */}
                     <div>
                         <label className="block text-on-surface-variant font-label-xl text-sm font-semibold mb-1">
-                            Cor de fundo
+                            {t.utentes.bgColor}
                         </label>
-                        <p className="text-xs text-on-surface-variant mb-2">Recolore as iniciais e o ícone (quando não há foto).</p>
+                        <p className="text-xs text-on-surface-variant mb-2">{t.utentes.bgColorHint}</p>
                         <div className="flex flex-wrap gap-2">
                             {CORES_AVATAR.map((cor) => (
                                 <button
                                     key={cor}
                                     type="button"
-                                    title={`Cor ${cor}`}
+                                    title={t.utentes.colorTitle(cor)}
                                     onClick={() => setFormData({ ...formData, corAvatar: cor })}
                                     style={{ backgroundColor: cor }}
                                     className={`w-8 h-8 rounded-full border transition-all ${formData.corAvatar === cor ? 'ring-4 ring-primary scale-95' : 'border-outline-variant hover:scale-110'}`}
@@ -179,7 +180,7 @@ const UtenteForm = ({
                     {templates && (
                         <div>
                             <label className="block text-on-surface-variant font-label-xl text-sm font-semibold mb-2">
-                                Tabela (template)
+                                {t.utentes.template}
                             </label>
                             <div className="flex gap-2">
                                 <select
@@ -188,17 +189,17 @@ const UtenteForm = ({
                                     required
                                     className="flex-1 px-4 py-3 rounded-lg bg-surface-container border border-outline-variant focus:border-primary focus:ring-2 focus:ring-primary focus:outline-none transition-all text-on-surface"
                                 >
-                                    <option value="" disabled>Escolhe um template…</option>
-                                    {templates.map((t) => <option key={t.id} value={t.id}>{t.nome}</option>)}
+                                    <option value="" disabled>{t.utentes.templatePlaceholder}</option>
+                                    {templates.map((tpl) => <option key={tpl.id} value={tpl.id}>{tpl.nome}</option>)}
                                 </select>
                                 {onCriarNovo && (
                                     <button type="button" onClick={onCriarNovo}
                                         className="px-4 py-3 rounded-lg bg-surface-container-high text-on-surface font-staff-mono whitespace-nowrap hover:bg-surface-variant transition-colors flex items-center gap-1">
-                                        <span className="material-symbols-outlined text-[18px]">add</span> Criar do zero
+                                        <span className="material-symbols-outlined text-[18px]">add</span> {t.utentes.createFromScratch}
                                     </button>
                                 )}
                             </div>
-                            <p className="text-xs text-on-surface-variant mt-1">Ou cria uma tabela personalizada para este utente, desde o zero.</p>
+                            <p className="text-xs text-on-surface-variant mt-1">{t.utentes.templateHint}</p>
                         </div>
                     )}
 
@@ -214,7 +215,7 @@ const UtenteForm = ({
                             onClick={onCancel}
                             className="flex-1 bg-surface-container-high text-on-surface py-3 rounded-full font-staff-mono text-staff-mono font-bold hover:bg-surface-variant transition-colors"
                         >
-                            Cancelar
+                            {t.common.cancel}
                         </button>
                     </div>
                 </form>
@@ -222,7 +223,7 @@ const UtenteForm = ({
                 {/* Preview — flex-col-reverse põe-a em cima em mobile; lg:flex-row à direita em desktop.
                     (Não usar order-*: o Tailwind Play CDN não deixa lg:order-* sobrepor o order-* base.) */}
                 <div className="w-full lg:flex-1 bg-surface-container-lowest p-8 rounded-xl shadow-sm border border-surface-variant flex flex-col items-center">
-                    <h2 className="font-display-lg text-2xl font-bold text-on-surface mb-6 w-full underline decoration-primary decoration-4 underline-offset-8">Pré-visualização</h2>
+                    <h2 className="font-display-lg text-2xl font-bold text-on-surface mb-6 w-full underline decoration-primary decoration-4 underline-offset-8">{t.common.preview}</h2>
 
                     <div className="bg-surface-container-lowest rounded-lg p-6 shadow-sm border border-surface-variant hover:shadow-md hover:border-primary transition-all relative overflow-hidden group w-full max-w-sm">
                         <div className="absolute top-0 left-0 w-full h-1 bg-status-green"></div>
@@ -235,15 +236,15 @@ const UtenteForm = ({
                                 className="w-16 h-16 text-[24px] border-2 border-surface-container"
                             />
                             <div className="px-2 py-1 rounded text-xs font-staff-mono font-bold text-status-green flex items-center gap-1">
-                                <span className="material-symbols-outlined text-[14px]">check_circle</span> Estável
+                                <span className="material-symbols-outlined text-[14px]">check_circle</span> {t.utentes.stable}
                             </div>
                         </div>
-                        <h3 className="font-body-xl text-body-xl font-semibold text-on-surface mb-1 truncate" title={formData.nome || "Nome"}>
-                            {formData.nome || "Nome do utente"}
+                        <h3 className="font-body-xl text-body-xl font-semibold text-on-surface mb-1 truncate" title={formData.nome || t.utentes.name}>
+                            {formData.nome || t.utentes.namePreview}
                         </h3>
                         <p className="font-body-md text-body-md text-on-surface-variant flex items-center gap-1">
                             <span className="material-symbols-outlined text-[16px]">meeting_room</span>
-                            {formData.quarto || "Quarto"}
+                            {formData.quarto || t.utentes.roomPreview}
                         </p>
                     </div>
                 </div>

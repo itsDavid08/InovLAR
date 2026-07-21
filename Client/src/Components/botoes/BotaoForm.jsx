@@ -2,6 +2,7 @@
 // Componente presentacional — todo o estado e a lógica vivem em EditBotoes.
 import { useRef } from "react";
 import CategoriaDropdown from "./CategoriaDropdown";
+import { t } from "../../i18n";
 
 const BotaoForm = ({
     mode,
@@ -31,7 +32,7 @@ const BotaoForm = ({
                         <span className="material-symbols-outlined">arrow_back</span>
                     </button>
                     <h1 className="font-headline-md text-headline-md font-black text-primary dark:text-inverse-primary">
-                        {mode === "edit" ? "Editar Botão" : "Novo Botão"}
+                        {mode === "edit" ? t.botoes.editButton : t.botoes.newButton}
                     </h1>
                 </div>
             </header>
@@ -42,7 +43,7 @@ const BotaoForm = ({
 
                     <div>
                         <label className="block text-on-surface-variant font-label-xl text-sm font-semibold mb-2">
-                            Nome
+                            {t.botoes.name}
                         </label>
                         <input
                             type="text"
@@ -50,13 +51,13 @@ const BotaoForm = ({
                             onChange={e => setFormData({ ...formData, nome: e.target.value })}
                             required
                             className="w-full px-4 py-3 rounded-lg bg-surface-container border border-outline-variant focus:border-primary focus:ring-2 focus:ring-primary focus:outline-none transition-all text-on-surface"
-                            placeholder="Nome do Botão"
+                            placeholder={t.botoes.namePlaceholder}
                         />
                     </div>
 
                     <div>
                         <label className="block text-on-surface-variant font-label-xl text-sm font-semibold mb-2">
-                            Mensagem
+                            {t.botoes.message}
                         </label>
                         <input
                             type="text"
@@ -64,13 +65,13 @@ const BotaoForm = ({
                             onChange={e => setFormData({ ...formData, mensagem: e.target.value })}
                             required
                             className="w-full px-4 py-3 rounded-lg bg-surface-container border border-outline-variant focus:border-primary focus:ring-2 focus:ring-primary focus:outline-none transition-all text-on-surface"
-                            placeholder="Mensagem a enviar..."
+                            placeholder={t.botoes.messagePlaceholder}
                         />
                     </div>
 
                     <div>
                         <label className="block text-on-surface-variant font-label-xl text-sm font-semibold mb-2">
-                            Categoria
+                            {t.botoes.category}
                         </label>
                         <CategoriaDropdown
                             value={formData.categoria}
@@ -83,7 +84,7 @@ const BotaoForm = ({
                     <div>
                         <div className="flex justify-between items-center mb-2">
                             <label className="text-on-surface-variant font-label-xl text-sm font-semibold">
-                                Imagem
+                                {t.botoes.image}
                             </label>
                             <button
                                 type="button"
@@ -91,7 +92,7 @@ const BotaoForm = ({
                                 className="flex items-center gap-1 text-primary text-sm font-semibold hover:underline"
                             >
                                 <span className="material-symbols-outlined text-base">upload</span>
-                                Carregar imagem
+                                {t.botoes.uploadImage}
                             </button>
                             <input
                                 ref={uploadInputRef}
@@ -106,7 +107,7 @@ const BotaoForm = ({
                                 <div key={index} className="relative group/img">
                                     <img
                                         src={imgSrc(img)}
-                                        alt={`Opção ${index}`}
+                                        alt={t.botoes.imageOption(index)}
                                         className={`w-full aspect-square object-cover rounded-lg cursor-pointer transition-all ${formData.imagem === img ? 'ring-4 ring-primary scale-95 shadow-md' : 'hover:scale-105 shadow-sm'}`}
                                         onClick={() => onImageSelect(img)}
                                     />
@@ -114,7 +115,7 @@ const BotaoForm = ({
                                         type="button"
                                         onClick={() => onDeleteImagem(img)}
                                         className="absolute top-0.5 right-0.5 hidden group-hover/img:flex bg-error text-on-error rounded-full p-0.5 shadow"
-                                        title="Eliminar imagem"
+                                        title={t.botoes.deleteImage}
                                     >
                                         <span className="material-symbols-outlined text-sm leading-none">delete</span>
                                     </button>
@@ -128,14 +129,14 @@ const BotaoForm = ({
                             type="submit"
                             className="flex-1 bg-primary text-on-primary py-3 rounded-full font-staff-mono text-staff-mono font-bold hover:bg-primary-container hover:text-on-primary-container transition-colors shadow-sm"
                         >
-                            {mode === "edit" ? "Atualizar Botão" : "Criar Botão"}
+                            {mode === "edit" ? t.botoes.updateButton : t.botoes.createButton}
                         </button>
                         <button
                             type="button"
                             onClick={onCancel}
                             className="flex-1 bg-surface-container-high text-on-surface py-3 rounded-full font-staff-mono text-staff-mono font-bold hover:bg-surface-variant transition-colors"
                         >
-                            Cancelar
+                            {t.common.cancel}
                         </button>
                     </div>
                 </form>
@@ -143,7 +144,7 @@ const BotaoForm = ({
                 {/* Preview — flex-col-reverse põe-a em cima em mobile; lg:flex-row à direita em desktop.
                     (Não usar order-*: o Tailwind Play CDN não deixa lg:order-* sobrepor o order-* base.) */}
                 <div className="w-full lg:flex-1 bg-surface-container-lowest p-8 rounded-xl shadow-sm border border-surface-variant flex flex-col items-center">
-                    <h2 className="font-display-lg text-2xl font-bold text-on-surface mb-6 w-full underline decoration-primary decoration-4 underline-offset-8">Pré-visualização</h2>
+                    <h2 className="font-display-lg text-2xl font-bold text-on-surface mb-6 w-full underline decoration-primary decoration-4 underline-offset-8">{t.common.preview}</h2>
 
                     <div className="bg-surface-container-lowest rounded-lg p-6 shadow-sm border border-surface-variant hover:shadow-md hover:border-primary transition-all relative overflow-hidden group w-full max-w-sm text-center">
                         <div className="flex items-center flex-col text-center mt-4">
@@ -154,14 +155,14 @@ const BotaoForm = ({
                                     className="w-full h-full object-cover"
                                 />
                             </div>
-                            <h3 className="font-headline-md text-2xl font-bold text-on-surface mb-1 truncate w-full" title={formData.nome || "Nome"}>
-                                {formData.nome || "Nome do Botão"}
+                            <h3 className="font-headline-md text-2xl font-bold text-on-surface mb-1 truncate w-full" title={formData.nome || t.botoes.name}>
+                                {formData.nome || t.botoes.namePreview}
                             </h3>
                             <p className="font-body-md text-body-md text-on-surface-variant mb-2 truncate w-full">
-                                {formData.mensagem || "Mensagem do botão"}
+                                {formData.mensagem || t.botoes.messagePreview}
                             </p>
                             <span className="mt-2 bg-tertiary-container text-on-tertiary-container px-3 py-1 rounded-full text-xs font-staff-mono font-bold">
-                                {formData.categoria || "Categoria"}
+                                {formData.categoria || t.botoes.categoryPreview}
                             </span>
                         </div>
                     </div>

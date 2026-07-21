@@ -1,4 +1,5 @@
 import { useNavigate } from "react-router-dom";
+import { t } from "../i18n";
 
 // Ecrã de boas-vindas (raiz). Não pede PIN — só convida a iniciar sessão.
 // O botão leva ao ecrã de login do staff (/login).
@@ -16,25 +17,17 @@ export default function Welcome() {
                     <span className="welcome-split-logo-text">InovLAR</span>
                 </div>
 
-                <p className="welcome-split-tagline">
-                    Comunicação simples entre residentes e equipa.
-                </p>
-
-                <span className="welcome-split-caption">
-                    
-                </span>
+                <p className="welcome-split-tagline">{t.welcome.tagline}</p>
             </div>
 
             <div className="welcome-split-content">
-                <h1>Bem-vindo</h1>
-                <p className="login-subtitulo">
-                    Toque no botão para iniciar sessão com o seu PIN.
-                </p>
+                <h1>{t.welcome.title}</h1>
+                <p className="login-subtitulo">{t.welcome.subtitle}</p>
                 <button
                     className="login-iniciar"
                     onClick={() => navigate("/login")}
                 >
-                    Iniciar sessão
+                    {t.welcome.signIn}
                 </button>
             </div>
         </div>

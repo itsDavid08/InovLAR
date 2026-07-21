@@ -4,6 +4,12 @@ import { fetchImagensBotoes, uploadImagemBotao, deleteImagemBotao } from "../../
 import BotoesList from "./BotoesList";
 import BotaoForm from "./BotaoForm";
 import ConflitoImagemModal from "./ConflitoImagemModal";
+import { t } from "../../i18n";
+
+// Categorias sugeridas de base (o staff pode criar outras no dropdown).
+const CATEGORIAS_BASE = ["Sinto-me", "Medicamentos", "Necessidades", "Tecnologias", "Chamar"];
+
+const FORM_VAZIO = { nome: '', mensagem: '', categoria: '', imagem: '' };
 
 // Editor de botões. Container: detém o estado e a lógica e decide qual layout
 // mostrar — BotoesList (selecionar) ou BotaoForm (criar/editar).
@@ -12,12 +18,7 @@ const EditBotoes = () => {
     const [selectedBotao, setSelectedBotao] = useState(null);
     const [searchQuery, setSearchQuery] = useState("");
     const [mode, setMode] = useState("list"); // 'list', 'edit', 'new'
-    const [formData, setFormData] = useState({
-        nome: '',
-        mensagem: '',
-        categoria: '',
-        imagem: ''
-    });
+    const [formData, setFormData] = useState(FORM_VAZIO);
     const [imagensDisponiveis, setImagensDisponiveis] = useState([]);
     const [conflito, setConflito] = useState(null); // ficheiro à espera de decisão (nome já existe)
     const [versoes, setVersoes] = useState(new Map()); // path → timestamp p/ cache-busting de imagens substituídas
@@ -26,9 +27,8 @@ const EditBotoes = () => {
     // Categorias do dropdown: conjunto base ∪ as já usadas pelos botões ∪ as
     // criadas nesta sessão. Assim uma categoria nova reaparece após guardar o botão.
     const categoriasDisponiveis = useMemo(() => {
-        const base = ["Sinto-me", "Medicamentos", "Necessidades", "Tecnologias", "Chamar"];
         const usadas = botoes.map((b) => b.categoria).filter(Boolean);
-        return [...new Set([...base, ...usadas, ...categoriasNovas])];
+        return [...new Set([...CATEGORIAS_BASE, ...usadas, ...categoriasNovas])];
     }, [botoes, categoriasNovas]);
 
     const handleAddCategoria = (nome) => {
@@ -58,17 +58,12 @@ const EditBotoes = () => {
     };
 
     const handleNew = () => {
-        setFormData({
-            nome: '',
-            mensagem: '',
-            categoria: '',
-            imagem: ''
-        });
+        setFormData(FORM_VAZIO);
         setMode("new");
     };
 
     const handleDelete = async (botao) => {
-        if (window.confirm(`Tens certeza de eliminar o botão ${botao.nome}?`)) {
+        if (window.confirm(t.botoes.deleteConfirm(botao.nome))) {
             await deleteBotao(botao.id);
         }
     };
@@ -102,7 +97,7 @@ const EditBotoes = () => {
             setFormData(prev => ({ ...prev, imagem: path }));
         } catch (err) {
             console.error("Erro ao carregar imagem:", err);
-            window.alert("Não foi possível carregar a imagem. Verifique que é um ficheiro de imagem válido.");
+            window.alert(t.botoes.uploadError);
         }
     };
 
@@ -123,14 +118,14 @@ const EditBotoes = () => {
     };
 
     const handleDeleteImagem = async (imgPath) => {
-        if (!window.confirm(`Eliminar esta imagem? Os botões que a usam ficarão sem imagem associada.`)) return;
+        if (!window.confirm(t.botoes.deleteImageConfirm)) return;
         try {
             await deleteImagemBotao(imgPath);
             setImagensDisponiveis(prev => prev.filter(i => i !== imgPath));
             if (formData.imagem === imgPath) setFormData(prev => ({ ...prev, imagem: '' }));
         } catch (err) {
             console.error("Erro ao eliminar imagem:", err);
-            window.alert("Não foi possível eliminar a imagem.");
+            window.alert(t.botoes.deleteImageError);
         }
     };
 

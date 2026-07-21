@@ -84,13 +84,18 @@ Raspberry Pi deployment (MariaDB install, DB/user creation, migrations, systemd 
 **Client (React + Vite)**
 ```
 Client/src/
-├── api/              # HTTP requests by resource (botoes, utentes, pedidos, tabela, auth)
+├── api/              # HTTP requests by resource (botoes, utentes, pedidos, tabela, tabelasPadrao, auth) + client.js (get/mutate + apiUrl)
+├── i18n/             # pt.js (all user-facing PT strings, keyed in English) + index.js (exports `t`)
+├── state/            # Domain state hooks composed by ContextProvider: useBotoesState, useUtentesState, usePedidosState, useStaffAuthState
+├── hooks/            # Cross-cutting hooks: useFeedback, useButtonById, useAlarmeEmergencia
+├── constants.js      # PEDIDO_STATES (pendente/concluido/cancelado)
 ├── Components/
 │   ├── layout/       # StaffShell, StaffSidebar, StaffBottomNav, ItemMenu, navItems.js
-│   ├── botoes/       # EditBotoes (container) + BotoesList + BotaoForm + ConflitoImagemModal
-│   ├── utentes/      # EditUtente, NewUtente, UtenteForm
+│   ├── botoes/       # EditBotoes (container) + BotoesList + BotaoForm + CategoriaDropdown + ConflitoImagemModal
+│   ├── utentes/      # EditUtente, NewUtente, UtenteForm + UtenteAvatar (photo or initials-in-corAvatar fallback)
 │   ├── pedidos/      # PedidosPhone, PedidosTV (view modes) + decorate.js (pedido→visual props) + usePagedRotation + useViewportMode
-│   ├── tabela/       # TabelaEditor, TabelaPreview, ButtonTile, constants.js, gridSpans.js
+│   ├── tabela/       # See "Table editor structure" below — split into components + gesture hooks
+│   ├── Modal.jsx, SearchInput.jsx, FeedbackToast.jsx   # Shared UI primitives
 │   ├── RequireStaff.jsx       # Gate: blocks staff routes if staffUnlocked=false
 │   ├── Keypad.jsx             # Reusable numeric keypad (PIN, password)
 │   ├── PinPrompt.jsx          # Modal to exit patient board
@@ -102,16 +107,26 @@ Client/src/
 │   ├── StaffHome.jsx          # Patient list management
 │   ├── PedidosPendentes.jsx   # Monitor view (large screen format)
 │   ├── TabuleiroComunicacao.jsx  # Patient board (the "cage"; exit via PIN modal)
-│   ├── GerirTabela.jsx, GerirTemplate.jsx  # Table/template editors
+│   ├── GerirTabela.jsx, GerirTemplate.jsx  # Table/template editors (both use useTabelaConfigs)
 │   ├── TabelasView.jsx, ChangePassword.jsx
-│   └── [Orphaned] Home.jsx, UtenteHome.jsx, AbrirUtente.jsx, BindUtente.jsx, EscreverMensagem.jsx
 ├── utils/
 │   └── utenteToken.js         # 32-bit Feistel cipher: id↔URL token (tokenDoUtente/idDoToken). Reversible OBFUSCATION only — key is in the bundle, not access control (see security notes)
-├── ContextProvider.jsx        # Global state + state setters
+├── ContextProvider.jsx        # Composes the state/ hooks + cross-cutting orchestration (socket, staff-read gating, per-utente refetch). Single Context.
 ├── App.jsx                    # Router + protected routes via RequireStaff
 ├── main.jsx
 └── index.css                  # Global styles + responsive utilities
 ```
+
+**Table editor structure** (`Components/tabela/`) — the editor was one 1138-line file; it is now:
+- **Components**: `TabelaEditor` (orchestrator, ~340 lines), `EditorTopBar`, `BibliotecaBotoes`,
+  `PainelCoresCategoria`, `GridCell`, `LibraryTile`, `LibDrop`, `TrashZone`, `Segment`,
+  `MarchingAnts`, `ButtonTile`, `TabelaPreview`, `GrelhaTabuleiro` (read-only board grid)
+- **Gesture hooks** (`tabela/hooks/`): `usePinchZoom`, `useGridResize`, `useDragPlacement` — each
+  exposes `onPlace(cells, spans)`; the editor wires them to one `commitPlacement`
+- **Shared logic**: `constants.js` (DISPOSITIVOS, colours, `isSOS`, `defaultConfig`, `hasCells`,
+  `devicesWithLayout`), `gridSpans.js`, `useGridGeometry.js` (rows/slots/occupancy/category matrix —
+  used by editor, preview *and* board), `useTabelaConfigs.js` (3-device config state + dirty tracking),
+  `useTipoDispositivo.js`
 
 **Server (Express + Sequelize)**
 ```
@@ -119,7 +134,8 @@ Server/
 ├── config/
 │   ├── config.js         # sequelize-cli dialect config, reads DB_* from .env (dialect: 'mariadb')
 │   ├── database.js       # Sequelize instance built from config.js, used by models/index.js
-│   └── auth.js           # COOKIE_SECRET, MIN_DIGITOS
+│   ├── constants.js      # PEDIDO_STATES + DEVICES whitelist (shared by controllers)
+│   └── auth.js           # COOKIE_SECRET, MIN_PASSWORD_DIGITS
 ├── .env                  # DB_NAME/DB_USER/DB_PASS/DB_HOST/DB_PORT — gitignored, copy from .env.example
 ├── models/
 │   ├── Botao.js          # Button/quick-request (imagem: allowNull)
@@ -131,14 +147,16 @@ Server/
 │   ├── TabelaPadrao.js   # Template for bulk apply to patients — sync()'d, no migration
 │   └── index.js          # Exports + associations
 ├── routes/
-│   ├── route.js          # Main API endpoints (auth, utentes, botoes, pedidos, tabelas, imagesBotoes, imagesUtentes)
-│   └── images.js         # GET /imagesBotoes (flat listing; no subdirs)
-├── controller/           # Request handlers (authController, utente*, botao*, etc.)
+│   └── route.js          # Routing ONLY (no multer config, no model imports) — auth, utentes, botoes, pedidos, tabelas, images
+├── controller/           # Request handlers (auth*, utente*, botao*, pedido*, tabela*, imageController)
 ├── middleware/
 │   ├── auth.js           # requireStaff — async, validates session token against StaffSession (fail-closed)
+│   ├── errorHandler.js   # Central error handler (LAST middleware) — see "Error handling" below
+│   ├── uploads.js        # Multer configs (botão icons / utente photos) + shared imageFileFilter + isPersonalUtentePhoto
 │   └── rateLimiter.js    # staffAuthLimiter — 5 failed attempts/10min/IP on /auth/staff/{login,setup,change}
 ├── Util/
 │   ├── sessions.js       # criarSessao/validarSessao/revogarSessao — StaffSession helpers (hashes token, lazy expiry cleanup)
+│   ├── applyTemplate.js  # applyTemplateToUtente — shared by utente creation and POST /tabelas-padrao/:id/aplicar
 │   ├── socketIO.js       # Socket.io setup + notificarAlteracaoBD broadcast
 │   └── seedDefaults.js   # Create "Predefinida" template on first run (runs once — guards on TabelaPadrao.count())
 ├── seeders/              # Seed scripts (43 default botões); no run-once tracking table, re-running errors on dup IDs
@@ -147,9 +165,16 @@ Server/
 │   ├── imagesBotoes/     # Flat structure (no subfolders); upload/delete here
 │   ├── imagesUtentes/    # Patient avatars: random filenames + predefinidos/ subfolder (see Image Management below)
 │   └── [other assets]
-├── views/                # Orphaned EJS views (replaced by React SPA)
-└── main.js               # Entry point: Express + socket.io + static file serving; also calls sync() for the 3 non-migrated models
+└── main.js               # Entry point: Express + socket.io + static serving + SPA fallback; calls sync() for the non-migrated models; registers errorHandler last
 ```
+
+**Error handling (Server):** controllers have **no try/catch boilerplate** — Express 5 forwards
+rejected promises from async handlers to `middleware/errorHandler.js`, registered last in `main.js`.
+It maps `ValidationError`→400, `ForeignKeyConstraintError`→400, `MulterError`→400, any error with
+`err.status`→that status, everything else→generic 500. Responses are always `{ mensagem }` and never
+leak `erro.message`. Expected outcomes (404s, invalid input) stay explicit `return res.status(...)`
+in the controller — exceptions are for the *unexpected*. Where a specific error code matters (e.g.
+`ENOENT` on file delete → 404), keep a local try/catch and `throw err` for the rest.
 
 **MariaDB table-name gotcha:** table/column name casing is compared case-*insensitively* on Windows MariaDB (`lower_case_table_names=1`) but case-*sensitively* on Linux (default on the Pi/Debian, `=0`). A migration that creates `'Pedidos'` while the model declares `tableName: 'pedidos'` will silently work on Windows dev but throw `ER_NO_SUCH_TABLE` on the Pi. Always create tables with the exact lowercase name the model uses; see `Server/migrations/20260703150000-rename-pedidos-table.js` for the fix pattern (checks `information_schema.tables` with `BINARY` before renaming, so it's a no-op where the name is already correct).
 
@@ -180,8 +205,7 @@ Server/
 - `DELETE /imagesUtentes` + `{ path }` → nullify `imagem` on dependent utentes (predefined avatars can't be deleted this way) → **[requireStaff]**
 
 ### Botões (Buttons)
-- `GET /botoes` → all buttons
-- `GET /botoes/utente/:utenteId` → buttons associated with one patient
+- `GET /botoes` → all buttons (open — the board needs the catalog)
 - `POST /botoes` + body → **[requireStaff]**
 - `PUT /botoes/:id` + body → **[requireStaff]**
 - `DELETE /botoes/:id` → **[requireStaff]**
@@ -194,13 +218,13 @@ Server/
 - `GET /pedidos/ativos/emergencia` → SOS emergencies → **[requireStaff]**
 - `GET /pedidos/:id` → single request → **[requireStaff]**
 - `GET /pedidos/utente/:utenteId` → active requests for one patient (open — the board's own history)
-- `POST /pedidos` + body → patient creates request (no auth)
-- `PUT /pedidos/:id` + body → patient updates own request (no auth)
+- `POST /pedidos` + body → patient creates request (no auth). Body whitelisted to `{ emergencia, utenteId, botaoId }`. A duplicate pending request returns `200` + the existing one (double-tap guard), not a new row.
+- `PUT /pedidos/:id` + body → patient updates own request (no auth). Only `{ estado }` is accepted, validated against the ENUM.
 - `DELETE /pedidos/:id` → **[requireStaff]**
 
 ### Tabelas (Layouts)
 - `GET /tabelas` → all saved layouts → **[requireStaff]**
-- `GET /utentes/:id/tabela/:dispositivo` → get layout for device (phone/tablet) (open — the board's own)
+- `GET /utentes/:id/tabela/:dispositivo` → get layout for one device (open — the board's own). `:dispositivo` is `smartphone` | `tablet` | `pc`, whitelisted server-side in `tabelaController.js` (400 otherwise)
 - `PUT /utentes/:id/tabela/:dispositivo` + body → **[requireStaff]**
 - `GET /tabelas-padrao` → templates → **[requireStaff]**
 - `POST /tabelas-padrao` + body → **[requireStaff]**
@@ -209,7 +233,11 @@ Server/
 - `POST /tabelas-padrao/:id/aplicar` + `{ utenteIds }` → **[requireStaff]**
 
 ### Images
-- `GET /imagesBotoes` → list all images in flat structure
+- `GET /imagesBotoes` → list all images in flat structure (served by `imageController`)
+
+> **Removed (2026-07-16 refactor):** `GET /localIP` (unused by the Client; leaked network topology)
+> and `GET /botoes/utente/:utenteId` (unused *and* broken — `Botao` has no `utenteId` column; the
+> association is `belongsToMany` through `UtenteBotoes`, so the query threw "unknown column").
 
 ---
 
@@ -241,6 +269,26 @@ Server/
 - **Two request view modes** — PedidosPhone (mobile optimized) and PedidosTV (large-screen, portrait rotation).
 
 ### 5. Variable-Size Buttons & Category Coloring
+
+The board layout is one JSON blob per `(utenteId, dispositivo)` in `TabelaLayout.config`
+(`TabelaPadrao.configs` holds the same shape keyed by all three devices at once). Nothing
+validates it beyond the device whitelist, so both editors and both renderers must agree on it:
+
+```js
+{
+  cols: 5,                       // grid width; per-device default in DISPOSITIVOS (constants.js)
+  size: "M",                     // "P" | "M" | "G" — tile min-height/icon/text scale (TAMANHOS)
+  cells: [12, null, 7, ...],     // flat row-major array, index = r*cols+c; botaoId at the anchor,
+                                 //   null for empty AND for cells reserved by a bigger neighbour
+  spans: { "2": { w: 2, h: 2 } },// keyed by ANCHOR position; absent = 1×1
+  coresCategoria: { ... }        // staff colour overrides per category; absent = default pastel
+}
+```
+
+Devices are `smartphone` | `tablet` | `pc` (`DISPOSITIVOS` in `constants.js`, mirrored as a
+whitelist in `tabelaController.js`). Rows are implicit — derived from `cells`/`spans` via
+`extentRows()`, never stored.
+
 - **Spans, not a grid resize** — a button can occupy a rectangular w×h "footprint" anchored at
   its top-left cell. Anchor cell holds the `botaoId`; the rest of the footprint is reserved as
   `null`. Missing entry in `config.spans` = 1×1 (backward-compatible with tables saved before
@@ -253,6 +301,31 @@ Server/
   default pastel > no color. SOS never gets a background color. Adjacent same-category cells
   visually "merge" (shared corners square off) — computed per-cell, accounting for each button's
   full footprint, not just its anchor.
+- **The editor's drag/resize gestures are pixel-geometry, not cursor cells** — two traps, both
+  the result of a rewrite (2026-07-15, see `DEVELOPMENT_LOG.md`): the drop anchor comes from
+  `active.rect.current.translated` (the dragged node's real rectangle) via `ancoraDoArrasto()`,
+  **not** from dnd-kit's `over` cell, or a >1×1 button lands under the cursor instead of where
+  it visually appears; and resizing uses an 8-handle box where each handle has a **fixed pivot**,
+  rather than branching on the drag delta's sign — the sign approach made reversing direction
+  mid-gesture read as "grow more". `resizePreview`/`dragPreview` are local state, committed to
+  `config` only on pointerup.
+
+---
+
+## Code Conventions (2026-07 refactor)
+
+- **Code is written in English** — variables, functions, hooks, comments, new file names.
+- **Domain nouns stay Portuguese at the boundaries** — REST paths (`/utentes`, `/botoes`,
+  `/pedidos`), Sequelize models/tables/columns, and DB enum values (`pendente`, `concluido`,
+  `cancelado`) are **not** renamed. This protects deployed Pi devices and existing data. Handlers
+  therefore read as English verb + PT domain noun: `getAllUtentes`, `createPedido`, `associateBotao`.
+- **User-facing text lives in `Client/src/i18n/pt.js`** — never hardcode PT strings in JSX. Keys are
+  English and grouped by feature (`t.common.save`, `t.botoes.newButton`, `t.tabelasView.deleteConfirm(nome)`).
+  Strings needing interpolation are functions. Adding a language = a new file with the same shape,
+  swapped in `i18n/index.js`.
+- **Shared over duplicated** — before writing a toast/modal/search box/grid calculation, check
+  `Components/` (`Modal`, `SearchInput`, `FeedbackToast`), `hooks/` (`useFeedback`, `useButtonById`)
+  and `Components/tabela/` (`useGridGeometry`, `isSOS`, `defaultConfig`, `hasCells`).
 
 ---
 
@@ -275,7 +348,7 @@ Server/
 
 ### Fixing a Bug with Images
 
-- **Upload/delete error?** Check multer config in `route.js`, path validation (no `..`, starts with `/imagesBotoes/`), `requireStaff` middleware.
+- **Upload/delete error?** Check multer config in `middleware/uploads.js`, the handler in `controller/imageController.js`, path validation (no `..`, starts with `/imagesBotoes/`), `requireStaff` middleware.
 - **Image not showing?** Check fallback in component (`/imagesBotoes/default.png`), `apiUrl` prefix, cache-busting `versoes` map if edited.
 - **Name collision?** `ConflitoImagemModal` prompts staff; backend uses query `?onConflict=rename|replace`.
 
@@ -292,21 +365,22 @@ Server/
 | Run migrations | `cd Server && npx sequelize-cli db:migrate` |
 | Seed test data | `cd Server && npx sequelize-cli db:seed:all` (errors on 2nd run — no run-once guard; see table-name gotcha above) |
 | Full local dev setup (Windows) | `./install.ps1` from repo root |
-| Lint Client | `cd Client && npm run lint` (currently broken — see below) |
+| Lint Client | `cd Client && npm run lint` (0 errors; 4 known warnings — see below) |
 
 There is no automated test suite for either `Server` or `Client` (`Server`'s `npm test` is an unset placeholder).
+Both processes are also declared in `.claude/launch.json` as `server` (:3000) and `client` (:5173),
+so the preview tooling can start them by name instead of shelling out. Verification here means
+driving the running app — that's how the table-editor gesture rewrite was checked.
 
 ---
 
 ## Known Limitations & TODOs
 
-- **ESLint v9 not configured** — `Client/package.json` has a `lint` script but no `eslint.config.js` exists, so `npm run lint` fails.
-- **CSS class cleanup** — `.new-container` / `.edit-container` in `index.css` no longer used (UtenteForm was refactored); safe to remove.
+- **ESLint warnings (4, all benign)** — `npm run lint` passes with 0 errors. Remaining: `react-refresh/only-export-components` on `ContextProvider.jsx` and `UtenteAvatar.jsx` (each exports a non-component alongside a component; clearing them means moving `Context`/`ICONE_PESSOA` to their own files and updating ~14 imports), and `react-hooks/exhaustive-deps` on `PedidosTV.jsx` (`fila`) and `PedidosPendentes.jsx` (`handleVoltar`).
 - **Safe-area inset for iPhone** — bottom nav could include `env(safe-area-inset-bottom)` in height for cleaner spacing near home indicator.
-- **Orphaned components** — `Home.jsx`, `UtenteHome.jsx`, `AbrirUtente.jsx`, `BindUtente.jsx`, `EscreverMensagem.jsx` not in router (kept for reference).
 - **Production HTTPS** — cookie `secure` flag now reads `COOKIE_SECURE` env var (opt-in), since the Pi currently serves plain HTTP with no TLS anywhere in `install.sh`. Set `COOKIE_SECURE=true` once a reverse proxy with a certificate sits in front.
-- **Stale SQLite file** — `Server/database/apcm.sqlite` is a leftover from the pre-MariaDB era; nothing reads it anymore. Safe to delete.
-- **Known security gaps** — from a manual audit (originally tracked in a now-removed `SECURITY_CHECKLIST.md`; see the 2026-07 entries in `DEVELOPMENT_LOG.md` for fix history). All 🔴 Critical items are fixed (rate limiting on staff login, real revocable sessions replacing the old static `"ok"` cookie, `COOKIE_SECRET` fallback removed/required in production, `secure` cookie flag wired up). Partially fixed (🟠 High, 2026-07-14): the *aggregated* patient-data GETs (`/utentes`, `/pedidos`, `/pedidos/ativos/*`, `/pedidos/:id`, `/tabelas`, `/tabelas-padrao`) are now `requireStaff`, so the patient tablet no longer downloads the whole roster — but per-id enumeration (`GET /utentes/:id` by reversing the URL token) is still possible and needs real per-utente authz. Still open (🟠 High): `PUT /pedidos/:id` doesn't verify request ownership; mass assignment in a few controllers (`Pedido.create(req.body)`/`Pedido.update(req.body, ...)`/`Utente.update(req.body, ...)` pass the body straight to Sequelize with no field whitelist); the utente URL token is reversible obfuscation (key lives in the client bundle), not real access control. Still open (🟡 Medium): CORS reflects any origin with credentials on + no CSRF protection; image upload validates only mimetype/extension (client-supplied, spoofable), no file-size/count limits, silently overwrites same-named files outside the rename flow; an orphaned `multer` config writing to `Server/uploads/` in `main.js` isn't wired to any route; `GET /localIP` leaks internal network topology with no auth; no request-body schema validation layer; error responses return `erro.message` directly (potential internal detail leakage). Still open (🟢 Low): `/auth/staff/setup` has a reset race window (anyone on the network can claim the PIN first after a reset); 4-digit minimum PIN is a small search space even with rate limiting.
+- **No automated tests** — the biggest risk in this codebase. The table editor's drag/resize is pixel-geometry with no test coverage; every change there must be verified by driving the running app.
+- **Known security gaps** — from a manual audit (originally tracked in a now-removed `SECURITY_CHECKLIST.md`; see the 2026-07 entries in `DEVELOPMENT_LOG.md` for fix history). All 🔴 Critical items are fixed (rate limiting on staff login, real revocable sessions replacing the old static `"ok"` cookie, `COOKIE_SECRET` fallback removed/required in production, `secure` cookie flag wired up). Partially fixed (🟠 High, 2026-07-14): the *aggregated* patient-data GETs (`/utentes`, `/pedidos`, `/pedidos/ativos/*`, `/pedidos/:id`, `/tabelas`, `/tabelas-padrao`) are now `requireStaff`, so the patient tablet no longer downloads the whole roster — but per-id enumeration (`GET /utentes/:id` by reversing the URL token) is still possible and needs real per-utente authz. **Fixed 2026-07-16:** mass assignment (`Pedido`/`Botao`/`Utente` create+update now whitelist fields), `erro.message` leakage (central `errorHandler` returns generic messages), and `GET /localIP` (endpoint removed). Still open (🟠 High): `PUT /pedidos/:id` doesn't verify request ownership (any client can change any request's state by id); the utente URL token is reversible obfuscation (key lives in the client bundle), not real access control. Still open (🟡 Medium): CORS reflects any origin with credentials on + no CSRF protection; image upload validates only mimetype/extension (client-supplied, spoofable), no file-size/count limits, silently overwrites same-named files outside the rename flow; no request-body schema validation layer. Still open (🟢 Low): `/auth/staff/setup` has a reset race window (anyone on the network can claim the PIN first after a reset); 4-digit minimum PIN is a small search space even with rate limiting.
 
 ---
 

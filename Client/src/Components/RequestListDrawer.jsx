@@ -1,12 +1,11 @@
-import { useEffect, useState } from "react";
-import { useContext } from "react";
+import { useEffect, useState, useContext } from "react";
 import { Context } from "../ContextProvider";
 import { PEDIDO_STATES } from "../constants";
+import { t } from "../i18n";
 
 const RequestListDrawer = ({ visible, onClose }) => {
     const [isOpen, setIsOpen] = useState(false);
-    const { pedidosUtilizador, apiUrl } = useContext(Context);
-    const { updatePedido } = useContext(Context);
+    const { pedidosUtilizador, updatePedido, apiUrl } = useContext(Context);
 
     useEffect(() => {
         setIsOpen(visible);
@@ -33,7 +32,7 @@ const RequestListDrawer = ({ visible, onClose }) => {
             <div className={`custom-drawer ${isOpen ? "open" : ""}`}>
                 <div className="drawer-content">
                     <div className="drawer-header">
-                        <h3>Lista de Pedidos</h3>
+                        <h3>{t.tabuleiro.requestList}</h3>
                         <button className="close-button" onClick={handleClose}>
                             ×
                         </button>
@@ -60,7 +59,7 @@ const RequestListDrawer = ({ visible, onClose }) => {
                                 onMouseOut={e => e.currentTarget.style.background = "linear-gradient(90deg, #4caf50 0%, #43a047 100%)"}
                                 onClick={resolveTodosPedidos}
                             >
-                                Concluir todos os pedidos
+                                {t.tabuleiro.resolveAll}
                             </button>
                         )}
                         {pedidosUtilizador.map((item) => (
