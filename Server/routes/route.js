@@ -3,6 +3,7 @@ const utenteController = require("../controller/utenteController");
 const botaoController = require("../controller/botaoController");
 const pedidoController = require("../controller/pedidoController");
 const authController = require("../controller/authController");
+const boardController = require("../controller/boardController");
 const tabelaController = require("../controller/tabelaController");
 const tabelaPadraoController = require("../controller/tabelaPadraoController");
 const imageController = require("../controller/imageController");
@@ -18,6 +19,11 @@ router.post("/auth/staff/setup", staffAuthLimiter, authController.setup);
 router.post("/auth/staff/login", staffAuthLimiter, authController.login);
 router.post("/auth/staff/change", requireStaff, staffAuthLimiter, authController.change);
 router.post("/auth/staff/logout", authController.logout);
+
+// Board (tabuleiro do utente): bootstrap da sessão a partir do accessToken da URL.
+// As rotas de dados /board/* (ler/criar/atualizar) entram na Fase 2.
+router.post("/board/session", boardController.createSession);
+router.post("/board/logout", boardController.logout);
 
 // Utentes
 router.get("/utentes", requireStaff, utenteController.getAllUtentes); // full roster → staff only (RGPD)

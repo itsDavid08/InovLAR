@@ -4,10 +4,11 @@ const Utente = require('./Utente');
 const Pedido = require('./Pedido');
 const StaffAuth = require('./StaffAuth');
 const StaffSession = require('./StaffSession');
+const UtenteSession = require('./UtenteSession');
 const TabelaLayout = require('./TabelaLayout');
 const TabelaPadrao = require('./TabelaPadrao');
 
-const models = { Botao, Utente, Pedido, StaffAuth, StaffSession, TabelaLayout, TabelaPadrao };
+const models = { Botao, Utente, Pedido, StaffAuth, StaffSession, UtenteSession, TabelaLayout, TabelaPadrao };
 
 const initDb = async () => {
     try {

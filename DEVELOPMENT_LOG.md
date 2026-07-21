@@ -3393,3 +3393,57 @@ reload mantém sessão), criar/editar/eliminar utente e botão, tabuleiro (envia
 Continua sem testes automatizados — toda a verificação deste refactor foi estática (lint, build,
 carregamento de módulos) + revisão. Os fluxos de UI (sobretudo gestos do editor, kiosk/PIN e
 sincronização por socket) precisam de ser exercitados no browser antes de ir para o Pi.
+
+---
+
+## 2026-07-21 — Autorização por-utente (token real do tabuleiro) — Fase 1: fundação servidor
+
+### Contexto
+Item de "Alto" do `SECURITY_CHECKLIST.md`: o `PUT /pedidos/:id` não verifica o dono (qualquer
+cliente muda o estado de qualquer pedido por id) e o "token" do utente na URL é obfuscação reversível
+(cifra de Feistel com a chave no bundle), não uma credencial. Os dois itens têm a mesma raiz — o
+tabuleiro não tem identidade verificável — por isso decidiu-se resolvê-los juntos com a **variante
+completa**: dar a cada utente um `accessToken` real (segredo imprevisível na URL) que é trocado por
+uma **sessão de tabuleiro** (cookie httpOnly), espelhando o padrão do `StaffSession`. A partir daí o
+board deriva o `utenteId` da sessão (verificada no servidor), nunca da URL, tornando
+`pedido.utenteId === utenteDaSessão` uma verificação inforjável.
+
+Plano em fases (esta entrada = Fase 1): **1** fundação servidor; **2** rotas `/board/*` de dados +
+fechar as rotas antigas por-id + autorização do `updatePedido`; **3** cliente (bootstrap, `api/board`,
+remover Feistel, rota `/board/:accessToken`); **4** docs; **5** UI staff de copiar-URL/rotacionar
+token (commit isolado, rollback fácil). Rota do board decidida: prefixo **`/board`**.
+
+### Feito nesta fase (nada do comportamento antigo mudou ainda)
+- **`migrations/20260721120000-add-access-token-to-utentes.js`** — coluna `accessToken` (NOT NULL,
+  índice único) + **backfill** dos utentes existentes com tokens aleatórios. Idempotente (guardas em
+  cada passo). **Gotcha MariaDB:** as queries raw precisam de `type: QueryTypes.SELECT/UPDATE`
+  explícito — sem isso o conector `mariadb` rebenta com `Cannot delete property 'meta'`.
+- **`models/Utente.js`** — campo `accessToken`; hook `beforeValidate` que o gera (invariante "todo o
+  utente tem token" fica no modelo, não no controller); `defaultScope` que **exclui** o `accessToken`
+  de todas as leituras (é segredo; algumas rotas de leitura são abertas). Para o incluir usa-se
+  `Utente.unscoped()` (Fase 3, roster do staff).
+- **`models/UtenteSession.js`** (novo, via `sync()` como o `StaffSession`) — `tokenHash` (SHA-256) +
+  `utenteId` + `expiraEm`. Registado em `models/index.js` e `main.js`.
+- **`Util/utenteSessions.js`** — `criarSessaoUtente` (devolve o token em claro para o cookie),
+  `validarSessaoUtente` (devolve a sessão ou null, limpeza preguiçosa), `revogarSessaoUtente`,
+  `revogarSessoesDoUtente`.
+- **`middleware/auth.js`** — `identifyStaff` e `identifyUtente` (não-bloqueantes, põem `req.isStaff` /
+  `req.utenteId`) + `requireUtente` (bloqueante).
+- **`controller/boardController.js` + rotas** — `POST /board/session` (troca o `accessToken` por uma
+  sessão, cookie httpOnly assinado, 30 dias) e `POST /board/logout` (revoga).
+
+### Teste
+Migration corrida no MariaDB de dev: coluna `NOT NULL`+`UNIQUE`, os 2 utentes existentes com tokens
+únicos de 64 chars. Servidor reiniciado (a tabela `UtenteSessions` cria via `sync()` sem erros).
+Script node (contra a BD/servidor reais, depois apagado, sessões de teste limpas) — 12 asserções,
+todas PASS:
+- bootstrap com token válido → 200 + cookie `httpOnly`; devolve o `id` certo;
+- a sessão valida no servidor e aponta para o `utenteId` correto; a BD guarda o **hash**, não o token;
+- `accessToken` inválido → 404; em falta → 400;
+- `GET /utentes/:id` (rota aberta) **não** expõe o `accessToken` (defaultScope);
+- `POST /board/logout` revoga — o mesmo cookie deixa de validar.
+
+### Próximo (Fase 2)
+Rotas `/board/*` de dados (utente, pedidos, tabela — o utente vem da sessão), fechar as rotas antigas
+por-id com `requireStaff`, e autorização no `updatePedido` (`req.isStaff` OU
+`req.utenteId === pedido.utenteId`).
