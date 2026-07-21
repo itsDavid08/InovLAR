@@ -37,6 +37,7 @@ router.get("/utentes", requireStaff, utenteController.getAllUtentes); // full ro
 router.get("/utentes/:id", requireStaff, utenteController.getUtenteById); // o tabuleiro usa /board/utente
 router.post("/utentes/create", requireStaff, utenteController.createUtente);
 router.put("/utentes/:id", requireStaff, utenteController.updateUtente);
+router.post("/utentes/:id/rotate-token", requireStaff, utenteController.rotateToken); // novo accessToken + corta sessões
 router.delete("/utentes/:id", requireStaff, utenteController.deleteUtente);
 router.post("/utentes/:utenteId/botoes/:botaoId", requireStaff, utenteController.associateBotao);
 router.delete("/utentes/:utenteId/botoes/:botaoId", requireStaff, utenteController.dissociateBotao);

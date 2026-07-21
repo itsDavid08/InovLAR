@@ -94,6 +94,16 @@ export default {
         newUtente: "Novo Utente",
         openBoard: "Tabela InovLAR",
         deleteConfirm: (nome) => `Tens certeza que pretendes eliminar ${nome}?`,
+        copyUrlDone: "URL do tablet copiada",
+        copyUrlError: "Não foi possível copiar a URL",
+        rotateConfirm: (nome) =>
+            `Gerar um novo link de acesso para ${nome}? O link atual deixa de funcionar — os tablets abertos com ele têm de ser reabertos com o novo.`,
+        rotateDone: "Novo link gerado e copiado",
+        rotateError: "Não foi possível gerar o novo link",
+    },
+    itemMenu: {
+        copyUrl: "Copiar URL do tablet",
+        rotateToken: "Rotacionar acesso",
     },
     botoes: {
         listTitle: "Visão Geral dos Botões",

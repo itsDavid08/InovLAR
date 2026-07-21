@@ -3617,3 +3617,43 @@ Script node (BD/servidor reais) — 10 asserções, todas PASS: 1º bootstrap cr
 com o cookie **reutiliza** (continua 1, mesmo `tokenHash`, `expiraEm` renovado); sem cookie ou com
 cookie inválido cria nova; `purgarExpiradas` remove a expirada e mantém as válidas. Confirmado no
 browser: 2 carregamentos do tabuleiro → **1** linha em `UtenteSession` (antes seriam 2).
+
+---
+
+## 2026-07-21 — Autorização por-utente — Fase 5: UI de copiar URL + rotacionar accessToken
+
+### Contexto
+Última fase (commit isolado, para rollback fácil). Com o `accessToken` a ser uma credencial real,
+o staff precisa de duas ações de ciclo de vida: **copiar a URL do tablet** (para configurar/rebookmarkar
+dispositivos — a URL é uma string aleatória que não se decora) e **rotacionar** o token (revogação:
+tablet perdido/URL vazada).
+
+### Feito (servidor)
+- `POST /utentes/:id/rotate-token` (`requireStaff`) → `utenteController.rotateToken`: gera um
+  `accessToken` novo, chama `revogarSessoesDoUtente(id)` (corta os tablets com o URL antigo) e
+  `notificarAlteracaoBD` (o roster de staff refresca com o token novo). Devolve `{ accessToken }`.
+
+### Feito (cliente)
+- `api/utentes.js` — `rotateUtenteToken(id)`.
+- `i18n/pt.js` — `staffHome.{copyUrlDone,copyUrlError,rotateConfirm,rotateDone,rotateError}` +
+  secção `itemMenu.{copyUrl,rotateToken}`.
+- `Components/layout/ItemMenu.jsx` — duas ações novas opcionais (`onCopyUrl` ícone `link`,
+  `onRotateToken` ícone `autorenew`), rendidas no popover (desktop) e no bottom-sheet (mobile).
+- `Pages/StaffHome.jsx` — `handleCopyUrl` (copia `${origin}/board/${accessToken}` para o clipboard +
+  toast) e `handleRotate` (confirma → rota → copia logo o URL novo → toast); usa `useFeedback` +
+  `FeedbackToast`. Liga as duas ações ao `ItemMenu` de cada cartão.
+
+### Teste
+`vite build` OK. Endpoint verificado por script node (BD/servidor reais) — 9 asserções, todas PASS:
+sem sessão de staff → **401**; com staff → **200** e devolve um `accessToken` novo (64 hex, diferente),
+gravado na BD; o URL **antigo** deixa de abrir o board (`POST /board/session` → **404**) e o **novo**
+abre (**200**); as sessões de tabuleiro antigas ficam **revogadas**; id inexistente → **404**.
+**Nota:** o UI do `StaffHome` está atrás do gate `RequireStaff` (PIN de staff), por isso as ações
+(botões no menu, copiar/rotacionar, toasts) foram verificadas por build + endpoint, não *click-testadas*
+no browser. O clipboard pode falhar por permissões no ambiente — o código trata disso com toast de erro
+(copiar) ou ignorando a falha de cópia mas mantendo o link ativo (rotacionar).
+
+### Estado do plano
+Fases 1–5 concluídas. Os dois itens 🟠 High (posse do `PUT` + token-como-obfuscação) estão fechados;
+a autorização por-utente está completa (fundação, rotas, cliente, fecho das antigas, anti-acumulação,
+e agora o ciclo de vida do token no UI de staff).

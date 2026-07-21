@@ -1,6 +1,8 @@
+const crypto = require("crypto");
 const { Utente, Pedido, Botao, TabelaPadrao } = require("../models");
 const { notificarAlteracaoBD } = require("../Util/socketIO");
 const { applyTemplateToUtente } = require("../Util/applyTemplate");
+const { revogarSessoesDoUtente } = require("../Util/utenteSessions");
 const { PEDIDO_STATES } = require("../config/constants");
 
 // Whitelist: only these fields ever reach the model (no mass assignment).
@@ -54,6 +56,20 @@ const utenteController = {
         await utente.update(pickUtenteFields(req.body));
         notificarAlteracaoBD();
         res.json(utente);
+    },
+
+    // POST /utentes/:id/rotate-token — gera um novo accessToken (revoga o URL antigo)
+    // e corta todas as sessões de tabuleiro desse utente. Devolve o novo token para o
+    // staff copiar o URL novo.
+    rotateToken: async (req, res) => {
+        const utente = await Utente.unscoped().findByPk(req.params.id);
+        if (!utente) return res.status(404).json({ mensagem: "Utente não encontrado" });
+
+        utente.accessToken = crypto.randomBytes(32).toString("hex");
+        await utente.save();
+        await revogarSessoesDoUtente(utente.id);
+        notificarAlteracaoBD();
+        res.json({ accessToken: utente.accessToken });
     },
 
     // DELETE /utentes/:id

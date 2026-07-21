@@ -30,6 +30,16 @@ export function deleteUtente(id) {
     });
 }
 
+// Gera um novo accessToken (o URL antigo do tablet deixa de funcionar). Devolve { accessToken }.
+export async function rotateUtenteToken(id) {
+    const res = await mutate(`utentes/${id}/rotate-token`, {
+        method: "POST",
+        auth: true,
+        errorMsg: "Failed to rotate token",
+    });
+    return res.json();
+}
+
 // Upload de foto pessoal. previousPath: foto anterior a substituir (o servidor
 // apaga-a só se for um upload pessoal, nunca um avatar predefinido).
 export async function uploadImagemUtente(file, previousPath = '') {

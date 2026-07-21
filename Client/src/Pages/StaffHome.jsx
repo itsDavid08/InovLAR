@@ -6,12 +6,19 @@ import StaffSidebar from "../Components/layout/StaffSidebar";
 import ItemMenu from "../Components/layout/ItemMenu";
 import UtenteAvatar from "../Components/utentes/UtenteAvatar";
 import SearchInput from "../Components/SearchInput";
+import FeedbackToast from "../Components/FeedbackToast";
+import { useFeedback } from "../hooks/useFeedback";
+import { rotateUtenteToken } from "../api/utentes";
 import { t } from "../i18n";
+
+// URL completa do tabuleiro de um utente (o que se põe/bookmarka no tablet).
+const boardUrl = (utente) => `${window.location.origin}/board/${utente.accessToken}`;
 
 const StaffHome = () => {
     const { utentes, setUtente, deleteUtente, apiUrl } = useContext(Context);
     const navigate = useNavigate();
     const [searchQuery, setSearchQuery] = useState("");
+    const [feedback, setFeedback] = useFeedback();
     // Qual cartão tem o menu de ações aberto (só um de cada vez). O ref aponta para
     // esse cartão e serve de fronteira ao "clicar fora" do ItemMenu (ver ItemMenu.jsx).
     const [openMenuId, setOpenMenuId] = useState(null);
@@ -36,6 +43,30 @@ const StaffHome = () => {
     const handleDelete = async (utente) => {
         if (window.confirm(t.staffHome.deleteConfirm(utente.nome))) {
             await deleteUtente(utente.id);
+        }
+    };
+
+    // Copia a URL do tablet para a área de transferência (setup do dispositivo).
+    const handleCopyUrl = async (utente) => {
+        try {
+            await navigator.clipboard.writeText(boardUrl(utente));
+            setFeedback({ tipo: "ok", texto: t.staffHome.copyUrlDone });
+        } catch {
+            setFeedback({ tipo: "erro", texto: t.staffHome.copyUrlError });
+        }
+    };
+
+    // Gera um novo accessToken (revoga o URL antigo) e copia logo o URL novo.
+    const handleRotate = async (utente) => {
+        if (!window.confirm(t.staffHome.rotateConfirm(utente.nome))) return;
+        try {
+            const { accessToken } = await rotateUtenteToken(utente.id);
+            try {
+                await navigator.clipboard.writeText(`${window.location.origin}/board/${accessToken}`);
+            } catch { /* a cópia pode falhar (permissões) — o novo link fica na mesma ativo */ }
+            setFeedback({ tipo: "ok", texto: t.staffHome.rotateDone });
+        } catch {
+            setFeedback({ tipo: "erro", texto: t.staffHome.rotateError });
         }
     };
 
@@ -102,6 +133,8 @@ const StaffHome = () => {
                                     thumbnail={<UtenteAvatar imagem={utente.imagem} corAvatar={utente.corAvatar} nome={utente.nome} apiUrl={apiUrl} className="w-full h-full text-[16px]" />}
                                     onManage={() => handleManage(utente)}
                                     onEdit={() => handleEdit(utente)}
+                                    onCopyUrl={() => handleCopyUrl(utente)}
+                                    onRotateToken={() => handleRotate(utente)}
                                     onDelete={() => handleDelete(utente)}
                                 />
                             </div>
@@ -121,6 +154,7 @@ const StaffHome = () => {
                     </div>
                 ))}
             </div>
+            <FeedbackToast feedback={feedback} zClass="z-[70]" />
         </StaffShell>
     );
 };
