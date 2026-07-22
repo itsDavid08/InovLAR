@@ -3657,3 +3657,64 @@ no browser. O clipboard pode falhar por permissões no ambiente — o código tr
 Fases 1–5 concluídas. Os dois itens 🟠 High (posse do `PUT` + token-como-obfuscação) estão fechados;
 a autorização por-utente está completa (fundação, rotas, cliente, fecho das antigas, anti-acumulação,
 e agora o ciclo de vida do token no UI de staff).
+
+---
+
+## 2026-07-22 — CORS restrito (REST + socket.io), sem camada de CSRF separada
+
+### Contexto
+Primeiro item 🟡 Médio: `Server/main.js` tinha `origin: (origin, cb) => cb(null, true)` — reflete
+qualquer origem — combinado com `credentials: true`, e o socket.io com `cors: { origin: '*' }`.
+
+### Análise (antes de corrigir)
+- **CSRF já estava bastante mitigado** pelo `sameSite: "lax"` dos cookies (bloqueia o browser de
+  anexar o cookie em `fetch`/`XHR` cross-site, exceto navegação de topo por `GET`) — por isso decidiu-se
+  **não** adicionar uma camada de tokens CSRF separada; o fix do CORS é tratado como o fix do CSRF aqui.
+- **Produção é sempre same-origin** (o Express serve o Client e a API na mesma origem, `:3000`) — só o
+  Vite em dev (`:5173`→`:3000`) é genuinamente cross-origin.
+- **Socket.io**: por não transportar dados sensíveis (só `bd_alterado`, sem payload, sem canais
+  privados, sem eventos que o cliente possa emitir para o servidor), o risco de o deixar aberto é baixo
+  — a classe clássica de vulnerabilidade (Cross-Site WebSocket Hijacking, roubar a sessão via socket
+  para ler/escrever dados privilegiados) não se aplica, porque nada de privilegiado passa pelo socket.
+  O risco real identificado foi **amplificação de DoS** (browsers de visitantes de um site malicioso a
+  abrir ligações persistentes à Pi sem o visitante saber) — decidiu-se fechar por consistência e porque
+  o custo é baixo.
+
+### Correção — `Server/main.js`
+Substituída a função "aceita tudo" por uma allowlist **dinâmica**, comparando o `Origin` do pedido
+contra o `Host` real do pedido (não hardcoded por `NODE_ENV`) — funciona em qualquer IP/hostname sem
+editar código, cobre produção (same-origin sempre) e qualquer cenário de teste local (browser a apontar
+direto a `:3000`), com uma única exceção explícita fora de produção (`http://localhost:5173`, o Vite):
+```javascript
+function isOrigemPermitida(origin, host) {
+    if (!origin) return true; // curl, scripts, same-origin em GET — CORS só existe p/ o browser
+    let sameOrigin = false;
+    try { sameOrigin = new URL(origin).host === host; } catch { sameOrigin = false; }
+    const devOrigin = process.env.NODE_ENV !== 'production' && origin === 'http://localhost:5173';
+    return sameOrigin || devOrigin;
+}
+```
+Reutilizada como única fonte de verdade em dois sítios:
+- **API REST** — via `cors(corsOptionsDelegate)` (o "options delegate" do pacote `cors`, que dá acesso
+  ao `req` — ao contrário da forma simples `origin: (origin, cb) => ...`, que não tem `req.headers.host`).
+- **Socket.io** — `io.use((socket, next) => ...)`, comparando `socket.handshake.headers.{origin,host}`.
+
+### Teste
+Servidor reiniciado; testado por `curl` (REST) e um script node com `socket.io-client` (socket.io),
+todos contra o servidor real:
+- **REST:** sem `Origin` → 200 (curl/scripts continuam a funcionar); `Origin: http://localhost:3000`
+  (same-origin) → 200 com `Access-Control-Allow-Origin` presente; `Origin: http://localhost:5173`
+  (dev) → 200 com o header presente; `Origin` de um site malicioso → 200 (o servidor processa; é o
+  browser que bloqueia) mas **sem** `Access-Control-Allow-Origin` — confirmado também num preflight
+  `OPTIONS` a uma rota de escrita.
+- **Socket.io** (`socket.io-client`, transporte polling para os headers irem no handshake): sem
+  `Origin` → liga; `Origin` same-origin → liga; `Origin` do Vite dev → liga; `Origin` malicioso →
+  **rejeitado** (erro "Origem não permitida").
+- **Fluxo do board ponta-a-ponta** (o cenário mais próximo de um browser real): bootstrap com
+  `Origin: http://localhost:3000` → 200, cookie `httpOnly`+`SameSite=Lax` bem definido;
+  `GET /board/pedidos` com esse cookie, same-origin → 200; o mesmo cookie com `Origin` malicioso →
+  sem o header CORS (e, num browser real, o cookie nem seria enviado, dado o `SameSite=Lax`).
+
+### Próximo
+Restantes itens 🟡 Médio: validação de upload de imagens (magic bytes + `limits`, 10 MB acordado) e a
+camada de validação de schema (zod, aplicada a `/board/*` primeiro).

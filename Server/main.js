@@ -28,13 +28,35 @@ const { purgarExpiradas: purgarUtenteSessions } = require('./Util/utenteSessions
     await seedDefaults();            // cria a "Predefinida" (1ª vez) + aplica a utentes sem tabela
 })().catch((e) => console.error('Erro no arranque/seed:', e));
 
+// Origem do dev server do Vite — única exceção cross-origin permitida, e só fora
+// de produção (em produção o Client é servido por este mesmo Express: same-origin).
+const DEV_ORIGIN = 'http://localhost:5173';
+
+// Permite a origem se for a mesma do pedido (compara com o Host real, por isso
+// funciona em qualquer IP/hostname sem hardcode) ou, fora de produção, a origem
+// do Vite. Sem header Origin (curl, pedidos same-origin em GET, scripts) passa
+// sempre — CORS só existe para o browser decidir se deixa JS de outra origem ler
+// a resposta. Partilhado pela API REST e pelo socket.io (única fonte de verdade).
+function isOrigemPermitida(origin, host) {
+    if (!origin) return true;
+    let sameOrigin = false;
+    try {
+        sameOrigin = new URL(origin).host === host;
+    } catch {
+        sameOrigin = false;
+    }
+    const devOrigin = process.env.NODE_ENV !== 'production' && origin === DEV_ORIGIN;
+    return sameOrigin || devOrigin;
+}
+
 app.use(express.json());
-// CORS com credenciais: reflete a origem do pedido (não pode ser "*" quando há cookies).
-// Em produção (Client servido aqui mesmo) é mesma origem; em dev (Vite:5173) é cross-origin.
-app.use(cors({
-    origin: (origin, cb) => cb(null, true),
-    credentials: true,
-}));
+// CORS com credenciais: allowlist dinâmica (mesma origem do pedido, ou o Vite em
+// dev) em vez de refletir qualquer origem — ver isOrigemPermitida acima.
+const corsOptionsDelegate = (req, callback) => {
+    const origin = req.header('Origin');
+    callback(null, { origin: isOrigemPermitida(origin, req.headers.host), credentials: true });
+};
+app.use(cors(corsOptionsDelegate));
 app.use(cookieParser(COOKIE_SECRET)); // antes das rotas (preenche req.signedCookies)
 app.use(express.static('public'));
 app.use(express.static(DIST));
@@ -54,7 +76,17 @@ app.use(errorHandler);
 
 // Criação do servidor HTTP e integração com socket.io
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: '*' } });
+const io = new Server(server);
+
+// Mesma política de origem da API REST (isOrigemPermitida) — o socket.io não
+// transporta dados sensíveis (só o sinal vazio 'bd_alterado'), mas restringe-se
+// na mesma por consistência e para não deixar a porta aberta a ligações de
+// qualquer origem (amplificação de DoS via browsers de terceiros).
+io.use((socket, next) => {
+    const { origin, host } = socket.handshake.headers;
+    if (isOrigemPermitida(origin, host)) return next();
+    next(new Error('Origem não permitida'));
+});
 
 setIO(io);
 
