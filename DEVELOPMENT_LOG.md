@@ -3798,3 +3798,42 @@ Não há mais itens agendados do checklist original. Itens 🟢 Low continuam po
 de corrida no reset de `/auth/staff/setup`, PIN mínimo de 4 dígitos, custo de bcrypt (10), sem
 `helmet`. Estender a validação zod às restantes rotas mutáveis (`/utentes`, `/botoes`, `/pedidos/:id`,
 `/tabelas*`) fica em aberto para uma fase seguinte, a pedido do utilizador.
+
+## 2026-07-22 — Correção de regressão: CORS do socket.io (polling sem `Access-Control-Allow-Origin`)
+
+### Contexto
+Reportado pelo utilizador via consola do browser em `localhost:5173` (Client em dev): todos os pedidos
+de polling do socket.io a `localhost:3000/socket.io/...` falhavam com `No 'Access-Control-Allow-Origin'
+header is present`, entrando em loop de reconexão. Causa: regressão do commit `a9df9a7` (fecho de CORS
+REST + socket.io). Antes desse commit, `new Server(server, { cors: { origin: '*' } })` dava ao
+socket.io o seu próprio tratamento de CORS para o transporte de polling (XHR normal, sujeito à mesma
+política de origem do browser que qualquer `fetch`). O commit removeu essa opção `cors` por completo,
+substituindo-a só por `io.use(...)` — mas `io.use()` valida a origem ao nível do handshake do
+socket.io/engine.io, **não adiciona o header HTTP `Access-Control-Allow-Origin`** às respostas do
+polling. São mecanismos diferentes; tratar o `io.use()` como suficiente foi o erro. O transporte de
+polling do socket.io é servido pelo engine.io diretamente sobre o `http.Server`, sem passar pelo `app`
+do Express — por isso o `cors()` montado em `app.use()` nunca chega a correr para `/socket.io/*`.
+
+### Correção — `Server/main.js`
+- `corsOptionsDelegate` passou a ler `req.headers.origin` em vez de `req.header('Origin')` (método do
+  Express) — assim a mesma função serve tanto o `cors()` do Express como o middleware de CORS interno
+  do engine.io, que corre sobre o `req` cru do Node (sem `req.header()`).
+- `new Server(server, { cors: corsOptionsDelegate })` — o engine.io chama internamente
+  `require('cors')(this.opts.cors)`, e o pacote `cors` aceita uma função como argumento único (o mesmo
+  padrão "options delegate" já usado no `app.use(cors(corsOptionsDelegate))`), por isso a mesma
+  `isOrigemPermitida()` fica a ser a única fonte de verdade, reutilizada nos três sítios (REST, cors do
+  engine.io, `io.use()`).
+- `io.use(...)` mantido tal como estava — cobre o handshake do socket e o upgrade para WebSocket, que
+  não passam pela opção `cors` acima.
+
+### Teste
+Servidor reiniciado; `curl -i` com `Origin` diferentes contra `/socket.io/?EIO=4&transport=polling`:
+origem do Vite (`localhost:5173`) → `200` + `Access-Control-Allow-Origin: http://localhost:5173`;
+same-origin (`localhost:3000`) → `200` + header equivalente; origem não permitida
+(`evil.example.com`) → `200` mas **sem** `Access-Control-Allow-Origin` (o browser bloqueia a leitura da
+resposta). Repetido em `/auth/staff/status` (REST) para confirmar que não houve regressão aí. Sem
+erros no log do servidor.
+
+### Próximo
+Nenhum item novo agendado — este era um bug de regressão na correção de CORS já fechada, não um item
+do checklist original.
