@@ -10,6 +10,8 @@ const imageController = require("../controller/imageController");
 const { requireStaff, identifyUtente, requireUtente } = require("../middleware/auth");
 const { staffAuthLimiter } = require("../middleware/rateLimiter");
 const { uploadBotaoImage, uploadUtentePhoto, verifyImageSignature } = require("../middleware/uploads");
+const { validate } = require("../middleware/validate");
+const { boardSessionSchema, createPedidoSchema, updatePedidoSchema } = require("../validation/schemas");
 
 const router = express.Router();
 
@@ -21,7 +23,7 @@ router.post("/auth/staff/change", requireStaff, staffAuthLimiter, authController
 router.post("/auth/staff/logout", authController.logout);
 
 // Board (tabuleiro do utente): bootstrap da sessão a partir do accessToken da URL.
-router.post("/board/session", boardController.createSession);
+router.post("/board/session", validate(boardSessionSchema), boardController.createSession);
 router.post("/board/logout", boardController.logout);
 
 // Dados do tabuleiro — o utente vem sempre da sessão (identifyUtente + requireUtente),
@@ -29,8 +31,8 @@ router.post("/board/logout", boardController.logout);
 router.get("/board/utente", identifyUtente, requireUtente, boardController.getUtente);
 router.get("/board/pedidos", identifyUtente, requireUtente, boardController.getPedidos);
 router.get("/board/tabela/:dispositivo", identifyUtente, requireUtente, boardController.getTabela);
-router.post("/board/pedidos", identifyUtente, requireUtente, boardController.createPedido);
-router.put("/board/pedidos/:id", identifyUtente, requireUtente, boardController.updatePedido);
+router.post("/board/pedidos", identifyUtente, requireUtente, validate(createPedidoSchema), boardController.createPedido);
+router.put("/board/pedidos/:id", identifyUtente, requireUtente, validate(updatePedidoSchema), boardController.updatePedido);
 
 // Utentes
 router.get("/utentes", requireStaff, utenteController.getAllUtentes); // full roster → staff only (RGPD)

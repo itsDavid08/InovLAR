@@ -3755,3 +3755,46 @@ Todas as 8 asserções PASS.
 
 ### Próximo
 Último item 🟡 Médio: camada de validação de schema (zod, aplicada a `/board/*` primeiro).
+
+## 2026-07-22 — Camada de validação de schema (zod) em `/board/*`
+
+### Contexto
+O whitelisting de campos (`pickUtenteFields`, `pickBotaoFields`, `{ estado }` desestruturado nos
+controllers) já impedia mass assignment, mas não validava tipo/formato/tamanho do conteúdo — isso
+ficava a cargo do Sequelize (só valida o schema da coluna) ou não era validado. Nas rotas `/board/*`
+isto importava mais do que nas outras: são as únicas completamente abertas (sem `requireStaff`), com
+input a vir diretamente do tablet. Casos concretos identificados: `POST /board/session` só verificava
+`if (!accessToken)` — uma string arbitrariamente grande chegava ao `Utente.findOne({ where: {
+accessToken } })` sem limite de tamanho; `POST /board/pedidos` não validava `botaoId` como inteiro nem
+`emergencia` como boolean antes do `Pedido.create`, deixando erros de FK do driver percolarem até ao
+`errorHandler` genérico em vez de um 400 previsível.
+
+### Correção
+- **`npm i zod`** (`Server/package.json`).
+- **`Server/validation/schemas.js`** (novo) — schemas por endpoint: `boardSessionSchema` (`accessToken`
+  = exatamente 64 hex chars, invariante de `crypto.randomBytes(32).toString("hex")` em
+  `models/Utente.js`), `createPedidoSchema` (`botaoId` inteiro positivo, `emergencia` boolean
+  opcional), `updatePedidoSchema` (`estado` = enum de `PEDIDO_STATES`).
+- **`Server/middleware/validate.js`** (novo) — `validate(schema)`: corre `schema.safeParse(req.body)`
+  antes do controller; falha → 400 `{ mensagem: "Dados inválidos" }` (nunca o erro interno do zod);
+  sucesso → substitui `req.body` pelo resultado parseado, o que descarta automaticamente campos não
+  declarados no schema (reforça o whitelisting existente, não o duplica — ex.: um `utenteId` forjado no
+  corpo de `POST /board/pedidos` nunca chega ao controller, que de qualquer forma já o ignorava a favor
+  de `req.utenteId`).
+- **`routes/route.js`** — `validate(...)` inserido entre `identifyUtente`/`requireUtente` e o
+  controller em `POST /board/session`, `POST /board/pedidos`, `PUT /board/pedidos/:id`.
+
+### Teste
+Servidor reiniciado; script node com `fetch` contra o servidor real (9 asserções, todas PASS):
+`accessToken` curto/em falta → 400 "Dados inválidos" sem tocar na BD; `accessToken` com formato válido
+mas inexistente → passa a validação, falha no lookup → 404 (confirma que o zod só valida forma, a
+lógica de negócio continua no controller); `accessToken` real → 200 + cookie de sessão; `botaoId`
+como string ou negativo → 400; pedido com `utenteId` forjado no corpo → 201 mas com o `utenteId` real
+da sessão (campo extra descartado); `estado` inválido em `PUT /board/pedidos/:id` → 400; `estado`
+válido → 200.
+
+### Próximo
+Não há mais itens agendados do checklist original. Itens 🟢 Low continuam por fazer e sem data: janela
+de corrida no reset de `/auth/staff/setup`, PIN mínimo de 4 dígitos, custo de bcrypt (10), sem
+`helmet`. Estender a validação zod às restantes rotas mutáveis (`/utentes`, `/botoes`, `/pedidos/:id`,
+`/tabelas*`) fica em aberto para uma fase seguinte, a pedido do utilizador.
