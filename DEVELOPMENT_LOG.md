@@ -3718,3 +3718,40 @@ todos contra o servidor real:
 ### Próximo
 Restantes itens 🟡 Médio: validação de upload de imagens (magic bytes + `limits`, 10 MB acordado) e a
 camada de validação de schema (zod, aplicada a `/board/*` primeiro).
+
+---
+
+## 2026-07-22 — Upload de imagens: magic bytes + limite de 10 MB
+
+### Contexto
+Segundo item 🟡 Médio: `Server/middleware/uploads.js` validava só por `mimetype` e extensão do nome
+do ficheiro — ambos fornecidos pelo cliente e falsificáveis (um atacante podia enviar qualquer
+ficheiro com nome/mimetype de `.png`). Sem `limits` no multer, um upload podia ser arbitrariamente
+grande (DoS por esgotamento de disco).
+
+### Correção — `Server/middleware/uploads.js`
+- **`limits: { fileSize: 10 * 1024 * 1024, files: 1 }`** em ambos os `multer()` (ícones de botão e
+  fotos de utente) — 10 MB acordado. O multer já limpa o ficheiro parcial sozinho quando o limite é
+  excedido; o `MulterError` resultante já era apanhado pelo `errorHandler` central (400 genérico) —
+  não foi preciso tocar nele.
+- **`verifyImageSignature`** (novo middleware, sem dependências): corre **depois** do multer gravar o
+  ficheiro (o `diskStorage` grava antes do `fileFilter` poder ver o conteúdo real). Lê os primeiros 8
+  bytes do ficheiro gravado e compara com as assinaturas reais de PNG/JPEG/GIF; se não bater, apaga o
+  ficheiro do disco e responde 400. Fecha o buraco de mimetype/extensão serem dados pelo cliente.
+- **`routes/route.js`** — `verifyImageSignature` inserido na cadeia entre o multer e o controller, nas
+  duas rotas de upload (`/imagesBotoes/upload`, `/imagesUtentes/upload`). Mantém a separação de
+  responsabilidades: validação de upload fica no middleware, o controller só trata path/BD.
+
+### Teste
+Servidor reiniciado; testado por script node com `FormData`/`Blob` (simula exatamente o bypass do
+`fileFilter`: mimetype e extensão corretos, conteúdo não é imagem), contra ambos os endpoints:
+- **`/imagesBotoes/upload`** (5 asserções): PNG real de 1×1 → 2xx, devolve `path`, fica gravado em
+  disco; ficheiro de texto renomeado para `.png` com `mimetype: image/png` → **400**, mensagem
+  "não é uma imagem válida", e o ficheiro **não** fica em disco (apagado); ficheiro de 11 MB → **400**
+  (limite do multer), também não fica em disco.
+- **`/imagesUtentes/upload`** (3 asserções, storage com nome de ficheiro aleatório): mesmo padrão —
+  foto real aceite e gravada, foto falsa rejeitada com 400.
+Todas as 8 asserções PASS.
+
+### Próximo
+Último item 🟡 Médio: camada de validação de schema (zod, aplicada a `/board/*` primeiro).

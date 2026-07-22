@@ -9,7 +9,7 @@ const tabelaPadraoController = require("../controller/tabelaPadraoController");
 const imageController = require("../controller/imageController");
 const { requireStaff, identifyUtente, requireUtente } = require("../middleware/auth");
 const { staffAuthLimiter } = require("../middleware/rateLimiter");
-const { uploadBotaoImage, uploadUtentePhoto } = require("../middleware/uploads");
+const { uploadBotaoImage, uploadUtentePhoto, verifyImageSignature } = require("../middleware/uploads");
 
 const router = express.Router();
 
@@ -56,11 +56,11 @@ router.post("/tabelas-padrao/:id/aplicar", requireStaff, tabelaPadraoController.
 
 // Botão images (shared icon library)
 router.get("/imagesBotoes", imageController.listBotaoImages);
-router.post("/imagesBotoes/upload", requireStaff, uploadBotaoImage.single("imagem"), imageController.uploadBotaoImage);
+router.post("/imagesBotoes/upload", requireStaff, uploadBotaoImage.single("imagem"), verifyImageSignature, imageController.uploadBotaoImage);
 router.delete("/imagesBotoes", requireStaff, imageController.deleteBotaoImage);
 
 // Utente photos (personal → confidential pipeline, see middleware/uploads.js)
-router.post("/imagesUtentes/upload", requireStaff, uploadUtentePhoto.single("imagem"), imageController.uploadUtentePhoto);
+router.post("/imagesUtentes/upload", requireStaff, uploadUtentePhoto.single("imagem"), verifyImageSignature, imageController.uploadUtentePhoto);
 router.delete("/imagesUtentes", requireStaff, imageController.deleteUtentePhoto);
 
 // Botões
