@@ -4167,3 +4167,51 @@ pré-existente do Tailwind CDN.
 Não foi preciso mexer na CSP do `helmet` — `font-src` e `style-src` já tinham `https:` nos defaults do
 helmet (não haviam sido restringidos na configuração explícita do `main.js`), por isso o Google Fonts já
 carregava sob essa CSP e continua a carregar agora, só que de `'self'`.
+
+---
+
+## 2026-07-23 — Auditoria geral + limpeza de dependências (remover antd, higiene dos package.json)
+
+### Contexto
+Pedido de análise transversal ao projeto (segurança, organização, SOLID/clean code, arquitetura,
+linguagem, cores, ícones, acessibilidade). O levantamento completo — 16 pontos por área, com um TOP 3
+recomendado — ficou registado em `IMPROVEMENTS_CHECKLIST.md` (novo, na raiz), para servir de roadmap.
+Este entry cobre o primeiro item atacado.
+
+### TOP 3 do levantamento (contexto para as próximas sessões)
+1. **Tailwind via CDN → build real** — o `index.html` carrega `cdn.tailwindcss.com` em runtime. Obriga
+   ao `'unsafe-inline'` na CSP (anula grande parte da proteção XSS) **e** faz o tablet arrancar sem
+   estilo se a internet falhar (o lar pode estar offline; as fontes já foram auto-hospedadas pela mesma
+   razão — ver entry anterior). É o próximo a fazer.
+2. **Primeiros testes** — `gridSpans.js`/`useGridGeometry` (geometria pura, sem DOM) + contrato de auth
+   com supertest. São as duas zonas mais frágeis e sem cobertura.
+3. **Remover antd + higiene dos package.json** — feito aqui.
+
+### Decisão — remover o Ant Design
+O antd estava a ser usado num **único** ficheiro (`SuccessModal.jsx`), só para um modal de confirmação.
+Era uma dependência pesada (arrasta toda a árvore `rc-*` + `dayjs`) por um componente trivial que o
+projeto já sabe fazer com o `Modal.jsx` partilhado (backdrop, fecha ao clicar fora). Terceiro framework
+de UI a coexistir com o Bootstrap e o Tailwind — mais uma razão para o cortar.
+
+### Alterações
+- **`Client/src/Components/SuccessModal.jsx`** — reescrito sobre o `Modal.jsx` partilhado em vez do
+  `Modal` do antd. Passou a guardar no `visible` (o `Modal` partilhado renderiza sempre que montado).
+- **`Client/src/i18n/pt.js`** — a string "Pedido enviado com sucesso" saiu do JSX para
+  `t.tabuleiro.requestSent` (a convenção proíbe PT hardcoded em JSX; o antd tinha-a inline).
+- **`Client/package.json`** — removidos `antd` **e** `cors` (este era dependência de servidor a mais no
+  browser, não fazia nada). Renomeado `apcm-project` → `inovlar-client`, versão `0.0.0` → `1.0.0`.
+- **`Server/package.json`** — `nodemon` e `sequelize-cli` movidos para `devDependencies` (peso morto no
+  Pi de produção). Scripts adicionados: `start` (`node main.js`), `dev` (`nodemon main.js`), `migrate`,
+  `seed`. Renomeado `server` → `inovlar-server`, versão `1.0.0`.
+- **`Server/main.js`** — a porta passou de `3000` hardcoded para `process.env.PORT || 3000`.
+
+### Teste
+`npm install` no Client removeu **70 pacotes** (a árvore do antd). `npm run lint` passa com **0 erros**
+(mantêm-se os 4 warnings já conhecidos). `npm run build` compila (152 módulos; JS 425 kB → 130 kB gzip)
+— confirma que nada ficou a referenciar `antd`/`cors`. Não se conduziu o browser até ao modal em si
+(exigiria DB + servidor + sessão de board a correr); o build + lint cobrem o risco real da mudança
+(imports partidos), e o markup do modal segue o mesmo padrão do `Modal.jsx` já usado noutros sítios.
+
+### Nota
+O `npm install` reportou 4 vulnerabilidades *high* no Client — não vêm desta mudança (são da toolchain
+de dev, vite/esbuild). Ficam para o `npm audit` do item de segurança do checklist.

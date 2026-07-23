@@ -198,5 +198,6 @@ export default {
         noTable: "Sem tabela configurada",
         noTableHint: "Peça ao staff para configurar a tabela deste utente.",
         resolveAll: "Concluir todos os pedidos",
+        requestSent: "Pedido enviado com sucesso",
     },
 };
