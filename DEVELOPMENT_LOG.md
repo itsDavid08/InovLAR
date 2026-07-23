@@ -3837,3 +3837,60 @@ erros no log do servidor.
 ### Próximo
 Nenhum item novo agendado — este era um bug de regressão na correção de CORS já fechada, não um item
 do checklist original.
+
+## 2026-07-23 — Camada de validação de schema (zod) nas rotas `requireStaff`
+
+### Contexto
+Primeiro item 🟡 Médio a seguir ao fecho do checklist original: `/board/*` já validava com zod
+(2026-07-22), mas `/utentes`, `/botoes`, `/pedidos/:id` e `/tabelas*` continuavam só com o
+whitelisting de campos existente — sem validar tipo, formato ou tamanho. Estas rotas exigem
+`requireStaff`, por isso a superfície não é "qualquer pessoa na internet", mas uma sessão de staff
+comprometida (cookie roubado, bug no cliente) ainda passava sem qualquer travão. Riscos concretos
+identificados: colunas `STRING` (`VARCHAR(255)` no MariaDB) sem limite de tamanho no lado do servidor
+— um valor maior do que a coluna aguenta gera um `SequelizeDatabaseError` (500 genérico do
+`errorHandler`) em vez de um 400 previsível; e, mais grave, `tabelaController.saveTabela` e
+`tabelaPadraoController.create/update` gravavam `config`/`configs` sem validar a forma interna (`cols`,
+`cells`, `spans` — ver "Variable-Size Buttons" no `CLAUDE.md`) — o `useGridGeometry.js` do lado do
+cliente (editor, preview *e* tabuleiro do utente) assume essa forma sem validação defensiva, por isso
+um payload malformado só rebentava mais tarde, a renderizar o tabuleiro de um paciente específico
+(negar a um utente o próprio dispositivo de comunicação). `POST /tabelas-padrao/:id/aplicar` agravava
+isto: um `configs` malformado propaga-se a todos os utentes a quem o template for aplicado.
+
+### Correção
+- **`Server/validation/schemas.js`** — novos schemas: `createUtenteSchema`/`updateUtenteSchema`
+  (`nome`/`quarto` não-vazios, `max(255)`; `corAvatar` hex `#rrggbb` **ou string vazia** — ver nota de
+  teste abaixo; `templateId` inteiro positivo opcional), `createBotaoSchema`/`updateBotaoSchema`
+  (`nome`/`mensagem`/`categoria` não-vazios, `max(255)`), `tabelaConfigSchema` (`cols` inteiro
+  positivo, `size` enum `P|M|G` opcional, `cells` array, `spans`/`coresCategoria` objetos opcionais,
+  com `.passthrough()` para não travar em chaves futuras — o formato é deliberadamente
+  retrocompatível), `saveTabelaSchema` (`{ config }`), `createTabelaPadraoSchema`/
+  `updateTabelaPadraoSchema` (`{ nome, configs }`, `configs` = o mesmo schema de config por cada um
+  dos 3 dispositivos), `aplicarTemplateSchema` (`utenteId` inteiro positivo). `updatePedidoSchema`
+  (já existente, criado para `/board/pedidos/:id`) reaproveitado tal e qual em `PUT /pedidos/:id`
+  (staff) — mesmo enum de `PEDIDO_STATES`.
+- **`routes/route.js`** — `validate(schema)` inserido antes do controller em `POST /utentes/create`,
+  `PUT /utentes/:id`, `POST /botoes`, `PUT /botoes/:id`, `PUT /utentes/:id/tabela/:dispositivo`,
+  `POST /tabelas-padrao`, `PUT /tabelas-padrao/:id`, `POST /tabelas-padrao/:id/aplicar`,
+  `PUT /pedidos/:id`.
+
+### Nota (bug apanhado antes de testar)
+Ao inspecionar `EditUtente.jsx` antes de escrever os testes, reparei que ele manda sempre
+`corAvatar: ''` (nunca `null`/omitido) quando o utente ainda não tem cor escolhida — um schema com só
+`z.string().regex(hex)` teria rejeitado isto com 400 e partido a edição de qualquer utente sem cor
+definida. Corrigido para `z.union([z.literal(""), regexHex])` antes de sequer correr os testes.
+
+### Teste
+Servidor reiniciado; script node com sessão de staff forjada (`criarSessao()` + `cookie-signature`,
+mesmo padrão de testes usado nas fases anteriores) contra o servidor real (17 asserções, todas PASS):
+`createUtente` válido com `corAvatar: ''` → 201; `nome` de 300 chars → 400; `nome` vazio → 400;
+`corAvatar` inválido (`"not-a-color"`) → 400; `PUT /utentes/:id` no formato exato do
+`EditUtente.jsx` (`imagem`/`corAvatar` vazios + campos extra como `id`/`createdAt`/`pedidos`/`botoes`
+espalhados no corpo, que o schema descarta silenciosamente) → 200; `createBotao` válido → 201; sem
+`categoria` → 400; `PUT /pedidos/:id` com `estado` inválido → 400 antes mesmo do 404 de "não
+encontrado"; `saveTabela` com config válido → 200, com `cols` string → 400, com `cells` não-array →
+400; `createTabelaPadrao` válido → 201; `aplicar` sem `utenteId` → 400, com `utenteId` válido → 200.
+Sem erros no log do servidor.
+
+### Próximo
+Restam dois itens 🟡 Médio: upload sobrescreve ficheiros com o mesmo nome fora do fluxo
+`?onConflict=rename`; nenhum agendado ainda pelo utilizador.

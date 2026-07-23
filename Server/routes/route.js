@@ -11,7 +11,19 @@ const { requireStaff, identifyUtente, requireUtente } = require("../middleware/a
 const { staffAuthLimiter } = require("../middleware/rateLimiter");
 const { uploadBotaoImage, uploadUtentePhoto, verifyImageSignature } = require("../middleware/uploads");
 const { validate } = require("../middleware/validate");
-const { boardSessionSchema, createPedidoSchema, updatePedidoSchema } = require("../validation/schemas");
+const {
+    boardSessionSchema,
+    createPedidoSchema,
+    updatePedidoSchema,
+    createUtenteSchema,
+    updateUtenteSchema,
+    createBotaoSchema,
+    updateBotaoSchema,
+    saveTabelaSchema,
+    createTabelaPadraoSchema,
+    updateTabelaPadraoSchema,
+    aplicarTemplateSchema,
+} = require("../validation/schemas");
 
 const router = express.Router();
 
@@ -37,8 +49,8 @@ router.put("/board/pedidos/:id", identifyUtente, requireUtente, validate(updateP
 // Utentes
 router.get("/utentes", requireStaff, utenteController.getAllUtentes); // full roster → staff only (RGPD)
 router.get("/utentes/:id", requireStaff, utenteController.getUtenteById); // o tabuleiro usa /board/utente
-router.post("/utentes/create", requireStaff, utenteController.createUtente);
-router.put("/utentes/:id", requireStaff, utenteController.updateUtente);
+router.post("/utentes/create", requireStaff, validate(createUtenteSchema), utenteController.createUtente);
+router.put("/utentes/:id", requireStaff, validate(updateUtenteSchema), utenteController.updateUtente);
 router.post("/utentes/:id/rotate-token", requireStaff, utenteController.rotateToken); // novo accessToken + corta sessões
 router.delete("/utentes/:id", requireStaff, utenteController.deleteUtente);
 router.post("/utentes/:utenteId/botoes/:botaoId", requireStaff, utenteController.associateBotao);
@@ -47,14 +59,14 @@ router.delete("/utentes/:utenteId/botoes/:botaoId", requireStaff, utenteControll
 // Table layouts (per utente + device)
 router.get("/tabelas", requireStaff, tabelaController.listTabelas); // all layouts → staff only
 router.get("/utentes/:id/tabela/:dispositivo", requireStaff, tabelaController.getTabela); // o tabuleiro usa /board/tabela
-router.put("/utentes/:id/tabela/:dispositivo", requireStaff, tabelaController.saveTabela);
+router.put("/utentes/:id/tabela/:dispositivo", requireStaff, validate(saveTabelaSchema), tabelaController.saveTabela);
 
 // Table templates ("defaults")
 router.get("/tabelas-padrao", requireStaff, tabelaPadraoController.list);
-router.post("/tabelas-padrao", requireStaff, tabelaPadraoController.create);
-router.put("/tabelas-padrao/:id", requireStaff, tabelaPadraoController.update);
+router.post("/tabelas-padrao", requireStaff, validate(createTabelaPadraoSchema), tabelaPadraoController.create);
+router.put("/tabelas-padrao/:id", requireStaff, validate(updateTabelaPadraoSchema), tabelaPadraoController.update);
 router.delete("/tabelas-padrao/:id", requireStaff, tabelaPadraoController.remove);
-router.post("/tabelas-padrao/:id/aplicar", requireStaff, tabelaPadraoController.apply);
+router.post("/tabelas-padrao/:id/aplicar", requireStaff, validate(aplicarTemplateSchema), tabelaPadraoController.apply);
 
 // Botão images (shared icon library)
 router.get("/imagesBotoes", imageController.listBotaoImages);
@@ -67,8 +79,8 @@ router.delete("/imagesUtentes", requireStaff, imageController.deleteUtentePhoto)
 
 // Botões
 router.get("/botoes", botaoController.getAllBotoes);
-router.post("/botoes", requireStaff, botaoController.createBotao);
-router.put("/botoes/:id", requireStaff, botaoController.updateBotao);
+router.post("/botoes", requireStaff, validate(createBotaoSchema), botaoController.createBotao);
+router.put("/botoes/:id", requireStaff, validate(updateBotaoSchema), botaoController.updateBotao);
 router.delete("/botoes/:id", requireStaff, botaoController.deleteBotao);
 
 // Pedidos — aggregated reads are staff only (RGPD); the board only uses its
@@ -80,7 +92,7 @@ router.get("/pedidos/:id", requireStaff, pedidoController.getPedidoById);
 router.get("/pedidos/utente/:utenteId", requireStaff, pedidoController.getActivePedidosByUtenteId); // o tabuleiro usa /board/pedidos
 // Criar/atualizar pedidos do tabuleiro é feito em /board/pedidos (sessão de tabuleiro).
 // O PUT aqui fica só para o monitor de staff (resolver qualquer pedido).
-router.put("/pedidos/:id", requireStaff, pedidoController.updatePedido);
+router.put("/pedidos/:id", requireStaff, validate(updatePedidoSchema), pedidoController.updatePedido);
 router.delete("/pedidos/:id", requireStaff, pedidoController.deletePedido);
 
 module.exports = router;
