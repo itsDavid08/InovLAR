@@ -7,7 +7,7 @@
     "dev": "nodemon main.js",
     "migrate": "sequelize-cli db:migrate",
     "seed": "sequelize-cli db:seed:all",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run"
   },
   "author": "",
   "license": "ISC",
@@ -28,6 +28,8 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.10",
-    "sequelize-cli": "^6.6.5"
+    "sequelize-cli": "^6.6.5",
+    "supertest": "^7.2.2",
+    "vitest": "^4.1.10"
   }
 }

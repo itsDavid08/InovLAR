@@ -4273,3 +4273,62 @@ o Bootstrap gera `.bg-primary{...!important}`, e o Tailwind (CDN **ou** build) n
 por isso o Bootstrap sempre ganhou esta colisão — inclusive antes desta mudança. **Não é regressão** (a
 aparência é idêntica à do CDN), mas é um sintoma da coexistência de três frameworks de UI. A limpeza
 disto pertence ao item 11 (aposentar o Bootstrap), porque corrigir a colisão *mudaria* a aparência atual.
+
+---
+
+## 2026-07-23 — Primeiros testes automatizados (Vitest) + bug descoberto no editor de tabelas
+
+### Contexto
+O projeto não tinha testes — o maior risco identificado (item 10 do `IMPROVEMENTS_CHECKLIST.md`, e
+sempre destacado no CLAUDE.md). Objetivo: um *safety net* focado nas duas zonas mais frágeis, não
+cobertura total. Ambos os pacotes passam a usar **Vitest** (`npm test` = `vitest run`).
+
+### Client — geometria da grelha (lógica pura, sem DOM)
+`Components/tabela/gridSpans.test.js` e `constants.test.js` cobrem `trim`, `getSpan`, `footprint`,
+`buildOcupacao`, `extentRows`, `colocarComEmpurrao`, e `isSOS`/`resolverCorCategoria`/`escalaPorColunas`/
+`hasCells`/`devicesWithLayout`/`defaultConfig`/`matrizCategorias`/`raioFusao`. **29 testes + 2 xfail.**
+
+Método: antes de escrever asserções, executei as funções reais com cenários de grelha cheia (como na
+app) para caracterizar o comportamento verdadeiro, em vez de assumir.
+
+### 🐞 Bug descoberto: `colocarComEmpurrao` perde/sobrepõe botões no empurrão
+A função **não reserva a pegada do alvo em `ocup`** antes de realocar os botões colididos, por isso um
+colidido pode ser colocado numa célula do alvo e depois ser sobrescrito pelo `pousar(targetPos)` final.
+Confirmado com grelha cheia:
+- `resize 10@0 → 2×1` com vizinho `20@1` → **20 desaparece** (devia ir para @2).
+- `resize 10@0 → 2×2` → 20 perde-se e 30 fica **sobreposto** dentro da pegada do 10.
+- `place 20@0` sobre `10@0` (1×1) → **10 desaparece**.
+
+**Alcançável** pelo gesto de redimensionar por cima de um vizinho (`useGridResize.js:84` chama
+`colocarComEmpurrao`). Documentado como dois testes `it.fails` (xfail) que afirmam o comportamento
+CORRETO — passam enquanto o bug existir; quando for corrigido, o Vitest marca-os como falha inesperada
+(sinal para tirar o `.fails`). **Não corrigido aqui**: alterar o algoritmo muda o comportamento de um
+sítio delicado que a CLAUDE.md manda verificar a conduzir a app — precisa de aval e verificação própria.
+Esboço da correção: levantar todos os colididos, reservar `fpAlvo` em `ocup`, e só depois procurar
+destino livre para cada um (o scan passa a excluir a pegada do alvo).
+
+### Server — contrato de auth/validação (sem BD)
+- `tests/schemas.test.mjs` — zod puro (`boardSession`, `createPedido`, `updatePedido`, `createUtente`,
+  `saveTabela`): forma do accessToken, ENUM de estado, corAvatar (`""`/hex), corte a 255, passthrough do
+  config, descarte de campos não declarados.
+- `tests/validate.middleware.test.mjs` — supertest a um mini-app: 400 genérico em input inválido, 200 +
+  campos não declarados descartados.
+- `tests/auth.middleware.test.mjs` — `requireStaff` 401 fail-closed sem sessão; `identifyUtente`+
+  `requireUtente` 401 sem sessão de tabuleiro; guard segue quando há `utenteId`. Sem cookie, os
+  `validarSessao*` fazem short-circuit a null (`Util/sessions.js:18`) — nunca tocam na BD.
+- `tests/boardController.updatePedido.test.cjs` — a **posse** dos pedidos do board (403 entre utentes,
+  404, 400, sucesso). **23 testes.**
+
+### Armadilhas de interop CJS/ESM no Vitest (documentadas para o futuro)
+1. `vi.mock('../models')` **não** interceta o `require('../models')` transitivo do controller (o mock
+   aplica-se ao `import` do teste, mas o controller é CJS) — o controller acabava a ir à **BD de dev
+   real**. Solução: `vi.spyOn(Pedido, 'findByPk')` no objeto real partilhado.
+2. Um teste `.mjs` a importar `../models` cria uma **2ª instância** dos modelos (registo ESM ≠ registo
+   CJS do controller) → `associate()` corre 2× → `SequelizeAssociationError: alias pedidos`. Solução:
+   escrever esse teste em **CommonJS** (`.test.cjs`), que partilha o registo CJS com o código-fonte, com
+   os globais do Vitest ativados em `vitest.config.mjs` (`test.globals: true`).
+
+### Estado
+Client: **31** (29 + 2 xfail). Server: **23**. Ambos `npm test` verdes. Dependências novas: `vitest`
+(Client e Server), `supertest` (Server). CLAUDE.md atualizado (as afirmações "no automated tests" e a
+nota do CDN no helmet estavam desatualizadas).

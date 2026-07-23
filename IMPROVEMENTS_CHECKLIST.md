@@ -40,9 +40,11 @@ marcados como **[TOP 3]** são as prioridades recomendadas.
 - [ ] **9. Contexto único = re-renders globais.** Um só Context com os 4 hooks; qualquer
   pedido re-renderiza todos os consumidores. Memoizar o `value` (quick win) e, a prazo,
   dividir em 2–3 contexts.
-- [ ] **10. Zero testes (maior risco).** Melhor custo/benefício: unit tests puros para
-  `gridSpans.js`, `useGridGeometry`, `raioFusao`/`matrizCategorias` (Vitest, sem DOM) +
-  supertest para o contrato de auth (staff 401s, ownership do board, validação zod).
+- [x] **10. [TOP 3] Primeiros testes.** ✅ 2026-07-23. Vitest nos dois pacotes (`npm test`).
+  Client (31): `gridSpans` + `constants` (geometria/cor, puro). Server (23): schemas zod,
+  `validate`/`requireStaff`/`requireUtente`, e a posse do board (403). **Descoberta:** bug real em
+  `colocarComEmpurrao` (perde/sobrepõe botões no resize por cima de vizinho) — capturado em 2 xfail,
+  **por corrigir** (ver DEVELOPMENT_LOG). Falta (futuro): gestos drag/resize e integração HTTP com BD.
 
 ## ✨ Clean code / SOLID
 
