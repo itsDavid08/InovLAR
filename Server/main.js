@@ -1,4 +1,5 @@
 const express = require('express');
+const helmet = require('helmet');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const http = require('http');
@@ -48,6 +49,26 @@ function isOrigemPermitida(origin, host) {
     const devOrigin = process.env.NODE_ENV !== 'production' && origin === DEV_ORIGIN;
     return sameOrigin || devOrigin;
 }
+
+// Headers de segurança HTTP (clickjacking, MIME-sniffing, referrer, HSTS, CSP —
+// ver DEVELOPMENT_LOG.md 2026-07-23). Só a CSP precisa de exceção: o index.html
+// carrega o Tailwind via CDN em runtime (script externo + um <script> inline de
+// configuração do tema) — sem isto ficaria sem estilo nenhum em produção (é este
+// mesmo Express que serve o build do Client; em dev quem serve a página é o Vite,
+// por isso esta CSP nem chega a aplicar-se lá). 'unsafe-inline' em script-src é um
+// trade-off aceite: continua a barrar scripts de origens não listadas, mas deixa
+// de barrar um script inline injetado por XSS — corrigir isso a sério exige tirar
+// a config do Tailwind do CDN para um build real (fora do âmbito desta correção).
+app.use(
+    helmet({
+        contentSecurityPolicy: {
+            directives: {
+                ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+                "script-src": ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com"],
+            },
+        },
+    })
+);
 
 app.use(express.json());
 // CORS com credenciais: allowlist dinâmica (mesma origem do pedido, ou o Vite em

@@ -4048,3 +4048,49 @@ migração. Linha original de `StaffAuth` reposta no fim.
 
 ### Próximo
 Fica 1 item 🟢 Low: sem `helmet`.
+
+## 2026-07-23 — `helmet`: headers de segurança HTTP (CSP com exceção para o Tailwind CDN)
+
+### Contexto
+Último item do checklist original. `main.js` nunca definia headers de segurança HTTP além do que o
+Express faz por omissão — sem `X-Frame-Options` (clickjacking, incluindo o próprio ecrã de PIN),
+`X-Content-Type-Options` (MIME-sniffing, relevante para os ficheiros carregados por staff em
+`/imagesBotoes/`/`/imagesUtentes/`), `Referrer-Policy`, ou `Content-Security-Policy` (a mais valiosa
+contra XSS). Antes de ativar, verifiquei que o `index.html` carrega o Tailwind via CDN em runtime
+(`<script src="https://cdn.tailwindcss.com...">` + um `<script>` inline de configuração do tema) —
+usado tanto em dev como no build de produção (é o aviso "cdn.tailwindcss.com should not be used in
+production" já visto na consola do browser; problema de tooling pré-existente, fora do âmbito desta
+correção). Testei os defaults do `helmet` 8.3 isoladamente: `script-src 'self'` por omissão bloquearia
+os dois scripts do Tailwind, deixando a app sem estilo nenhum; os restantes recursos externos
+(`fonts.googleapis.com`/`fonts.gstatic.com`) já passam nos defaults (`style-src`/`font-src` permitem
+`https:` e `'unsafe-inline'` por omissão). Perguntei ao utilizador como tratar a CSP dado este
+trade-off: escolheu ativá-la com uma exceção explícita para o Tailwind, em vez de desligar a CSP toda.
+
+### Correção — `Server/main.js`
+- `app.use(helmet({ contentSecurityPolicy: { directives: { ...helmet.contentSecurityPolicy
+  .getDefaultDirectives(), "script-src": ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com"] } } }))`,
+  montado logo no início da cadeia de middleware (antes do `cors()`/`express.json()`).
+- Todas as outras diretivas da CSP ficam nos defaults do helmet (`default-src 'self'`, `object-src
+  'none'`, `frame-ancestors 'self'`, etc.), assim como os restantes headers (`X-Frame-Options:
+  SAMEORIGIN`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`,
+  `Strict-Transport-Security` — inofensivo em HTTP simples, o browser só o aplica em ligações já
+  HTTPS).
+- **Trade-off aceite e documentado no código**: `'unsafe-inline'` em `script-src` é necessário por causa
+  do `<script>` inline de configuração do Tailwind — continua a barrar scripts carregados de origens
+  não listadas, mas deixa de barrar um script inline injetado por um XSS. Corrigir isso a sério exige
+  tirar a configuração do Tailwind do CDN para um build real (fora do âmbito desta correção).
+- O `io.use(...)`/CORS do socket.io (engine.io corre sobre o `http.Server` cru, não pelo `app` do
+  Express) não é afetado pelo helmet — confirmado em teste.
+
+### Teste
+Servidor reiniciado. `curl -i` a três respostas diferentes: o fallback SPA (`index.html`, o caminho de
+produção que serve o build do Client) e uma resposta JSON da API mostram os headers esperados,
+incluindo a CSP com a exceção do Tailwind; o polling do socket.io continua a devolver
+`Access-Control-Allow-Origin` normalmente (sem regressão do fix de CORS anterior). Confirmei por grep
+no `Client/dist/index.html` que os únicos recursos externos são o script do Tailwind (agora
+explicitamente permitido) e as duas folhas de estilo do Google Fonts (já cobertas pelos defaults). Sem
+browser disponível nesta sessão para confirmar visualmente que o estilo se mantém — pedido ao
+utilizador para verificar uma vez.
+
+### Próximo
+Fecha o checklist de segurança original (Críticos, Altos, Médios e Baixos todos tratados).
