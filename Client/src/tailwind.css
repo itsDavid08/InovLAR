@@ -1,0 +1,7 @@
+/* Diretivas do Tailwind (build real). Antes eram injetadas em runtime pelo CDN
+   `cdn.tailwindcss.com` no fim do <head> — ver DEVELOPMENT_LOG.md 2026-07-23.
+   Importado por último em main.jsx para reproduzir essa ordem (o preflight e as
+   utilities ganham os empates de especificidade sobre o Bootstrap, como antes). */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

@@ -4215,3 +4215,61 @@ de UI a coexistir com o Bootstrap e o Tailwind — mais uma razão para o cortar
 ### Nota
 O `npm install` reportou 4 vulnerabilidades *high* no Client — não vêm desta mudança (são da toolchain
 de dev, vite/esbuild). Ficam para o `npm audit` do item de segurança do checklist.
+
+---
+
+## 2026-07-23 — Tailwind: CDN em runtime → build real (PostCSS/Vite)
+
+### Contexto
+O `index.html` carregava o Tailwind pelo Play CDN (`cdn.tailwindcss.com`) e configurava o tema num
+`<script id="tailwind-config">` inline. Dois problemas sérios (item 1 do `IMPROVEMENTS_CHECKLIST.md`):
+
+1. **Segurança:** para o `<script>` inline de config funcionar, a CSP do helmet tinha de permitir
+   `'unsafe-inline'` no `script-src` (mais o domínio do CDN) — o que deixava passar qualquer script
+   inline injetado por XSS. Era um trade-off documentado à espera desta correção.
+2. **Offline:** os tablets correm num Pi em LAN que pode não ter internet. Sem o CDN, a app arrancava
+   **sem estilo nenhum** — exatamente o motivo que já tinha levado a auto-hospedar as fontes (entry
+   anterior). O Tailwind tinha ficado para trás.
+
+### Decisão — build real com Tailwind v3 (não v4)
+A config inline já estava em formato v3 (`theme.extend` com colors/spacing/fontFamily/fontSize/
+keyframes/animation). A migração fiel e de menor risco é **Tailwind v3 + PostCSS**: a config passa
+quase 1:1 para `tailwind.config.js`. O v4 (CSS-first, `@theme`, plugins diferentes) seria uma reescrita
+muito maior sem ganho para este caso — fica como possível modernização futura.
+
+### Alterações
+- **`Client/` (novas devDependencies):** `tailwindcss@^3`, `postcss`, `autoprefixer`,
+  `@tailwindcss/forms`, `@tailwindcss/container-queries` (estes dois cobrem o `?plugins=forms,
+  container-queries` que vinha na query do CDN).
+- **`Client/tailwind.config.js`** (novo) — o objeto de config do `index.html` portado verbatim, mais
+  `content: ["./index.html", "./src/**/*.{js,jsx}"]` e `darkMode: "class"`. Plugins importados como ESM
+  (o Client é `"type": "module"`, `require()` não serve).
+- **`Client/postcss.config.js`** (novo) — `tailwindcss` + `autoprefixer`.
+- **`Client/src/tailwind.css`** (novo) — as três diretivas `@tailwind base/components/utilities`.
+- **`Client/src/main.jsx`** — importa `./tailwind.css` **por último** (depois de bootstrap/fonts/
+  index.css). O Play CDN injetava o seu `<style>` no fim do `<head>` em runtime, por isso o Tailwind
+  ganhava os empates de especificidade; manter a ordem evita regressões.
+- **`Client/index.html`** — removidos os dois `<script>` (CDN + config inline). Aproveitou-se para
+  `lang="en"` → `lang="pt"` (screen readers; a app é 100% PT) e `<title>APCM` → `InovLAR` (item 16).
+- **`Server/main.js`** — a CSP do helmet volta aos defaults no `script-src` (`'self'`, **sem**
+  `'unsafe-inline'` nem CDN): já não há script externo nem inline a autorizar. O
+  `crossOriginResourcePolicy: "cross-origin"` mantém-se (é do problema das imagens dev, independente).
+
+### Teste
+`npm run build` compila (CSS 243 → 273 kB; `index.html` 6.4 → 0.7 kB sem a config inline). No CSS gerado
+confirmou-se que as utilities customizadas existem com os valores certos: `.bg-surface-container` →
+`rgb(242 236 244)` (#f2ecf4), `.text-on-surface` → `rgb(29 27 32)` (#1d1b20), `.animate-fade-in` → a
+keyframe, e a fonte Atkinson presente. Verificação no browser (dev server reiniciado para carregar o
+novo `postcss.config.js`): injetando elementos com classes usadas no código-fonte, `bg-surface-container`/
+`text-on-surface`/`rounded-2xl`/`bg-error`/`animate-fade-in` resolvem todos para os valores custom;
+`document.querySelector('script[src*="cdn.tailwindcss.com"]')` é `null`; sem erros de consola nem de
+build. Nenhuma classe Tailwind é construída por interpolação (`bg-${x}`) no código — todas as dinâmicas
+são literais completos dentro de ternários, que o JIT deteta pelo scan dos ficheiros — por isso não foi
+preciso `safelist`.
+
+### Descoberta (pré-existente, não corrigida aqui)
+`bg-primary` resolve para o azul do Bootstrap (`#0d6efd`), não para o roxo M3 do Tailwind (`#4f378a`):
+o Bootstrap gera `.bg-primary{...!important}`, e o Tailwind (CDN **ou** build) nunca usa `!important`,
+por isso o Bootstrap sempre ganhou esta colisão — inclusive antes desta mudança. **Não é regressão** (a
+aparência é idêntica à do CDN), mas é um sintoma da coexistência de três frameworks de UI. A limpeza
+disto pertence ao item 11 (aposentar o Bootstrap), porque corrigir a colisão *mudaria* a aparência atual.

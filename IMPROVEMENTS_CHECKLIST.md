@@ -8,11 +8,11 @@ marcados como **[TOP 3]** são as prioridades recomendadas.
 
 ## 🔒 Segurança
 
-- [ ] **1. [TOP 3] Tailwind via CDN → build real.** `Client/index.html` carrega
-  `cdn.tailwindcss.com` em runtime. Obriga ao `'unsafe-inline'` na CSP (`Server/main.js`),
-  o que anula grande parte da proteção XSS, **e** faz o tablet arrancar sem estilo se a
-  internet falhar (lar offline). Migrar para o plugin Tailwind do Vite; a config do
-  `index.html` passa para `tailwind.config.js`. Resolve segurança + offline + peso da página.
+- [x] **1. [TOP 3] Tailwind via CDN → build real.** ✅ 2026-07-23. Migrado para Tailwind v3 +
+  PostCSS (`tailwind.config.js` + `postcss.config.js` + `src/tailwind.css`); removidos os dois
+  `<script>` do `index.html`; CSP do helmet sem `'unsafe-inline'`/CDN no `script-src`. Verificado
+  no build e no browser. **Descoberta:** `bg-primary` mostra o azul do Bootstrap (`!important`),
+  não o roxo M3 — pré-existente, não regressão; limpeza fica no item 11.
 - [ ] **2. TLS em falta.** Sessões (staff + board) viajam em HTTP puro na rede local →
   qualquer dispositivo no Wi-Fi captura o cookie. Pôr um Caddy à frente do Express no Pi
   (cert interno) + `COOKIE_SECURE=true`.
@@ -69,8 +69,8 @@ marcados como **[TOP 3]** são as prioridades recomendadas.
   → mau para daltónicos/baixa visão (a população-alvo). Adicionar redundância (rótulo/ícone de
   categoria). `darkMode: "class"` está configurado mas nunca ativado → um **modo alto
   contraste** teria valor real. (Atkinson Hyperlegible é boa escolha, manter.)
-- [ ] **16. Polimento do `index.html`:** `lang="en"` numa app PT (afeta screen readers → deve
-  ser `pt`), título `APCM` vs. `InovLAR`, favicon ainda é o `vite.svg` default.
+- [~] **16. Polimento do `index.html`:** `lang="en"`→`pt` ✅ e título `APCM`→`InovLAR` ✅
+  (feitos com o item 1). Falta: favicon ainda é o `vite.svg` default.
 
 ---
 

@@ -51,7 +51,7 @@ function isOrigemPermitida(origin, host) {
 }
 
 // Headers de segurança HTTP (clickjacking, MIME-sniffing, referrer, HSTS, CSP —
-// ver DEVELOPMENT_LOG.md 2026-07-23). Duas exceções aos defaults do helmet:
+// ver DEVELOPMENT_LOG.md 2026-07-23). Uma exceção aos defaults do helmet:
 //
 // - crossOriginResourcePolicy: "cross-origin" em vez de "same-origin". Em dev o
 //   Vite serve a página em :5173 e as imagens (/imagesBotoes, /imagesUtentes) vêm
@@ -60,23 +60,14 @@ function isOrigemPermitida(origin, host) {
 //   nunca faria diferença (tudo same-origin), mas partia sempre o dev. Nada aqui é
 //   sensível ao ponto de precisar da proteção do CORP (as fotos pessoais de
 //   utentes já têm o próprio controlo de acesso — nome de ficheiro aleatório).
-// - contentSecurityPolicy script-src: o index.html carrega o Tailwind via CDN em
-//   runtime (script externo + um <script> inline de configuração do tema) — sem
-//   isto ficaria sem estilo nenhum em produção (é este mesmo Express que serve o
-//   build do Client; em dev quem serve a página é o Vite, por isso esta CSP nem
-//   chega a aplicar-se lá). 'unsafe-inline' é um trade-off aceite: continua a
-//   barrar scripts de origens não listadas, mas deixa de barrar um script inline
-//   injetado por XSS — corrigir isso a sério exige tirar a config do Tailwind do
-//   CDN para um build real (fora do âmbito desta correção).
+//
+// O `script-src` fica nos defaults do helmet (só 'self', sem 'unsafe-inline' nem
+// CDN): o Tailwind passou a ser um build real (ver index.html / tailwind.config.js),
+// por isso já não há nem script externo nem <script> inline de config a autorizar —
+// a CSP volta a barrar qualquer script inline injetado por XSS.
 app.use(
     helmet({
         crossOriginResourcePolicy: { policy: "cross-origin" },
-        contentSecurityPolicy: {
-            directives: {
-                ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-                "script-src": ["'self'", "'unsafe-inline'", "https://cdn.tailwindcss.com"],
-            },
-        },
     })
 );
 
