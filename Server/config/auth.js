@@ -18,7 +18,12 @@ if (!COOKIE_SECRET) {
     COOKIE_SECRET = 'dev-only-cookie-secret-inseguro-nao-usar-em-producao';
 }
 
-// Tamanho mínimo do PIN do staff (nº de dígitos).
-const MIN_PASSWORD_DIGITS = 4;
+// Tamanho do PIN do staff (nº de dígitos). Mínimo 6 (4 dígitos = só 10.000
+// combinações — força bruta viável mesmo com rate limiting, ver DEVELOPMENT_LOG.md
+// 2026-07-23). Máximo 20: sem teto "prático" (o teclado físico também funciona,
+// não só o táctil), mas continua limitado para não mandar uma string arbitrária
+// para o bcrypt.hash.
+const MIN_PASSWORD_DIGITS = 6;
+const MAX_PASSWORD_DIGITS = 20;
 
-module.exports = { COOKIE_SECRET, MIN_PASSWORD_DIGITS };
+module.exports = { COOKIE_SECRET, MIN_PASSWORD_DIGITS, MAX_PASSWORD_DIGITS };

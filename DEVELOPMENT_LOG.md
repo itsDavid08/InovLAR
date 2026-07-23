@@ -3976,3 +3976,44 @@ confirma `configurado: true` como antes.
 
 ### Próximo
 Ficam 3 itens 🟢 Low: PIN mínimo de 4 dígitos, custo de bcrypt (10), sem `helmet`.
+
+## 2026-07-23 — PIN de staff: mínimo 6 dígitos, sem teto prático (20)
+
+### Contexto
+`MIN_PASSWORD_DIGITS = 4` era o único piso — o teclado (`Keypad.jsx`) é puramente numérico, por isso um
+PIN de 4 dígitos tem só 10.000 combinações. Com o rate limiting já existente (5 falhas/10min/IP) um
+ataque de força bruta sustentado a partir de um único IP esgota isso em ~14 dias, sem qualquer alerta
+entretanto — barato para uma rede partilhada (o mesmo modelo de ameaça do item anterior, o reset do
+`/auth/staff/setup`). Perguntado ao utilizador se um teto mais alto fazia sentido: confirmou que sim,
+porque o PIN também pode ser escrito pelo teclado físico do dispositivo (`Keypad.jsx` já tinha um
+listener de teclado, não só os botões táteis), tornando um PIN mais longo prático de escrever.
+
+### Correção
+- **`Server/config/auth.js`** — `MIN_PASSWORD_DIGITS` de `4` para `6`; novo `MAX_PASSWORD_DIGITS = 20`
+  (sem teto "prático", mas continua limitado para não mandar uma string arbitrária para o
+  `bcrypt.hash`).
+- **`Server/controller/authController.js`** — `novaPasswordValida()` centraliza a verificação de
+  intervalo, usada em `setup` (PIN novo) e em `change` (só o `newPassword`). Importante: a
+  **`currentPassword`** em `change` continua **sem** nenhuma verificação de comprimento — pode ter sido
+  definida sob o mínimo antigo (4), e é o `bcrypt.compare` que a valida a sério; aplicar-lhe o novo
+  mínimo bloquearia quem tem um PIN de 4/5 dígitos de sequer conseguir alterá-lo.
+- **`Client/src/Pages/StaffLogin.jsx`** e **`ChangePassword.jsx`** — tampa do `slice()` de 8 para 20
+  dígitos (deixa de haver diferença entre o que o teclado deixa escrever e o que o servidor aceita). O
+  passo "palavra-passe atual" do `ChangePassword` passou de exigir `>= 4` (a regra antiga, hardcoded) a
+  só exigir não-vazio (`>= 1`) — pela mesma razão da `currentPassword` no servidor: não é uma
+  palavra-passe nova, não deve ser julgada pela regra nova.
+- **`Client/src/i18n/pt.js`** — `minDigits` atualizado para "Mínimo 6 dígitos"; nova mensagem
+  `currentRequired` ("Escreva a palavra-passe atual") para o passo "atual" do `ChangePassword`.
+
+### Teste
+Servidor reiniciado; guardada a linha real de `StaffAuth` antes de mexer (mesmo padrão dos testes
+anteriores). Script node contra o servidor real (8 asserções, todas PASS): `setup` com 4 dígitos → 400
+(antes seria aceite); com 21 dígitos → 400; com 5 → 400; com 6 (limite exato) → 200; login com esse PIN
+de 6 → 200; simulado um PIN "antigo" de 4 dígitos direto na BD (`bcrypt.hash` fora do fluxo normal, como
+se tivesse sido criado antes desta mudança) e chamado `/auth/staff/change` com essa `currentPassword`
+de 4 dígitos — aceite normalmente (só a `newPassword` de 2 dígitos foi rejeitada); repetido com uma
+`newPassword` válida de 6 dígitos → 200, e login com a palavra-passe nova confirma. Linha original de
+`StaffAuth` reposta no fim.
+
+### Próximo
+Ficam 2 itens 🟢 Low: custo de bcrypt (10), sem `helmet`.

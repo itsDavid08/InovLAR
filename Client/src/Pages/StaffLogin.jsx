@@ -44,7 +44,7 @@ export default function StaffLogin() {
 
     const adicionar = (d) => {
         setErro("");
-        setValor((p) => (p + d).slice(0, 8));
+        setValor((p) => (p + d).slice(0, 20));
     };
     const apagar = () => setValor((p) => p.slice(0, -1));
 
@@ -60,7 +60,7 @@ export default function StaffLogin() {
         }
         // modo "definir"
         if (passo === 1) {
-            if (pin.length < 4) {
+            if (pin.length < 6) {
                 setErro(t.auth.minDigits);
                 return;
             }

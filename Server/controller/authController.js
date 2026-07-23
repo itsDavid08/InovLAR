@@ -3,9 +3,10 @@ const { Transaction } = require("sequelize");
 const { StaffAuth, sequelize } = require("../models");
 const { COOKIE_NAME } = require("../middleware/auth");
 const { criarSessao, validarSessao, revogarSessao } = require("../Util/sessions");
-const { MIN_PASSWORD_DIGITS: MIN_DIGITS } = require("../config/auth");
+const { MIN_PASSWORD_DIGITS: MIN_DIGITS, MAX_PASSWORD_DIGITS: MAX_DIGITS } = require("../config/auth");
 
 const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
+const PIN_RANGE_MSG = `A palavra-passe tem de ter entre ${MIN_DIGITS} e ${MAX_DIGITS} dígitos`;
 
 const cookieOptions = {
     httpOnly: true, // browser JS can't read it
@@ -14,6 +15,13 @@ const cookieOptions = {
     secure: process.env.COOKIE_SECURE === "true", // only when HTTPS terminates in front (see .env.example)
     maxAge: ONE_YEAR_MS, // ~1 year on the device (no repeated logins)
 };
+
+// Válido só para uma palavra-passe NOVA (setup / novo PIN no change) — nunca para
+// a palavra-passe ATUAL num change, que tem de continuar aceite mesmo que tenha
+// sido definida sob um MIN_DIGITS mais baixo no passado (não há migração de PINs
+// já existentes; só o próximo que for definido fica sujeito ao novo mínimo).
+const novaPasswordValida = (p) =>
+    typeof p === "string" && p.length >= MIN_DIGITS && p.length <= MAX_DIGITS;
 
 const authController = {
     // GET /auth/staff/status — tells the frontend what to show:
@@ -43,10 +51,8 @@ const authController = {
     // garante que a leitura seguinte já vê a linha da vencedora.
     setup: async (req, res) => {
         const { password } = req.body;
-        if (!password || String(password).length < MIN_DIGITS) {
-            return res.status(400).json({
-                mensagem: `A palavra-passe tem de ter pelo menos ${MIN_DIGITS} dígitos`,
-            });
+        if (!novaPasswordValida(String(password ?? ""))) {
+            return res.status(400).json({ mensagem: PIN_RANGE_MSG });
         }
 
         let jaConfigurado;
@@ -92,7 +98,8 @@ const authController = {
     },
 
     // POST /auth/staff/change { currentPassword, newPassword } — requires an
-    // authenticated session (cookie) AND knowing the current password.
+    // authenticated session (cookie) AND knowing the current password. A atual não
+    // passa por `novaPasswordValida` — pode ter sido definida sob regras antigas.
     change: async (req, res) => {
         const { currentPassword, newPassword } = req.body;
         const record = await StaffAuth.findOne();
@@ -103,10 +110,8 @@ const authController = {
         if (!ok) {
             return res.status(401).json({ mensagem: "Palavra-passe atual incorreta" });
         }
-        if (!newPassword || String(newPassword).length < MIN_DIGITS) {
-            return res.status(400).json({
-                mensagem: `A nova palavra-passe tem de ter pelo menos ${MIN_DIGITS} dígitos`,
-            });
+        if (!novaPasswordValida(String(newPassword ?? ""))) {
+            return res.status(400).json({ mensagem: PIN_RANGE_MSG });
         }
         record.passwordHash = await bcrypt.hash(String(newPassword), 10);
         await record.save();

@@ -20,17 +20,20 @@ export default function ChangePassword() {
 
     const adicionar = (d) => {
         setErro("");
-        setValor((p) => (p + d).slice(0, 8));
+        setValor((p) => (p + d).slice(0, 20));
     };
     const apagar = () => setValor((p) => p.slice(0, -1));
 
     const avancar = async () => {
         if (passo === "atual") {
-            if (atual.length < 4) return setErro(t.auth.minDigits);
+            // Só exige não-vazio: a atual pode ter sido definida sob um mínimo mais
+            // baixo no passado (é o servidor, via bcrypt.compare, que a valida a
+            // sério no fim) — não faz sentido bloquear aqui com a regra da NOVA.
+            if (atual.length < 1) return setErro(t.auth.currentRequired);
             return setPasso("nova");
         }
         if (passo === "nova") {
-            if (nova.length < 4) return setErro(t.auth.minDigits);
+            if (nova.length < 6) return setErro(t.auth.minDigits);
             return setPasso("confirmar");
         }
         // passo "confirmar"
