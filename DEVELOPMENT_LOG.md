@@ -4123,3 +4123,47 @@ Testar headers de segurança só com `curl` não chega para apanhar proteções 
 no carregamento de recursos (CORP, COEP, etc.) — só aparecem numa sessão real de browser. Sem essa
 ferramenta disponível nesta sessão, o utilizador continua a ser quem confirma visualmente estas
 mudanças; a apanhar isto rápido evitou o problema ficar por descobrir mais tempo.
+
+## 2026-07-23 — Fontes auto-hospedadas em vez do CDN da Google Fonts
+
+### Contexto
+O utilizador reparou que o texto/fontes ficam diferentes entre a página "ao vivo" e uma cópia guardada
+localmente em `.html` (via "Guardar página como → Completa"). Ao inspecionar o `.html` guardado, o
+Chrome tinha renomeado as duas folhas de estilo da Google Fonts para `css2`/`css2(1)` (perdendo a
+extensão `.css` e a query string), e os `@font-face` lá dentro continuam a apontar para
+`fonts.gstatic.com` (URLs absolutos) — ao reabrir o ficheiro guardado esses pedidos falham e o browser
+cai na pilha de fallback (`index.css:13`) para sempre, em vez do "flash" normal e temporário do
+`font-display: swap` que acontece no carregamento normal da app. Para além de explicar o sintoma
+reportado, isto é também um risco real em produção: os tablets correm num Raspberry Pi em rede local,
+que pode não ter acesso à internet — se o Google Fonts CDN não responder, a app inteira perde o
+Atkinson Hyperlegible Next/Inter/Material Symbols Outlined silenciosamente.
+
+### Correção
+- `Client/index.html`: removidas as duas tags `<link>` para `fonts.googleapis.com` (Atkinson
+  Hyperlegible Next + Inter, e Material Symbols Outlined).
+- `Client/public/fonts/`: três ficheiros `.woff2` descarregados uma vez do `fonts.gstatic.com` e
+  commitados no repositório — `atkinson-hyperlegible-next.woff2`, `inter.woff2`,
+  `material-symbols-outlined.woff2`. Cada um é o ficheiro de fonte variável que a Google já usava para
+  cobrir todos os pesos pedidos (confirmado: os `@font-face` que a Google gera para 400/600/700 do
+  Atkinson apontam todos para o mesmo URL, e o mesmo acontece com 400/500/600 do Inter) — só foi preciso
+  o subset "latin" (não "latin-ext"/cyrillic/greek/vietnamese), já que os acentos do português (ã, õ, ç,
+  á, é, í, ó, ú) estão todos dentro de `U+0000-00FF`.
+- `Client/src/fonts.css` (novo): os mesmos 7 `@font-face` que a Google servia, agora com
+  `src: url('/fonts/...')` em vez de `fonts.gstatic.com`, mais a classe utilitária
+  `.material-symbols-outlined` (copiada do CSS da Google). Importado em `main.jsx` antes de
+  `index.css`.
+- Ficheiros servidos a partir de `Client/public/` — chegam a `/fonts/...` tanto no Vite dev server
+  como no build de produção (o Express já serve o `dist/` estaticamente, sem mudanças no `Server`).
+
+### Teste
+Sessão de browser real: `document.fonts` mostra as 7 faces como `loaded` depois de forçar
+`FontFace.load()`, e os pedidos de rede correspondentes (`performance.getEntriesByType('resource')`)
+mostram os três ficheiros a vir de `http://localhost:5173/fonts/...` com o tamanho exato dos ficheiros
+descarregados (34 296 / 48 556 / 1 126 120 bytes) — confirma que carregam do mesmo servidor, sem
+qualquer pedido a `fonts.googleapis.com`/`fonts.gstatic.com`. Sem erros na consola além do aviso
+pré-existente do Tailwind CDN.
+
+### Nota
+Não foi preciso mexer na CSP do `helmet` — `font-src` e `style-src` já tinham `https:` nos defaults do
+helmet (não haviam sido restringidos na configuração explícita do `main.js`), por isso o Google Fonts já
+carregava sob essa CSP e continua a carregar agora, só que de `'self'`.
