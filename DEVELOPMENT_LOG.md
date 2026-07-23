@@ -3894,3 +3894,45 @@ Sem erros no log do servidor.
 ### Próximo
 Restam dois itens 🟡 Médio: upload sobrescreve ficheiros com o mesmo nome fora do fluxo
 `?onConflict=rename`; nenhum agendado ainda pelo utilizador.
+
+## 2026-07-23 — Upload de ícones de botão: conflito de nome decidido pelo servidor
+
+### Contexto
+Último item 🟡 Médio: `POST /imagesBotoes/upload` (biblioteca partilhada de ícones, estrutura plana)
+sobrescrevia silenciosamente um ficheiro existente sempre que o nome coincidia e `onConflict` não era
+`"rename"`. A deteção de colisão vivia inteiramente no cliente (`EditBotoes.jsx`), contra uma lista em
+memória (`imagensDisponiveis`) obtida uma vez ao abrir o editor — o servidor nunca verificava o disco
+antes de escrever. Duas consequências: (1) corrida legítima — duas sessões de staff a carregar imagens
+ao mesmo tempo, ou uma sessão com o editor aberto há um bocado enquanto outra pessoa carrega um
+ficheiro com o mesmo nome, e a substituição acontece sem o modal de decisão alguma vez aparecer; (2)
+qualquer sessão de staff podia ignorar a UI e chamar o endpoint diretamente com um nome já existente —
+o servidor aceitava e substituía sempre, trocando o ícone de qualquer botão já em uso (potencialmente
+visível a todos os utentes) sem exigir mais privilégio do que gerir botões já exige.
+
+### Correção
+- **`Server/middleware/uploads.js`** (`botaoImageStorage.filename`) — passa a verificar
+  `fs.existsSync` no disco real, no momento da escrita: se o nome já existe e `onConflict` não for
+  `"replace"` nem `"rename"`, recusa com `err.status = 409` (multer só abre o stream de escrita depois
+  deste callback devolver — confirmado em `node_modules/multer/storage/disk.js`, por isso nada fica
+  gravado). `onConflict=replace` e `onConflict=rename` continuam a funcionar tal como antes, mas agora
+  só disparam quando pedidos explicitamente pelo request atual, nunca por omissão.
+- **`Client/src/api/botoes.js`** (`uploadImagemBotao`) — deixou de ter `onConflict` por omissão
+  (`'replace'`); um 409 é convertido num erro com `err.conflito = true` para o chamador distinguir de
+  uma falha genérica.
+- **`Client/src/Components/botoes/EditBotoes.jsx`** — `handleUploadImagem` deixou de pré-verificar
+  `imagensDisponiveis`; tenta sempre o upload sem `onConflict` e só mostra o `ConflitoImagemModal`
+  quando o servidor responde 409 (`enviarImagem` apanha `err.conflito`). O fluxo passa a ser reativo ao
+  estado real do servidor, não preditivo a partir de uma lista que podia estar desatualizada.
+
+### Teste
+Servidor reiniciado; script node com upload multipart real (`FormData`/`Blob`) contra
+`/imagesBotoes/upload` com sessão de staff forjada (4 asserções, todas PASS): 1º upload de um nome novo
+sem `onConflict` → 200, fica em disco; 2º upload do mesmo nome sem `onConflict` → **409**, `mtime` do
+ficheiro original inalterado (confirma que nada foi escrito); `onConflict=rename` → 200, cria
+`nome(1).png`, original continua intacto; `onConflict=replace` → 200, `mtime` muda (substituição agora
+explícita). Log do servidor mostra o 409 a passar pelo `errorHandler` central como esperado, sem
+comportamento inesperado.
+
+### Próximo
+Não há mais itens 🟡 Médio agendados. Ficam os 🟢 Low por fazer, sem data: janela de corrida no reset de
+`/auth/staff/setup`, PIN mínimo de 4 dígitos, custo de bcrypt (10), sem `helmet`.

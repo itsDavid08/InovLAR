@@ -96,19 +96,18 @@ const EditBotoes = () => {
             if (jaExistia) setVersoes(prev => new Map(prev).set(path, Date.now()));
             setFormData(prev => ({ ...prev, imagem: path }));
         } catch (err) {
+            if (err.conflito) {
+                setConflito(file); // o servidor confirmou uma colisão real — só agora o modal
+                return;
+            }
             console.error("Erro ao carregar imagem:", err);
             window.alert(t.botoes.uploadError);
         }
     };
 
-    const handleUploadImagem = async (file) => {
-        // Deteção de colisão de nome (lista em memória, fresca na sessão).
-        if (imagensDisponiveis.includes(`/imagesBotoes/${file.name}`)) {
-            setConflito(file); // abre o modal de decisão
-            return;
-        }
-        await enviarImagem(file, 'replace'); // nome novo, sem colisão
-    };
+    // 1ª tentativa sem onConflict — quem decide se há colisão é o servidor (disco
+    // real), não a lista `imagensDisponiveis` em memória, que pode estar desatualizada.
+    const handleUploadImagem = (file) => enviarImagem(file);
 
     const resolverConflito = async (decisao) => {
         const file = conflito;

@@ -34,14 +34,23 @@ export function deleteBotao(id) {
     });
 }
 
-export async function uploadImagemBotao(file, onConflict = 'replace') {
+// onConflict fica de fora na 1ª tentativa: quem decide se há colisão é o servidor
+// (estado real do disco), não uma lista em memória do cliente. Um 409 significa
+// "o nome já existe" — o chamador decide então pedir 'replace' ou 'rename'.
+export async function uploadImagemBotao(file, onConflict) {
     const formData = new FormData();
     formData.append('imagem', file);
-    const res = await fetch(`${apiUrl}imagesBotoes/upload?onConflict=${onConflict}`, {
+    const qs = onConflict ? `?onConflict=${onConflict}` : '';
+    const res = await fetch(`${apiUrl}imagesBotoes/upload${qs}`, {
         method: 'POST',
         credentials: 'include',
         body: formData,
     });
+    if (res.status === 409) {
+        const err = new Error('Já existe uma imagem com esse nome');
+        err.conflito = true;
+        throw err;
+    }
     if (!res.ok) throw new Error('Erro ao fazer upload da imagem');
     return res.json();
 }

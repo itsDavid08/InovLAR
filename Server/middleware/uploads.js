@@ -50,22 +50,34 @@ const verifyImageSignature = async (req, res, next) => {
 };
 
 // Botão icons keep their original filename (they're a shared, listable library);
-// on name conflict the client chooses rename/replace via ?onConflict.
+// on name conflict the client chooses rename/replace via ?onConflict. O conflito é
+// decidido aqui, contra o disco real, no momento da escrita — nunca a partir de uma
+// lista em memória do cliente (pode estar desatualizada entre duas sessões de staff
+// a carregar imagens ao mesmo tempo; ver DEVELOPMENT_LOG.md 2026-07-23).
 const botaoImageStorage = multer.diskStorage({
     destination: (req, file, cb) => {
         fs.mkdir(BOTAO_IMAGES_DIR, { recursive: true }, (err) => cb(err, BOTAO_IMAGES_DIR));
     },
     filename: (req, file, cb) => {
         const original = path.basename(file.originalname); // strips path components (traversal)
-        if (req.query.onConflict === "rename") {
+        const onConflict = req.query.onConflict;
+
+        if (onConflict === "rename") {
             const ext = path.extname(original);
             const base = path.basename(original, ext);
             let name = original, n = 1;
             while (fs.existsSync(path.join(BOTAO_IMAGES_DIR, name))) name = `${base}(${n++})${ext}`;
-            cb(null, name);
-        } else {
-            cb(null, original); // replace or first upload
+            return cb(null, name);
         }
+        if (onConflict !== "replace" && fs.existsSync(path.join(BOTAO_IMAGES_DIR, original))) {
+            // Nome já existe e não foi pedido nem "replace" nem "rename": recusa em vez
+            // de substituir silenciosamente — o cliente mostra o modal de decisão só
+            // perante este 409, nunca antecipadamente.
+            const err = new Error("Já existe uma imagem com esse nome");
+            err.status = 409;
+            return cb(err);
+        }
+        cb(null, original); // nome novo, ou substituição explicitamente pedida
     },
 });
 
