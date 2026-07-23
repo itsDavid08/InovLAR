@@ -4094,3 +4094,32 @@ utilizador para verificar uma vez.
 
 ### Próximo
 Fecha o checklist de segurança original (Críticos, Altos, Médios e Baixos todos tratados).
+
+## 2026-07-23 — Fix de regressão: helmet bloqueava imagens em dev (CORP same-origin)
+
+### Contexto
+Reportado pelo utilizador via consola do browser logo a seguir ao commit do helmet: todos os ícones de
+botão (`/imagesBotoes/*.png`) falhavam a carregar com `ERR_BLOCKED_BY_RESPONSE.NotSameOrigin`. Causa:
+`Cross-Origin-Resource-Policy: same-origin`, que o `helmet()` liga por omissão e eu não tinha testado —
+os meus testes de verificação usaram `curl`, que não aplica esta proteção (é o browser que a impõe ao
+carregar `<img>`/`fetch`, não algo visível na resposta HTTP em si). Em dev, o Vite serve a página em
+`:5173` e as imagens vêm deste servidor em `:3000` — origens diferentes aos olhos do browser — por isso
+o CORP bloqueava sempre. Em produção nunca teria dado erro (Client e imagens same-origin), mas isto
+partia o fluxo de dev por completo.
+
+### Correção — `Server/main.js`
+`helmet({ crossOriginResourcePolicy: { policy: "cross-origin" }, ... })` — substitui o "same-origin" por
+omissão. Nada servido por este Express (ícones de botão, fotos de utente, o build do Client) é sensível
+ao ponto de precisar da proteção do CORP; as fotos pessoais já têm o próprio controlo de acesso (nome de
+ficheiro aleatório, não listável — ver "Image Management" no `CLAUDE.md`).
+
+### Teste
+Servidor reiniciado; `curl -I` a uma imagem com `Origin: http://localhost:5173` confirma
+`Cross-Origin-Resource-Policy: cross-origin` na resposta (o `curl` não reproduz o bloqueio do browser,
+mas confirma que o header mudou como esperado).
+
+### Lição
+Testar headers de segurança só com `curl` não chega para apanhar proteções que o próprio browser impõe
+no carregamento de recursos (CORP, COEP, etc.) — só aparecem numa sessão real de browser. Sem essa
+ferramenta disponível nesta sessão, o utilizador continua a ser quem confirma visualmente estas
+mudanças; a apanhar isto rápido evitou o problema ficar por descobrir mais tempo.
