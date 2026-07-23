@@ -3936,3 +3936,43 @@ comportamento inesperado.
 ### Próximo
 Não há mais itens 🟡 Médio agendados. Ficam os 🟢 Low por fazer, sem data: janela de corrida no reset de
 `/auth/staff/setup`, PIN mínimo de 4 dígitos, custo de bcrypt (10), sem `helmet`.
+
+## 2026-07-23 — `/auth/staff/setup`: fecha a corrida de dois pedidos simultâneos
+
+### Contexto
+Primeiro item 🟢 Low: `POST /auth/staff/setup` (sem autenticação — é o próprio arranque, não há PIN
+ainda para validar contra) fazia `if (await StaffAuth.findOne()) return 409; ... StaffAuth.create(...)`
+sem nada a impedir que dois pedidos verdadeiramente simultâneos passassem ambos o `findOne()` antes de
+qualquer um criar a linha, resultando em duas linhas em `StaffAuth` (que devia ter sempre uma só, mas
+não tinha nenhuma constraint da BD a impor isso). Esta é só a metade do problema que dá para fechar por
+código: a janela mais realista (staff apaga a linha para reset do PIN, e outro dispositivo na mesma
+rede chega primeiro a configurar um novo PIN) é uma questão de "quem chega lá fisicamente primeiro" e
+fica como está, documentada como limitação operacional aceite — o fix aqui é só para a corrida de
+milissegundos entre dois pedidos concorrentes.
+
+### Correção — `Server/controller/authController.js`
+- `setup` passa a fazer o `findOne`+`create` dentro de uma transação com isolamento **SERIALIZABLE**
+  (`sequelize.transaction({ isolationLevel: Transaction.ISOLATION_LEVELS.SERIALIZABLE }, ...)`).
+- Confirmado em teste direto contra a BD real: quando duas transações SERIALIZABLE colidem desta forma
+  (ambas leem "vazio", ambas tentam inserir), o MariaDB não as serializa silenciosamente — mata uma
+  delas com `ER_LOCK_DEADLOCK` (errno 1213). Por isso `setup` apanha esse erro especificamente
+  (`_isRaceError`, também cobre `ER_LOCK_WAIT_TIMEOUT`) e **repete a transação inteira** (não só uma
+  leitura a seguir ao catch — nessa altura a vencedora podia ainda não ter feito commit, dando um falso
+  "não foi corrida nenhuma") até 3 vezes, com um pequeno backoff. Na repetição, uma nova transação já vê
+  a linha da vencedora e devolve 409 corretamente. Pedidos sem corrida (o caso normal) não passam por
+  nenhum retry — a transação segue o caminho de sempre.
+
+### Teste
+Servidor reiniciado; antes de testar, guardei a linha real de `StaffAuth` (id, hash, timestamps) para o
+caso de precisar de a apagar. Script node contra o servidor real: password fraca → 400, nada criado;
+setup normal (sem corrida) → 200, 1 linha; setup outra vez (já configurado) → 409, continua 1 linha;
+**5 pedidos verdadeiramente simultâneos** (`Promise.all`) → exatamente 1× `200`, 4× `409`, e **1 única
+linha** na BD no final (confirmado por query direta). A 1ª tentativa deste teste, sem isolar do rate
+limiter (`staffAuthLimiter`, já existente — 5 falhas/10min/IP), misturou `429` a meio por causa de
+chamadas anteriores do próprio script, não da lógica nova; reiniciar o servidor (limpa o rate limiter,
+que é em memória) e isolar só o teste da corrida confirmou o resultado limpo. Repus a linha original de
+`StaffAuth` no fim (mesmo id e hash — só `updatedAt` mudou, cosmético); `GET /auth/staff/status`
+confirma `configurado: true` como antes.
+
+### Próximo
+Ficam 3 itens 🟢 Low: PIN mínimo de 4 dígitos, custo de bcrypt (10), sem `helmet`.

@@ -1,5 +1,6 @@
 const bcrypt = require("bcryptjs");
-const { StaffAuth } = require("../models");
+const { Transaction } = require("sequelize");
+const { StaffAuth, sequelize } = require("../models");
 const { COOKIE_NAME } = require("../middleware/auth");
 const { criarSessao, validarSessao, revogarSessao } = require("../Util/sessions");
 const { MIN_PASSWORD_DIGITS: MIN_DIGITS } = require("../config/auth");
@@ -24,7 +25,22 @@ const authController = {
         res.json({ configurado: !!record, autenticado });
     },
 
-    // POST /auth/staff/setup { password } — first-time only.
+    // Códigos do MariaDB para "duas transações colidiram, tenta outra vez" — não
+    // são erros reais, são o mecanismo normal de deteção de corrida do próprio
+    // motor (ver DEVELOPMENT_LOG.md 2026-07-23).
+    _isRaceError: (err) =>
+        err?.original?.code === "ER_LOCK_DEADLOCK" || err?.original?.code === "ER_LOCK_WAIT_TIMEOUT",
+
+    // POST /auth/staff/setup { password } — first-time only. StaffAuth guarda uma
+    // única linha por convenção (sem constraint na BD a impor isso), e este
+    // endpoint não exige autenticação (é o próprio arranque). Sem mais nada, dois
+    // pedidos verdadeiramente simultâneos passavam ambos o "já existe?" antes de
+    // qualquer um criar a linha — a transação SERIALIZABLE fecha essa corrida: o
+    // segundo `create()` colide com o primeiro (deadlock do MariaDB, confirmado em
+    // teste) em vez de as duas passarem. Repete a transação (não só a leitura) até
+    // 3 vezes: a que perde vê o erro antes da vencedora fazer commit, por isso uma
+    // nova transação — não um `findOne()` isolado a seguir ao catch — é o que
+    // garante que a leitura seguinte já vê a linha da vencedora.
     setup: async (req, res) => {
         const { password } = req.body;
         if (!password || String(password).length < MIN_DIGITS) {
@@ -32,11 +48,29 @@ const authController = {
                 mensagem: `A palavra-passe tem de ter pelo menos ${MIN_DIGITS} dígitos`,
             });
         }
-        if (await StaffAuth.findOne()) {
+
+        let jaConfigurado;
+        for (let tentativa = 1; ; tentativa++) {
+            try {
+                jaConfigurado = await sequelize.transaction(
+                    { isolationLevel: Transaction.ISOLATION_LEVELS.SERIALIZABLE },
+                    async (t) => {
+                        if (await StaffAuth.findOne({ transaction: t })) return true;
+                        const passwordHash = await bcrypt.hash(String(password), 10);
+                        await StaffAuth.create({ passwordHash }, { transaction: t });
+                        return false;
+                    }
+                );
+                break;
+            } catch (err) {
+                if (tentativa >= 3 || !authController._isRaceError(err)) throw err;
+                await new Promise((r) => setTimeout(r, 20 * tentativa)); // pequeno backoff
+            }
+        }
+
+        if (jaConfigurado) {
             return res.status(409).json({ mensagem: "Já existe uma palavra-passe definida" });
         }
-        const passwordHash = await bcrypt.hash(String(password), 10);
-        await StaffAuth.create({ passwordHash });
         const token = await criarSessao(); // authenticated right away
         res.cookie(COOKIE_NAME, token, cookieOptions);
         res.json({ autenticado: true });
