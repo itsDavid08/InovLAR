@@ -4017,3 +4017,34 @@ de 4 dígitos — aceite normalmente (só a `newPassword` de 2 dígitos foi reje
 
 ### Próximo
 Ficam 2 itens 🟢 Low: custo de bcrypt (10), sem `helmet`.
+
+## 2026-07-23 — Custo do bcrypt: 10 → 12
+
+### Contexto
+`bcrypt.hash(password, 10)` usava o valor por omissão do bcrypt, nunca revisto. O rate limiting
+protege o ataque online (adivinhar o PIN contra o próprio servidor); não protege um ataque offline —
+se a tabela `StaffAuth` alguma vez for lida diretamente (backup, compromisso do servidor), o único
+travão à velocidade de tentativas passa a ser o custo computacional do próprio hash. Medido nesta
+máquina antes de decidir: custo 10 ≈ 67ms/hash, 12 ≈ 236ms, 13 ≈ 475ms. O Pi de produção corre
+`bcryptjs` (JS puro, mais lento que bcrypt nativo por escolha deliberada do projeto — ver
+"Key Design Decisions" no `CLAUDE.md`) em hardware mais modesto, por isso o tempo real lá é maior; mas
+como o bcrypt só corre em `setup`/`login`/`change` (nunca por pedido normal — sessões validam por
+SHA-256), mesmo um atraso de 1-2s aí é aceitável.
+
+### Correção
+- **`Server/config/auth.js`** — novo `BCRYPT_COST = 12`.
+- **`Server/controller/authController.js`** — as duas chamadas a `bcrypt.hash(..., 10)` (`setup` e
+  `change`) passam a usar `BCRYPT_COST`.
+- **Sem migração** — o custo fica embutido no próprio hash bcrypt (`$2b$12$...`); hashes já gravados
+  com custo 10 continuam a validar normalmente via `bcrypt.compare` (não exige custo uniforme). Só um
+  `setup` novo ou um `change` explícito passam a gravar com custo 12.
+
+### Teste
+Servidor reiniciado; guardada a linha real de `StaffAuth`. Script node (3 asserções, todas PASS): PIN
+novo via `/auth/staff/setup` → hash gravado tem `12` no campo de custo (`$2b$12$...`); login com esse
+PIN → 200; simulado um hash "antigo" (custo 10, como o hash real de produção) diretamente na BD → login
+continua a validar normalmente, confirmando que hashes de custos diferentes coexistem sem qualquer
+migração. Linha original de `StaffAuth` reposta no fim.
+
+### Próximo
+Fica 1 item 🟢 Low: sem `helmet`.

@@ -26,4 +26,12 @@ if (!COOKIE_SECRET) {
 const MIN_PASSWORD_DIGITS = 6;
 const MAX_PASSWORD_DIGITS = 20;
 
-module.exports = { COOKIE_SECRET, MIN_PASSWORD_DIGITS, MAX_PASSWORD_DIGITS };
+// Custo do bcrypt (nº de "rounds" = 2^custo iterações). O rate limiting no login
+// protege contra adivinhar o PIN online; isto protege contra um ataque offline
+// (alguém a testar hashes localmente, sem limite, se algum dia ler a tabela
+// StaffAuth) — ver DEVELOPMENT_LOG.md 2026-07-23. Só corre em setup/login/change,
+// nunca por pedido normal (sessões validam por SHA-256), por isso o custo extra
+// não é sentido no uso do dia a dia.
+const BCRYPT_COST = 12;
+
+module.exports = { COOKIE_SECRET, MIN_PASSWORD_DIGITS, MAX_PASSWORD_DIGITS, BCRYPT_COST };

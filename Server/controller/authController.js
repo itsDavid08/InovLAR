@@ -3,7 +3,7 @@ const { Transaction } = require("sequelize");
 const { StaffAuth, sequelize } = require("../models");
 const { COOKIE_NAME } = require("../middleware/auth");
 const { criarSessao, validarSessao, revogarSessao } = require("../Util/sessions");
-const { MIN_PASSWORD_DIGITS: MIN_DIGITS, MAX_PASSWORD_DIGITS: MAX_DIGITS } = require("../config/auth");
+const { MIN_PASSWORD_DIGITS: MIN_DIGITS, MAX_PASSWORD_DIGITS: MAX_DIGITS, BCRYPT_COST } = require("../config/auth");
 
 const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 const PIN_RANGE_MSG = `A palavra-passe tem de ter entre ${MIN_DIGITS} e ${MAX_DIGITS} dígitos`;
@@ -62,7 +62,7 @@ const authController = {
                     { isolationLevel: Transaction.ISOLATION_LEVELS.SERIALIZABLE },
                     async (t) => {
                         if (await StaffAuth.findOne({ transaction: t })) return true;
-                        const passwordHash = await bcrypt.hash(String(password), 10);
+                        const passwordHash = await bcrypt.hash(String(password), BCRYPT_COST);
                         await StaffAuth.create({ passwordHash }, { transaction: t });
                         return false;
                     }
@@ -113,7 +113,7 @@ const authController = {
         if (!novaPasswordValida(String(newPassword ?? ""))) {
             return res.status(400).json({ mensagem: PIN_RANGE_MSG });
         }
-        record.passwordHash = await bcrypt.hash(String(newPassword), 10);
+        record.passwordHash = await bcrypt.hash(String(newPassword), BCRYPT_COST);
         await record.save();
         res.json({ alterado: true });
     },
