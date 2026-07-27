@@ -4854,3 +4854,58 @@ inalterado. `npm test`: 29 + 2 xfail, inalterado — todas as mudanças são com
 lógica pura e documentada (sem verificação de corpo) em 3 componentes JSX. Alcance deliberadamente
 contido — alargar a mais ficheiros é só acrescentar `// @ts-check` e correr `tsc` para ver o que
 aparece.
+
+---
+
+## 2026-07-27 — Item 14 (cores em três sítios): investigado, sem mudança de código
+
+### Contexto
+Item 14 do `IMPROVEMENTS_CHECKLIST.md`, como descrito originalmente: "paleta Material-3 no
+`index.html`, hexes hardcoded em `tabela/constants.js` (`status-yellow #F9A825` ==
+`"Sinto-me" #F9A825`, duplicado), e 883 linhas de `index.css`. Ao migrar o Tailwind, extrair
+para tokens/CSS vars num sítio só." Com o Tailwind já migrado para build real (item 1), a
+paleta M3 já não vive no `index.html` — passou para `tailwind.config.js`.
+
+Perguntado ao utilizador qual dos dois alcances muito diferentes deste item fazer: (a) só a
+duplicação pontual do `#F9A825`, ou (b) a consolidação completa da paleta do `index.css`
+(~40 cores hex legadas, ver achado abaixo). Escolhida a opção (a).
+
+### Achado 1 — a "duplicação" do #F9A825 é coincidência, não uma violação real de DRY
+Antes de ligar os dois valores a uma constante partilhada, fui ver onde `status-yellow` (o
+token do Tailwind) é realmente consumido no código — e não é, em lado nenhum. `status-red`
+também não. Só `status-green` está ligado a alguma coisa (o indicador "● Estável" em
+`StaffHome.jsx`/`UtenteForm.jsx`, sobre o estado do utente — um conceito completamente
+diferente de `COR_CATEGORIA["Sinto-me"]`, que é a cor de agrupamento de uma categoria de
+botões no editor de tabelas).
+
+Isto muda a decisão: os dois valores partilharem o hex `#F9A825` é coincidência (dois sítios
+independentes escolheram o mesmo amarelo âmbar), não uma dependência real entre conceitos. Se
+os forçasse a partilhar uma constante, criava um acoplamento artificial — mudar a cor de
+"Sinto-me" no editor passaria a arriscar mudar também um token de estado (ainda) não usado, e
+vice-versa. E apagar `status-yellow`/`status-red` por estarem sem uso seria presumir que são
+lixo esquecido, quando podem ser espaço reservado de propósito (o padrão green/yellow/red
+sugere um sistema de 3 níveis — ex.: estados de urgência — do qual só o verde foi
+implementado até agora). Sem confirmação de qual das duas coisas é, a opção mais segura é não
+mexer em nenhum dos dois.
+
+**Nenhuma mudança de código feita** — nem em `tailwind.config.js` nem em `constants.js`. O
+item fica marcado como investigado, não como corrigido: às vezes a resposta certa a "isto
+parece duplicado" é confirmar que não há ali um problema real, não forçar uma correção.
+
+### Achado 2 — o `index.css` tem uma paleta legada inteira, não só cores soltas
+Ao levantar o alcance completo antes de perguntar ao utilizador, uma busca por `#[hex]`/`rgb(`
+em `index.css` (883 linhas) devolveu **~40 ocorrências** — não hexes isolados, mas uma paleta
+coerente e repetida: `#1E90FF` (azul "dodger", usado ~10× em botões/bordas/texto do
+Welcome/StaffLogin), `#50D1D1`/`#04D9D9` (teal, gradiente de fundo), `#4CAF50`/`#F44336`
+(verde/vermelho de sucesso/erro), entre outras. Esta paleta é completamente independente da
+M3 do Tailwind — nenhuma sobreposição de valores encontrada entre as duas.
+
+Consolidar isto para uma fonte única exigiria migrar as páginas que ainda usam CSS/classes
+próprias (`.login-iniciar` e afins) para os tokens Tailwind — um trabalho de redesign real,
+não uma extração mecânica, com risco genuíno de regressão visual em várias páginas, e que
+sobrepõe parcialmente o item 11 (aposentar o Bootstrap/CSS legado, já classificado como
+"a prazo"). Ficou fora do alcance escolhido pelo utilizador para esta sessão.
+
+### Estado
+Sem alterações de código. `IMPROVEMENTS_CHECKLIST.md` atualizado com os dois achados e a
+decisão do utilizador sobre o alcance.

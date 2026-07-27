@@ -100,10 +100,19 @@ marcados como **[TOP 3]** são as prioridades recomendadas.
 
 ## 🎨 Cores, ícones, acessibilidade
 
-- [ ] **14. Cores em três sítios sem fonte única** — paleta Material-3 no `index.html`, hexes
-  hardcoded em `tabela/constants.js` (`status-yellow #F9A825` == `"Sinto-me" #F9A825`,
-  duplicado), e 883 linhas de `index.css`. Ao migrar o Tailwind, extrair para tokens/CSS vars
-  num sítio só.
+- [~] **14. Cores em três sítios sem fonte única.** 🔍 Investigado 2026-07-27, sem mudança de
+  código (decisão do utilizador: só o alcance pontual, não a consolidação completa). Achados:
+  (a) o `#F9A825` duplicado (`status-yellow` no Tailwind vs. `COR_CATEGORIA["Sinto-me"]`) é
+  **coincidência, não uma violação real de DRY** — `status-yellow` e `status-red` não são usados
+  em lado nenhum do código (só `status-green` está ligado a algo, o indicador "Estável" do
+  utente); forçar os dois a partilhar uma constante criava um acoplamento artificial entre
+  conceitos sem relação, e apagar os tokens não usados seria presumir que não são espaço
+  reservado para uma funcionalidade futura (ex.: níveis de urgência). Nenhuma mudança feita.
+  (b) O `index.css` (883 linhas) tem uma paleta legada separada de ~40 cores hex
+  (`#1E90FF`, `#50D1D1`, `#4CAF50`, etc.), usada pelo Welcome/StaffLogin/outros — completamente
+  desligada da paleta M3 do Tailwind. Consolidar isto é um trabalho grande, com risco real de
+  regressão visual em várias páginas, e sobrepõe-se ao item 11 (aposentar o Bootstrap,
+  já adiado) — fica por fazer, não é "custo quase zero". Ver DEVELOPMENT_LOG.
 - [ ] **15. Categoria comunicada só por cor.** Fusão visual e identidade dependem 100% da cor
   → mau para daltónicos/baixa visão (a população-alvo). Adicionar redundância (rótulo/ícone de
   categoria). `darkMode: "class"` está configurado mas nunca ativado → um **modo alto
