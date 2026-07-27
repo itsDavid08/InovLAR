@@ -1,13 +1,37 @@
+// @ts-check
 import { useState } from "react";
 import { DISPOSITIVOS, defaultConfig } from "./constants";
 
+/** @typedef {import('./constants').TabelaConfig} TabelaConfig */
+
+/** @returns {Object<string, TabelaConfig>} */
 const configsVazias = () =>
-    Object.fromEntries(Object.keys(DISPOSITIVOS).map((d) => [d, defaultConfig(d)]));
+    // Object.keys() devolve string[] em TS, mesmo quando as chaves reais são só
+    // as de DISPOSITIVOS — cast honesto, não um @ts-ignore às cegas.
+    Object.fromEntries(
+        Object.keys(DISPOSITIVOS).map((d) => [
+            d,
+            defaultConfig(/** @type {keyof typeof DISPOSITIVOS} */ (d)),
+        ])
+    );
 
 // Estado partilhado dos 3 layouts (por dispositivo) de um editor de tabelas.
 // GerirTabela (por utente) e GerirTemplate (por template) só diferem em como
 // carregam e gravam os dados — trocar de separador, editar um campo, e saber
 // o que está "por gravar" é igual nos dois, e estava duplicado entre eles.
+/**
+ * @returns {{
+ *   configs: Object<string, TabelaConfig>,
+ *   setConfigs: React.Dispatch<React.SetStateAction<Object<string, TabelaConfig>>>,
+ *   dispositivo: string,
+ *   setDispositivo: React.Dispatch<React.SetStateAction<string>>,
+ *   cfg: TabelaConfig,
+ *   patch: (parcial: Partial<TabelaConfig>) => void,
+ *   dirtyDevices: Set<string>,
+ *   dirty: boolean,
+ *   markClean: () => void,
+ * }}
+ */
 export function useTabelaConfigs() {
     const [configs, setConfigs] = useState(configsVazias);
     const [dispositivo, setDispositivo] = useState("pc");

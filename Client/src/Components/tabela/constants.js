@@ -1,4 +1,27 @@
+// @ts-check
 import { getSpan, footprint } from "./gridSpans";
+
+/**
+ * Configuração de uma tabela de comunicação para UM dispositivo — o JSON
+ * persistido em `TabelaLayout.config` / `TabelaPadrao.configs[dispositivo]`
+ * (ver CLAUDE.md "Variable-Size Buttons & Category Coloring"). Espelha
+ * `tabelaConfigSchema` em `Server/validation/schemas.js` — mudar a forma aqui
+ * sem mudar lá (ou vice-versa) desalinha o cliente do que o servidor aceita.
+ * Item 13 do IMPROVEMENTS_CHECKLIST.md: única fonte de verdade do tipo,
+ * importada pelos editores/renderers em vez de repetir a forma em comentários.
+ *
+ * @typedef {Object} TabelaConfig
+ * @property {number} cols - Largura da grelha (nº de colunas).
+ * @property {"P"|"M"|"G"} [size] - Escala do tile (ver TAMANHOS).
+ * @property {(number|null)[]} cells - Flat, row-major (índice = r*cols+c).
+ *   botaoId na célula-âncora; `null` nas vazias E nas reservadas pela pegada
+ *   de um botão maior vizinho.
+ * @property {Object<string, {w: number, h: number}>} [spans] - Pegada (>1×1)
+ *   por posição de âncora. Ausente = 1×1 (retrocompatível com tabelas
+ *   guardadas antes disto existir).
+ * @property {Object<string, string>} [coresCategoria] - Override de cor por
+ *   categoria (staff). Ausente = pastel default (COR_CATEGORIA_FUNDO) > sem cor.
+ */
 
 export const DISPOSITIVOS = {
     smartphone: {
@@ -44,7 +67,11 @@ export const COL_OPCOES = [2, 3, 4, 5, 6];
 export const isSOS = (botao) =>
     !!botao && (botao.categoria === "SOS" || botao.nome === "SOS");
 
-// Config vazia de um dispositivo (estado inicial dos editores).
+/**
+ * Config vazia de um dispositivo (estado inicial dos editores).
+ * @param {keyof typeof DISPOSITIVOS} dispositivo
+ * @returns {TabelaConfig}
+ */
 export const defaultConfig = (dispositivo) => ({
     cols: DISPOSITIVOS[dispositivo].colsDefault,
     size: "M",
@@ -53,11 +80,19 @@ export const defaultConfig = (dispositivo) => ({
     coresCategoria: {},
 });
 
-// True se a config tem pelo menos um botão colocado.
+/**
+ * True se a config tem pelo menos um botão colocado.
+ * @param {TabelaConfig} [config]
+ * @returns {boolean}
+ */
 export const hasCells = (config) =>
     !!config && Array.isArray(config.cells) && config.cells.some((v) => v != null);
 
-// Dispositivos de um mapa de configs { dispositivo: config } com layout preenchido.
+/**
+ * Dispositivos de um mapa de configs `{ dispositivo: config }` com layout preenchido.
+ * @param {Object<string, TabelaConfig>} [configs]
+ * @returns {string[]}
+ */
 export const devicesWithLayout = (configs) =>
     Object.keys(DISPOSITIVOS).filter((d) => hasCells(configs?.[d]));
 
@@ -84,15 +119,28 @@ export const COR_CATEGORIA_FUNDO = {
     Medicamentos: "#F6D3D3",
 };
 
-// Override do staff > default pastel > sem cor (nunca inventa cor para categorias
-// desconhecidas).
+/**
+ * Override do staff > default pastel > sem cor (nunca inventa cor para
+ * categorias desconhecidas).
+ * @param {string} categoria
+ * @param {TabelaConfig["coresCategoria"]} overrides
+ * @returns {string | null}
+ */
 export const resolverCorCategoria = (categoria, overrides) =>
     overrides?.[categoria] ?? COR_CATEGORIA_FUNDO[categoria] ?? null;
 
-// Matriz de categorias do quadro (índice = r*cols+c), para a ilusão de fusão visual
-// entre células vizinhas da mesma categoria. Preenche toda a pegada de um botão maior
-// (não só a âncora), para a fusão funcionar em qualquer aresta dele. SOS nunca entra
-// — mantém-se sempre uma "ilha" isolada, com os 4 cantos arredondados.
+/**
+ * Matriz de categorias do quadro (índice = r*cols+c), para a ilusão de fusão visual
+ * entre células vizinhas da mesma categoria. Preenche toda a pegada de um botão maior
+ * (não só a âncora), para a fusão funcionar em qualquer aresta dele. SOS nunca entra
+ * — mantém-se sempre uma "ilha" isolada, com os 4 cantos arredondados.
+ * @param {TabelaConfig["cells"]} cells
+ * @param {TabelaConfig["spans"]} spans
+ * @param {number} cols
+ * @param {number} rows
+ * @param {Object<number, {categoria?: string}>} botaoPorId
+ * @returns {(string|null)[][]}
+ */
 export const matrizCategorias = (cells, spans, cols, rows, botaoPorId) => {
     const grid = Array.from({ length: rows }, () => Array(cols).fill(null));
     cells.forEach((botaoId, pos) => {

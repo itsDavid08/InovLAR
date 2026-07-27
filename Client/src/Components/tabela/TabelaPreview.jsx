@@ -3,7 +3,13 @@ import { getSpan } from "./gridSpans";
 import { useGridGeometry } from "./useGridGeometry";
 import { t } from "../../i18n";
 
+/** @typedef {import('./constants').TabelaConfig} TabelaConfig */
+
 // Pré-visualização read-only de uma tabela (mesma geometria do editor, via useGridGeometry).
+/**
+ * @param {Object} props
+ * @param {TabelaConfig} [props.config]
+ */
 const TabelaPreview = ({ config, dispositivo, botaoPorId, apiUrl }) => {
     const dev = DISPOSITIVOS[dispositivo];
     const cells = Array.isArray(config?.cells) ? config.cells : [];

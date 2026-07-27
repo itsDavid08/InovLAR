@@ -1,6 +1,9 @@
+// @ts-check
 import { useMemo } from "react";
 import { DISPOSITIVOS, matrizCategorias } from "./constants";
 import { buildOcupacao, extentRows } from "./gridSpans";
+
+/** @typedef {import('./constants').TabelaConfig} TabelaConfig */
 
 // Geometria partilhada da grelha de uma tabela. Era calculada (com pequenas
 // variações) no TabelaEditor, no TabuleiroComunicacao e no TabelaPreview —
@@ -13,6 +16,14 @@ import { buildOcupacao, extentRows } from "./gridSpans";
 //  - ocupacao: Map posição → âncora (para saltar células cobertas por spans)
 //  - gridCategorias: matriz de categorias para a fusão visual (raioFusao);
 //    dispensável nos previews — basta não passar botaoPorId
+/**
+ * @param {Object} params
+ * @param {TabelaConfig["cells"]} params.cells
+ * @param {TabelaConfig["spans"]} params.spans
+ * @param {number} params.cols
+ * @param {string} params.dispositivo
+ * @param {Object<number, {categoria?: string}>} [params.botaoPorId]
+ */
 export function useGridGeometry({ cells, spans, cols, dispositivo, botaoPorId = {} }) {
     const [aspW, aspH] = (DISPOSITIVOS[dispositivo]?.aspect || "16 / 10")
         .split("/")

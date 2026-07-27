@@ -32,6 +32,12 @@ import { t } from "../../i18n";
 // Interface: `config` (cols/size/cells/spans/coresCategoria) + `onPatch(parcial)`,
 // em vez de um par valor/setter por campo — o chamador (useTabelaConfigs) já
 // trabalha com patches parciais internamente.
+/** @typedef {import('./constants').TabelaConfig} TabelaConfig */
+/**
+ * @param {Object} props
+ * @param {TabelaConfig} props.config
+ * @param {(parcial: Partial<TabelaConfig>) => void} props.onPatch
+ */
 const TabelaEditor = ({
     titulo = t.tabelaEditor.manageTabelaTitle,
     utenteNome,

@@ -83,13 +83,20 @@ marcados como **[TOP 3]** são as prioridades recomendadas.
   - [x] Substituir o antd pelo `Modal.jsx` partilhado e **remover o antd** ✅ 2026-07-23
     (removeu 70 pacotes; bundle JS caiu para ~130 kB gzip).
   - [ ] A prazo, escolher Tailwind (com build) e aposentar o Bootstrap gradualmente.
-- [ ] **12. Convenção de linguagem inconsistente.** CLAUDE.md diz "código em inglês", mas o
-  servidor tem identificadores PT (`isOrigemPermitida`, `purgarExpiradas`, `criarSessao`) e
-  comentários PT. Decidir: traduzir comentários para inglês (abre a contribuidores) **ou**
-  atualizar a convenção escrita. Estado atual (regra ≠ prática) é o pior.
-- [ ] **13. Sem tipos no contrato mais frágil.** O JSON de layout (`cells`/`spans`/
-  `coresCategoria`) só existe como comentário. Um `@typedef` JSDoc importado pelos editores e
-  renderers dá verificação no editor a custo quase zero (sem migrar já para TS).
+- [ ] **12. Convenção de linguagem inconsistente.** ⏸️ Decisão tomada 2026-07-27: deixar como
+  está por agora. CLAUDE.md diz "código em inglês", mas o servidor tem identificadores PT
+  (`isOrigemPermitida`, `purgarExpiradas`, `criarSessao`) e comentários PT — traduzir tudo
+  seria uma mudança grande (dezenas de ficheiros); atualizar só a regra escrita, uma opção
+  pequena. Perguntado ao utilizador; escolheu não mexer por agora. Revisitar se algum dia
+  importar (ex.: abrir a contribuidores externos).
+- [x] **13. Sem tipos no contrato mais frágil.** ✅ 2026-07-27. `@typedef {TabelaConfig}` em
+  `Components/tabela/constants.js`, referenciado via JSDoc em `gridSpans.js`,
+  `useGridGeometry.js`, `useTabelaConfigs.js` e nos componentes do editor/renderer.
+  `jsconfig.json` novo + `typescript` como devDependency (só para `tsc --noEmit`, sem
+  sintaxe TS em lado nenhum); `checkJs: false` global de propósito (evitava inundar o
+  projeto todo com avisos não relacionados) — os 4 ficheiros de lógica pura ganham
+  `// @ts-check` individual. Confirmado a sério que o `tsc` apanha erros reais (injetei
+  um erro deliberado, confirmou, removi). Ver DEVELOPMENT_LOG.
 
 ## 🎨 Cores, ícones, acessibilidade
 

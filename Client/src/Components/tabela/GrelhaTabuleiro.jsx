@@ -2,9 +2,15 @@ import { isSOS, resolverCorCategoria, raioFusao } from "./constants";
 import { getSpan } from "./gridSpans";
 import { useGridGeometry } from "./useGridGeometry";
 
+/** @typedef {import('./constants').TabelaConfig} TabelaConfig */
+
 // Grelha read-only do tabuleiro do utente (o que o utente toca). Mesma geometria
 // do editor (via useGridGeometry) para reproduzir o desenho fielmente; cada botão
 // dispara onButtonClick, exceto o SOS que dispara onSOS.
+/**
+ * @param {Object} props
+ * @param {TabelaConfig} props.config
+ */
 const GrelhaTabuleiro = ({ config, dispositivo, botaoPorId, apiUrl, onButtonClick, onSOS }) => {
     const cols = config.cols || 4;
     const cells = config.cells || [];

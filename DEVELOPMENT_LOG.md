@@ -4787,3 +4787,70 @@ com precisão.
 ### Estado
 `Client/src/state/use*.js` (4 ficheiros) + `ContextProvider.jsx` — todos memoizados. Comentários
 explicam o "porquê" (incl. o "não resolve X" tal como aqui) para quem tentar o split completo depois.
+
+---
+
+## 2026-07-27 — `@typedef` para o JSON de layout das tabelas (item 13)
+
+### Contexto
+Item 13 do `IMPROVEMENTS_CHECKLIST.md`: o JSON de `config` (`cols`/`size`/`cells`/`spans`/
+`coresCategoria` — ver "Variable-Size Buttons" no CLAUDE.md) é o contrato mais frágil do
+projeto — passa por 4+ ficheiros do Client e é validado estruturalmente no Server
+(`tabelaConfigSchema`, zod) mas só existia como comentário do lado do Client, sem verificação
+nenhuma no editor.
+
+### Decisão — JSDoc + `jsconfig.json` com `checkJs: false` global, `@ts-check` por ficheiro
+Sem migrar para TypeScript (fora de âmbito, "sem migrar já para TS" no próprio item): um
+`@typedef TabelaConfig` central em `constants.js`, referenciado via JSDoc (`@param`/`@returns`)
+pelos consumidores. Para isto dar verificação REAL (não só texto de hover), instalei
+`typescript` como devDependency (só para `tsc --noEmit` — nenhuma sintaxe TS em lado nenhum) e
+criei `Client/jsconfig.json`.
+
+Decisão deliberada: `checkJs: false` no `jsconfig.json` **a nível de projeto**. Ligar
+`checkJs` globalmente num código 100% JS sem anotações prévias inundaria o projeto inteiro de
+avisos não relacionados com este item (código que nunca foi escrito a pensar em tipos). Em vez
+disso, cada ficheiro que QUERO verificado ganha um `// @ts-check` individual no topo — o padrão
+oficial de adoção incremental de JSDoc/TS em projetos JS. Também deixei `"strict": false`: sem
+isto, o `strictNullChecks` apanharia MUITOS `T | null` usados sem guarda em código já testado e
+em produção (ex.: `footprint()` pode devolver `null`, e `colocarComEmpurrao` assume implicitamente
+que nunca é null nalguns sítios internos) — corrigir isso é uma reescrita bem maior do que "custo
+quase zero" pede. Fica registado: esta verificação apanha erros de TIPO (string onde se espera
+number, chamar um método que não existe), não bugs de null-safety.
+
+### Alterações
+- **`Client/jsconfig.json`** (novo) — `target: ES2022`, `module: ESNext`, `moduleResolution:
+  Bundler`, `jsx: preserve`, `checkJs: false`, `strict: false`, `include: ["src"]`.
+- **`Client/package.json`** — `typescript` em devDependencies.
+- **`Components/tabela/constants.js`** — `@typedef TabelaConfig` (espelha `tabelaConfigSchema`
+  do Server) + `// @ts-check` + JSDoc em `defaultConfig`/`hasCells`/`devicesWithLayout`/
+  `resolverCorCategoria`/`matrizCategorias`.
+- **`Components/tabela/gridSpans.js`** — `// @ts-check` + JSDoc em todas as funções exportadas
+  (`trim`/`getSpan`/`footprint`/`buildOcupacao`/`extentRows`/`colocarComEmpurrao`), referenciando
+  `TabelaConfig["cells"]`/`TabelaConfig["spans"]` via `import('./constants').TabelaConfig`.
+- **`Components/tabela/useGridGeometry.js`** e **`useTabelaConfigs.js`** — idem (`// @ts-check` +
+  JSDoc). `useTabelaConfigs.js` precisou de um cast explícito e documentado
+  (`/** @type {keyof typeof DISPOSITIVOS} */ (d)`) em `Object.keys(DISPOSITIVOS)` — o TS não
+  preserva a união literal das chaves ao enumerar um objeto, uma limitação conhecida do próprio
+  TypeScript, não um bug real.
+- **`TabelaEditor.jsx`**, **`TabelaPreview.jsx`**, **`GrelhaTabuleiro.jsx`** — JSDoc só de
+  documentação (hover no editor), **sem** `// @ts-check` — JSX + dnd-kit + prop-drilling
+  provavelmente geram fricção que não vale o alcance deste item; ficam com o tipo documentado,
+  não verificado ao nível do corpo do componente.
+- **CLAUDE.md** — nova entrada em "Code Conventions" a explicar a decisão (`checkJs: false`
+  global, `@ts-check` por ficheiro, `strict: false` e o que isso implica), e corrigida uma
+  frase desatualizada no ponto 2 ("Two Authentication Paths") que ainda dizia `UtenteSession`
+  "sync()'d like StaffSession" — já não é verdade desde o item 5.
+
+### Teste
+Confirmação de que o `tsc` verifica mesmo, não é um no-op silencioso: injetei um erro de tipo
+deliberado em `gridSpans.js` (`"nao e numero".push(1)`) e o `tsc -p jsconfig.json --noEmit`
+apanhou-o (`TS2339: Property 'push' does not exist on type ...`); removido a seguir, confirmado
+limpo outra vez. `npm run lint`: 0 erros (mesmos 4 warnings). `npm run build`: 153 módulos,
+inalterado. `npm test`: 29 + 2 xfail, inalterado — todas as mudanças são comentários/anotações
+(exceto o cast de `useTabelaConfigs.js`, que é semanticamente neutro em runtime).
+
+### Estado
+`Client/jsconfig.json` novo; `TabelaConfig` como fonte única do tipo, verificada em 4 ficheiros de
+lógica pura e documentada (sem verificação de corpo) em 3 componentes JSX. Alcance deliberadamente
+contido — alargar a mais ficheiros é só acrescentar `// @ts-check` e correr `tsc` para ver o que
+aparece.

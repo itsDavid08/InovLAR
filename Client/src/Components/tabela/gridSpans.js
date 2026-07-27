@@ -1,20 +1,42 @@
+// @ts-check
 // Botões com tamanho variável (1x2, 2x2, 3x3…): um botão ocupa uma "pegada" retangular de
 // células a partir de uma célula-âncora (canto superior-esquerdo), guardada em `config.spans`
 // como `{ [posAncora]: { w, h } }`. `cells[pos]` só tem o botaoId na âncora; as restantes células
 // da pegada ficam a `null` (reservadas). Ausência de entrada em `spans` = 1x1 (retrocompatível
 // com tabelas guardadas antes desta funcionalidade existir).
+//
+// Forma partilhada com `constants.js: TabelaConfig` (item 13 do IMPROVEMENTS_CHECKLIST.md) —
+// ver o `@typedef` lá para a definição canónica de `cells`/`spans`.
 
-// remove nulls finais de um array de cells (mantém-no compacto)
+/** @typedef {import('./constants').TabelaConfig} TabelaConfig */
+
+/**
+ * remove nulls finais de um array de cells (mantém-no compacto)
+ * @param {TabelaConfig["cells"]} arr
+ * @returns {TabelaConfig["cells"]}
+ */
 export const trim = (arr) => {
     let e = arr.length;
     while (e > 0 && arr[e - 1] == null) e--;
     return arr.slice(0, e);
 };
 
-// tamanho de um botão ancorado em `pos` (default 1x1)
+/**
+ * tamanho de um botão ancorado em `pos` (default 1x1)
+ * @param {TabelaConfig["spans"]} spans
+ * @param {number} pos
+ * @returns {{w: number, h: number}}
+ */
 export const getSpan = (spans, pos) => spans?.[pos] || { w: 1, h: 1 };
 
-// posições cobertas por um botão w×h ancorado em `pos`; null se não couber na largura da grelha
+/**
+ * posições cobertas por um botão w×h ancorado em `pos`; null se não couber na largura da grelha
+ * @param {number} pos
+ * @param {number} w
+ * @param {number} h
+ * @param {number} cols
+ * @returns {number[] | null}
+ */
 export const footprint = (pos, w, h, cols) => {
     const r = Math.floor(pos / cols), c = pos % cols;
     if (c + w > cols) return null;
@@ -25,7 +47,13 @@ export const footprint = (pos, w, h, cols) => {
     return out;
 };
 
-// mapa posição → âncora, para todas as células ocupadas (a própria âncora ou cobertas pelo seu span)
+/**
+ * mapa posição → âncora, para todas as células ocupadas (a própria âncora ou cobertas pelo seu span)
+ * @param {TabelaConfig["cells"]} cells
+ * @param {TabelaConfig["spans"]} spans
+ * @param {number} cols
+ * @returns {Map<number, number>}
+ */
 export const buildOcupacao = (cells, spans, cols) => {
     const ocup = new Map();
     cells.forEach((botaoId, pos) => {
@@ -36,7 +64,13 @@ export const buildOcupacao = (cells, spans, cols) => {
     return ocup;
 };
 
-// nº de linhas necessárias para caber todos os botões (âncora + altura do span, não só a âncora)
+/**
+ * nº de linhas necessárias para caber todos os botões (âncora + altura do span, não só a âncora)
+ * @param {TabelaConfig["cells"]} cells
+ * @param {TabelaConfig["spans"]} spans
+ * @param {number} cols
+ * @returns {number}
+ */
 export const extentRows = (cells, spans, cols) => {
     let maxRow = -1;
     cells.forEach((botaoId, pos) => {
@@ -49,11 +83,21 @@ export const extentRows = (cells, spans, cols) => {
 
 const need = (arr, i) => { while (arr.length <= i) arr.push(null); };
 
-// Coloca (da biblioteca), move (arrasta um slot existente) ou redimensiona (mesma posição como
-// alvo e como `selfAnchor`) um botão w×h em `targetPos`. Quaisquer botões já colocados cuja
-// pegada colida com a nova são automaticamente empurrados para a próxima célula livre (varrimento
-// linha-a-linha; a grelha cresce sozinha se for preciso). Devolve `null` se o alvo não couber na
-// largura da grelha (não há como empurrar para fora dela horizontalmente).
+/**
+ * Coloca (da biblioteca), move (arrasta um slot existente) ou redimensiona (mesma posição como
+ * alvo e como `selfAnchor`) um botão w×h em `targetPos`. Quaisquer botões já colocados cuja
+ * pegada colida com a nova são automaticamente empurrados para a próxima célula livre (varrimento
+ * linha-a-linha; a grelha cresce sozinha se for preciso). Devolve `null` se o alvo não couber na
+ * largura da grelha (não há como empurrar para fora dela horizontalmente).
+ * @param {TabelaConfig["cells"]} cells
+ * @param {TabelaConfig["spans"]} spans
+ * @param {number} cols
+ * @param {number} targetPos
+ * @param {number} botaoId
+ * @param {{w: number, h: number}} span
+ * @param {number | null} [selfAnchor]
+ * @returns {{cells: TabelaConfig["cells"], spans: TabelaConfig["spans"]} | null}
+ */
 export const colocarComEmpurrao = (cells, spans, cols, targetPos, botaoId, { w, h }, selfAnchor = null) => {
     const fpAlvo = footprint(targetPos, w, h, cols);
     if (!fpAlvo) return null;
