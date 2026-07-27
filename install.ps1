@@ -158,25 +158,19 @@ try {
     if ($LASTEXITCODE -ne 0) { Die "Migrations falharam." }
 } finally { Pop-Location }
 
-### -------- 6) Seeders (botões predefinidos) — idempotente por contagem prévia --------
+### -------- 6) Seeders (botões predefinidos) --------
 # Ao contrário das migrations (registadas em SequelizeMeta), os seeders do sequelize-cli não têm
-# tabela de controlo própria — correr db:seed:all duas vezes rebentaria com chave duplicada
-# (o seeder usa IDs fixos). Por isso só semeia se a tabela Botoes estiver vazia.
-$countArgs = $rootArgs + @("-N", "-e", "SELECT COUNT(*) FROM ``$DbName``.Botoes;")
-$botaoCountRaw = (& $MysqlCli @countArgs 2>$null | Select-Object -First 1)
-$botaoCount = 0
-if ($botaoCountRaw) { $botaoCount = [int]$botaoCountRaw }
-
-if ($botaoCount -eq 0) {
-    Write-Step "A popular os botões predefinidos (seeders)..."
-    Push-Location $ServerDir
-    try {
-        node node_modules/sequelize-cli/lib/sequelize db:seed:all
-        if ($LASTEXITCODE -ne 0) { Die "Seeders falharam." }
-    } finally { Pop-Location }
-} else {
-    Write-Step "Tabela Botoes já tem $botaoCount linha(s) — salto os seeders (idempotência)."
-}
+# tabela de controlo própria — mas o seeder em si já é idempotente desde 2026-07-27
+# (IMPROVEMENTS_CHECKLIST.md item 6: ignoreDuplicates: true no bulkInsert), por isso corre-se
+# sempre, sem contagem prévia (uma versão anterior deste script contava as linhas de Botoes para
+# decidir se saltava o passo — já não é preciso, e um COUNT a zero não distinguia "nunca semeado"
+# de "alguém apagou tudo").
+Write-Step "A popular os botões predefinidos (seeders)..."
+Push-Location $ServerDir
+try {
+    node node_modules/sequelize-cli/lib/sequelize db:seed:all
+    if ($LASTEXITCODE -ne 0) { Die "Seeders falharam." }
+} finally { Pop-Location }
 
 Write-Host "`n------------------------------------------------------------" -ForegroundColor Cyan
 Write-Host "InovLAR (dev) pronto." -ForegroundColor Cyan

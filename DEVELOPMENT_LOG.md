@@ -4634,3 +4634,43 @@ As 5 tabelas + `AuditLog` + `Utente`/`Botao`/`Pedido`/`UtenteBotoes` — **todas
 são agora criadas por migration. Zero chamadas a `.sync()` em todo o `Server`. CLAUDE.md atualizado
 (ponto 5 reescrito de "dividido" para "unificado", árvore de ficheiros, nota sobre a armadilha do
 `BINARY`/`lower_case_table_names` para não se repetir).
+
+---
+
+## 2026-07-27 — Seeder dos botões predefinidos passa a idempotente (item 6)
+
+### Contexto
+Item 6 do `IMPROVEMENTS_CHECKLIST.md`: `db:seed:all` rebentava com "Validation error" (chave
+duplicada) se corrido uma 2ª vez — o seeder usa 43 IDs fixos (1–43) e o sequelize-cli não tem tabela
+própria de controlo de seeders já corridos (ao contrário das migrations, com `SequelizeMeta`).
+Reproduzido a sério antes de mexer: `db:seed:all` numa BD já semeada (43 botões) devolveu mesmo
+"Validation error", e a contagem de linhas confirmou que o `bulkInsert` falhado é atómico — não
+inseriu metade das linhas antes de rebentar, ficou tudo intocado.
+
+### Decisão — `ignoreDuplicates: true`, não um "salta se não estiver vazia"
+O checklist oferecia as duas opções. Testei `ignoreDuplicates: true` (traduz para `INSERT IGNORE` no
+MariaDB) diretamente contra a BD real antes de mexer no ficheiro — funcionou sem erro. Prefiro-a a um
+"só semeia se a tabela estiver vazia" (a alternativa, e o padrão que o `install.sh`/`install.ps1` já
+usavam ao nível do shell) por uma razão concreta: um `COUNT(*) = 0` só resolve o caso "nunca semeado";
+se um único botão predefinido for apagado à parte (ex.: staff engana-se a limpar imagens), a tabela
+deixa de estar vazia e esse "salta tudo" nunca o repõe. `ignoreDuplicates` repara linha a linha —
+testei isto a sério: apaguei o botão 43 ("Diretora"), corri o seeder, voltou com o conteúdo exato, sem
+tocar nos outros 42.
+
+### Alterações
+- **`seeders/20250506190850-seed-botoes.js`** — `ignoreDuplicates: true` nas opções do `bulkInsert`.
+- **`install.sh`** e **`install.ps1`** — removido o guard manual `BOTAO_COUNT`/`$botaoCount` (contagem
+  prévia + `if` a decidir se corria o seeder) que existia SÓ por causa deste bug; agora chamam
+  `db:seed:all` incondicionalmente. Simplifica os dois scripts e fecha o mesmo problema na raiz em vez
+  de o contornar em dois sítios diferentes (shell E o seeder).
+
+### Teste
+Sequência completa contra a BD de dev real (43 botões já semeados de antes): reproduzido o erro
+original → aplicado o fix → `db:seed:all` correu 3 vezes seguidas sem erro, contagem sempre 43,
+conteúdo do botão `id=1` inalterado → apagado o botão 43 → `db:seed:all` reposto-o com o conteúdo
+exato (nome/mensagem/imagem/categoria idênticos; `createdAt` naturalmente novo, é uma inserção real).
+Servidor arrancado por completo (`GET /botoes` → 200). `npm test`: 36/36. Sintaxe de `install.sh`
+(`bash -n`) e `install.ps1` (parser do PowerShell) confirmada válida depois de simplificar os dois.
+
+### Estado
+CLAUDE.md atualizado (3 referências à não-idempotência do seeder, todas desatualizadas, corrigidas).

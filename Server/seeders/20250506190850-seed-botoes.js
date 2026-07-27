@@ -46,7 +46,15 @@ module.exports = {
             { id: 41, nome: 'Terapeuta da fala', mensagem: 'Quero chamar um terapeuta da fala', imagem: '/imagesBotoes/Terapeuta_da_Fala.png', categoria: 'Chamar', createdAt: new Date(), updatedAt: new Date() },
             { id: 42, nome: 'Coordenadora', mensagem: 'Quero chamar a Coordinadora', imagem: '/imagesBotoes/coordenadora.png', categoria: 'Chamar', createdAt: new Date(), updatedAt: new Date() },
             { id: 43, nome: 'Diretora', mensagem: 'Quero chamar a Diretora', imagem: '/imagesBotoes/diretora técnica.png', categoria: 'Chamar', createdAt: new Date(), updatedAt: new Date() },
-        ], {});
+        ], {
+            // Item 6 do IMPROVEMENTS_CHECKLIST.md: sem isto, um 2º db:seed:all rebentava
+            // com chave duplicada (IDs fixos, sem tabela de controlo de seeders já
+            // corridos). `ignoreDuplicates` (INSERT IGNORE no MariaDB) torna cada linha
+            // idempotente por si — inclui o bónus de "auto-reparar" se um botão
+            // predefinido específico for apagado à parte, em vez de um simples "salta
+            // tudo se a tabela não estiver vazia" que não repunha nada.
+            ignoreDuplicates: true,
+        });
     },
 
     async down(queryInterface, Sequelize) {

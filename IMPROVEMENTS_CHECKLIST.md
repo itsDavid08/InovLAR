@@ -47,8 +47,10 @@ marcados como **[TOP 3]** são as prioridades recomendadas.
   ia tentar recriar um índice já existente. Corrigido para comparação insensível a
   maiúsculas antes de avançar; sem perda de dados (confirmado por contagem de linhas
   antes/depois). Ver DEVELOPMENT_LOG.
-- [ ] **6. Seeders não idempotentes** — 2º `db:seed:all` rebenta com IDs duplicados. Usar
-  `ignoreDuplicates: true` ou check prévio.
+- [x] **6. Seeders não idempotentes.** ✅ 2026-07-27. `ignoreDuplicates: true` no `bulkInsert`
+  dos botões predefinidos — testado a sério (3 corridas seguidas + apagar um botão e confirmar
+  que só ele é reposto). Removido também o guard manual `BOTAO_COUNT` do `install.sh`/
+  `install.ps1` (existia só por causa deste bug). Ver DEVELOPMENT_LOG.
 - [x] **7. [TOP 3] Higiene dos `package.json`:** ✅ 2026-07-23
   - [x] Remover `cors` das dependências do **Client** (é pacote de servidor).
   - [x] Mover `nodemon` e `sequelize-cli` para `devDependencies` no Server.

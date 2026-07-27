@@ -165,7 +165,7 @@ Server/
 │   ├── socketIO.js       # Socket.io setup + notificarAlteracaoBD broadcast
 │   ├── auditoria.js      # registarAuditoria(req, action, detalhes) — writes AuditLog, never throws (see Known Limitations/security notes)
 │   └── seedDefaults.js   # Create "Predefinida" template on first run (runs once — guards on TabelaPadrao.count())
-├── seeders/              # Seed scripts (43 default botões); no run-once tracking table, re-running errors on dup IDs
+├── seeders/              # Seed scripts (43 default botões); no run-once tracking table, but idempotent (ignoreDuplicates: true, 2026-07-27)
 ├── migrations/           # Sequelize migrations for every table (unified 2026-07-27, see point 5 above) — run via db:migrate
 ├── public/               # Static files served by Express
 │   ├── imagesBotoes/     # Flat structure (no subfolders); upload/delete here
@@ -386,7 +386,7 @@ whitelist in `tabelaController.js`). Rows are implicit — derived from `cells`/
 | Build Client | `cd Client && npm run build` |
 | Reset staff password | Delete the single row in `StaffAuth` (e.g. `mysql -u inovlar_app -p inovlar_dev -e "DELETE FROM StaffAuth;"`), then restart the server |
 | Run migrations | `cd Server && npx sequelize-cli db:migrate` |
-| Seed test data | `cd Server && npx sequelize-cli db:seed:all` (errors on 2nd run — no run-once guard; see table-name gotcha above) |
+| Seed test data | `cd Server && npx sequelize-cli db:seed:all` (idempotent since 2026-07-27 — `ignoreDuplicates: true`, safe to re-run, even self-heals a single deleted default botão) |
 | Full local dev setup (Windows) | `./install.ps1` from repo root |
 | Lint Client | `cd Client && npm run lint` (0 errors; 4 known warnings — see below) |
 | Test Client | `cd Client && npm test` (Vitest — grid geometry + category-colour logic) |
