@@ -57,9 +57,11 @@ marcados como **[TOP 3]** são as prioridades recomendadas.
   - [x] Adicionar scripts ao Server: `start`, `dev`, `migrate`, `seed`.
   - [x] Uniformizar nome/versão: `inovlar-client` / `inovlar-server` com versão real.
   - [x] Porta do Server a partir de `process.env.PORT` com fallback (hardcoded em `main.js`).
-- [ ] **8. Páginas roteadas a viver em `Components/`** — `EditUtente`, `NewUtente`,
-  `EditBotoes` são rotas mas estão em `Components/`. Rotas misturam convenções
-  (`/edit-utente` kebab vs. `/editBotoes` camel). Mover para `Pages/` e uniformizar paths.
+- [x] **8. Páginas roteadas a viver em `Components/`.** ✅ 2026-07-27. `EditUtente`,
+  `NewUtente`, `EditBotoes` movidos para `Pages/` (`git mv`, histórico preservado);
+  `/editBotoes` → `/edit-botoes` (kebab, uniforme com o resto). Imports internos e o link
+  de nav (`navItems.js`) atualizados. Verificado no browser (as 3 rotas resolvem e
+  redirecionam corretamente sem sessão) + build limpo (153 módulos, igual a antes).
 - [ ] **9. Contexto único = re-renders globais.** Um só Context com os 4 hooks; qualquer
   pedido re-renderiza todos os consumidores. Memoizar o `value` (quick win) e, a prazo,
   dividir em 2–3 contexts.

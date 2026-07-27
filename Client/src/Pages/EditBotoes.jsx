@@ -1,10 +1,10 @@
 import { useContext, useEffect, useMemo, useState } from "react";
-import { Context } from "../../ContextProvider";
-import { fetchImagensBotoes, uploadImagemBotao, deleteImagemBotao } from "../../api/botoes";
-import BotoesList from "./BotoesList";
-import BotaoForm from "./BotaoForm";
-import ConflitoImagemModal from "./ConflitoImagemModal";
-import { t } from "../../i18n";
+import { Context } from "../ContextProvider";
+import { fetchImagensBotoes, uploadImagemBotao, deleteImagemBotao } from "../api/botoes";
+import BotoesList from "../Components/botoes/BotoesList";
+import BotaoForm from "../Components/botoes/BotaoForm";
+import ConflitoImagemModal from "../Components/botoes/ConflitoImagemModal";
+import { t } from "../i18n";
 
 // Categorias sugeridas de base (o staff pode criar outras no dropdown).
 const CATEGORIAS_BASE = ["Sinto-me", "Medicamentos", "Necessidades", "Tecnologias", "Chamar"];

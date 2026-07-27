@@ -95,8 +95,8 @@ Client/src/
 ├── constants.js      # PEDIDO_STATES (pendente/concluido/cancelado)
 ├── Components/
 │   ├── layout/       # StaffShell, StaffSidebar, StaffBottomNav, ItemMenu, navItems.js
-│   ├── botoes/       # EditBotoes (container) + BotoesList + BotaoForm + CategoriaDropdown + ConflitoImagemModal
-│   ├── utentes/      # EditUtente, NewUtente, UtenteForm + UtenteAvatar (photo or initials-in-corAvatar fallback)
+│   ├── botoes/       # BotoesList + BotaoForm + CategoriaDropdown + ConflitoImagemModal (container EditBotoes lives in Pages/, see below)
+│   ├── utentes/      # UtenteForm + UtenteAvatar (photo or initials-in-corAvatar fallback) (containers EditUtente/NewUtente live in Pages/, see below)
 │   ├── pedidos/      # PedidosPhone, PedidosTV (view modes) + decorate.js (pedido→visual props) + usePagedRotation + useViewportMode
 │   ├── tabela/       # See "Table editor structure" below — split into components + gesture hooks
 │   ├── Modal.jsx, SearchInput.jsx, FeedbackToast.jsx   # Shared UI primitives
@@ -105,10 +105,12 @@ Client/src/
 │   ├── PinPrompt.jsx          # Modal to exit patient board
 │   ├── SuccessModal.jsx
 │   └── RequestListDrawer.jsx
-├── Pages/
+├── Pages/            # One file per routed page (App.jsx) — moved here from Components/ 2026-07-27 (IMPROVEMENTS_CHECKLIST.md item 8): a routed container belongs with the other pages, not nested under the presentational components it renders
 │   ├── Welcome.jsx            # Home screen (kiosk mode off)
 │   ├── StaffLogin.jsx         # PIN screen (define/login)
 │   ├── StaffHome.jsx          # Patient list management
+│   ├── EditUtente.jsx, NewUtente.jsx  # Utente form containers (state/logic; render Components/utentes/UtenteForm)
+│   ├── EditBotoes.jsx         # Botão editor container (state/logic; renders Components/botoes/BotoesList or BotaoForm)
 │   ├── PedidosPendentes.jsx   # Monitor view (large screen format)
 │   ├── TabuleiroComunicacao.jsx  # Patient board (the "cage"; exit via PIN modal)
 │   ├── GerirTabela.jsx, GerirTemplate.jsx  # Table/template editors (both use useTabelaConfigs)
@@ -364,7 +366,7 @@ whitelist in `tabelaController.js`). Rows are implicit — derived from `cells`/
 
 ### Adding a Staff Route
 
-1. **Create Page** or **Container + Presentational component** (split if complex).
+1. **Create the routed container in `Pages/`** (state/logic; e.g. `Pages/EditUtente.jsx`). If it's complex, split out presentational pieces into `Components/<feature>/` (e.g. `Components/utentes/UtenteForm.jsx`) — but the routed container itself always lives in `Pages/`, never nested under the components it renders (see item 8, `IMPROVEMENTS_CHECKLIST.md`).
 2. **Wrap in RequireStaff** in `App.jsx`.
 3. **Add nav link to navItems.js** → sidebar/bottom-nav sync.
 4. **Protect backend endpoints** with `requireStaff` middleware; add `credentials: "include"` to fetch in `api/` layer.

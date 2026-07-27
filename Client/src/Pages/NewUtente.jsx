@@ -1,11 +1,11 @@
 import { useState, useContext, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Context } from "../../ContextProvider";
-import { fetchTabelasPadrao } from "../../api/tabelasPadrao";
-import { uploadImagemUtente, deleteImagemUtente } from "../../api/utentes";
-import UtenteForm from "./UtenteForm";
-import { ICONE_PESSOA } from "./UtenteAvatar";
-import { t } from "../../i18n";
+import { Context } from "../ContextProvider";
+import { fetchTabelasPadrao } from "../api/tabelasPadrao";
+import { uploadImagemUtente, deleteImagemUtente } from "../api/utentes";
+import UtenteForm from "../Components/utentes/UtenteForm";
+import { ICONE_PESSOA } from "../Components/utentes/UtenteAvatar";
+import { t } from "../i18n";
 
 const NewUtente = () => {
     const navigate = useNavigate();

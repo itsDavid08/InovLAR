@@ -9,7 +9,7 @@ import { t } from "../../i18n";
 //  - `path`  : rota de destino.
 export const NAV_ITEMS = [
     { label: t.nav.utentes, short: t.nav.utentes, icon: "groups", path: "/staff" },
-    { label: t.nav.botoes, short: t.nav.botoes, icon: "tune", path: "/editBotoes" },
+    { label: t.nav.botoes, short: t.nav.botoes, icon: "tune", path: "/edit-botoes" },
     { label: t.nav.tabelas, short: t.nav.tabelas, icon: "grid_view", path: "/staff/tabelas" },
     { label: t.nav.pedidosPendentes, short: t.nav.pedidosShort, icon: "pending_actions", path: "/staff/pedidos" },
     { label: t.nav.changePassword, short: t.nav.passwordShort, icon: "lock", path: "/staff/alterar-password" },

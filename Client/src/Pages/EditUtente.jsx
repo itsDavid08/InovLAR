@@ -1,10 +1,10 @@
 import { useContext, useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Context } from "../../ContextProvider";
-import { uploadImagemUtente, deleteImagemUtente } from "../../api/utentes";
-import UtenteForm from "./UtenteForm";
-import { ICONE_PESSOA } from "./UtenteAvatar";
-import { t } from "../../i18n";
+import { Context } from "../ContextProvider";
+import { uploadImagemUtente, deleteImagemUtente } from "../api/utentes";
+import UtenteForm from "../Components/utentes/UtenteForm";
+import { ICONE_PESSOA } from "../Components/utentes/UtenteAvatar";
+import { t } from "../i18n";
 
 const EditUtente = () => {
     const { id } = useParams();

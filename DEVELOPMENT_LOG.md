@@ -4674,3 +4674,52 @@ Servidor arrancado por completo (`GET /botoes` → 200). `npm test`: 36/36. Sint
 
 ### Estado
 CLAUDE.md atualizado (3 referências à não-idempotência do seeder, todas desatualizadas, corrigidas).
+
+---
+
+## 2026-07-27 — Páginas roteadas movidas de Components/ para Pages/ (item 8)
+
+### Contexto
+Item 8 do `IMPROVEMENTS_CHECKLIST.md`: `EditUtente.jsx`, `NewUtente.jsx` (em `Components/utentes/`) e
+`EditBotoes.jsx` (em `Components/botoes/`) são os *containers* roteados diretamente em `App.jsx` — o
+mesmo papel que `GerirTabela.jsx`/`StaffHome.jsx`/etc., que sempre viveram em `Pages/`. Ficavam
+nested debaixo dos componentes presentacionais que eles próprios renderizam (`UtenteForm`,
+`BotoesList`), invertendo a relação. Ao mesmo tempo, a rota de `EditBotoes` era `/editBotoes`
+(camelCase) — a única a quebrar a convenção kebab-case usada em todas as outras (`/edit-utente`,
+`/gerir-tabela`, `/new-utente`, `/staff/alterar-password`).
+
+### Alterações
+- `git mv` (preserva histórico): `Components/utentes/EditUtente.jsx` → `Pages/EditUtente.jsx`,
+  `Components/utentes/NewUtente.jsx` → `Pages/NewUtente.jsx`, `Components/botoes/EditBotoes.jsx` →
+  `Pages/EditBotoes.jsx`.
+- Imports internos dos 3 ficheiros corrigidos para a nova profundidade (`Pages/` é um nível mais raso
+  que `Components/<feature>/`): `../../ContextProvider` → `../ContextProvider`, `../../api/*` →
+  `../api/*`, `../../i18n` → `../i18n`; os imports para os componentes presentacionais irmãos
+  (`UtenteForm`, `UtenteAvatar`, `BotoesList`, `BotaoForm`, `ConflitoImagemModal`) passam de `./X` para
+  `../Components/<feature>/X`.
+- `App.jsx` — imports apontam para `./Pages/*`; rota `/editBotoes` → `/edit-botoes`.
+- `Components/layout/navItems.js` — o link de nav (partilhado pela sidebar e pela bottom-nav) atualizado
+  para `/edit-botoes`.
+- CLAUDE.md — árvore de ficheiros e a secção "Adding a Staff Route" (que dizia vagamente "Create Page
+  or Container + Presentational component") reescritas para deixar explícito: o container roteado vive
+  sempre em `Pages/`, nunca aninhado debaixo dos componentes que renderiza.
+
+### Nota sobre o rename da rota
+Não foi adicionado nenhum redirect de `/editBotoes` para `/edit-botoes`. É uma rota só de staff,
+alcançada exclusivamente pela navegação interna (sidebar/bottom-nav, já atualizada nesta mesma
+alteração) — ao contrário do URL do tabuleiro do utente (`/board/<accessToken>`), não é o tipo de link
+que se espera em bookmarks externos. Sem uma rota "catch-all" (`*`) na app, visitar o URL antigo à mão
+resultaria numa área de conteúdo em branco (o `<Routes>` não encontra correspondência), não num crash —
+risco aceitável dado o padrão de acesso real.
+
+### Teste
+`npm run lint`: 0 erros (mesmos 4 warnings pré-existentes — lint não valida resolução de módulos).
+`npm run build`: sucesso, 153 módulos (igual ao build anterior a esta mudança — confirma que nada se
+perdeu nem duplicou). Verificado no browser, sem sessão de staff (não tenho o PIN de dev): `/edit-botoes`,
+`/new-utente` e `/edit-utente/1` redirecionam todos corretamente para `/` (via `RequireStaff`), sem
+erros de consola — prova que as 3 rotas resolvem e os componentes movidos carregam sem erros de import
+(um import partido mostraria o overlay de erro do Vite, não um redirect limpo).
+
+### Estado
+`Pages/` passa a conter todos os containers roteados da app (paridade completa com `App.jsx`).
+`Components/utentes/` e `Components/botoes/` ficam só com peças presentacionais.
