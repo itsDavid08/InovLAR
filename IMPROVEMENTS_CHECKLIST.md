@@ -20,8 +20,12 @@ marcados como **[TOP 3]** são as prioridades recomendadas.
   Opt-in e sticky — não muda o comportamento de instalações existentes. Ver Caddyfile +
   DEVELOPMENT_LOG. **Falta:** correr `ENABLE_TLS=true` numa Pi real e confirmar o fluxo do
   aviso de certificado nos tablets.
-- [ ] **3. `multer` 1.x com CVEs de DoS.** Atualizar para 2.x. Correr `npm audit` nos dois
-  projetos.
+- [x] **3. `multer` 1.x com CVEs de DoS.** ✅ 2026-07-27. Atualizado `1.4.5-lts.2` → `2.2.0`.
+  `npm audit` não assinalava isto (a versão fixa estava mesmo assim dentro do intervalo de
+  várias CVEs HIGH/CVSS 8.7 confirmadas via GHSA/NVD — crash do processo por pedido malformado,
+  sem workaround). Sem mudanças de código (única breaking change do 1.x→2.x é o Node mínimo,
+  já coberto). Verificado com pedidos HTTP reais (9/9) + 4 testes novos permanentes
+  (`Server/tests/uploads.test.mjs`). Ver DEVELOPMENT_LOG.
 - [ ] **4. Sem trilho de auditoria.** PIN partilhado → não se sabe *quem* resolveu um pedido
   ou alterou um perfil. Registar mutações (timestamp + ação + IP) num log simples (RGPD/paper).
 

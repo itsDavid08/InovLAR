@@ -4396,3 +4396,66 @@ via apt nunca correram contra uma Pi real — não há `caddy` disponível para 
 os exemplos oficiais da documentação do Caddy, mas a primeira execução em hardware real (`sudo
 ENABLE_TLS=true bash install.sh`) ainda precisa de ser verificada, incluindo o aviso de certificado nos
 tablets.
+
+---
+
+## 2026-07-27 — multer 1.x → 2.2.0 (CVEs de DoS, item 3)
+
+### Contexto
+Item 3 do `IMPROVEMENTS_CHECKLIST.md`: "multer 1.x com CVEs de DoS". O `npm audit` deste projeto
+**não** assinala o `multer` (a base de advisories do npm não tinha estas CVEs mapeadas para esta árvore
+de dependências) — só o próprio aviso de descontinuação do pacote no registo npm ("Multer 1.x is
+impacted by a number of vulnerabilities, which have been patched in 2.x") apontou para o problema.
+Confirmado a sério consultando os registos oficiais GHSA/NVD (via `WebFetch`, sem depender só da
+memória): a versão fixa no projeto, `1.4.5-lts.2`, está dentro do intervalo afetado de várias CVEs de
+severidade HIGH (CVSS 7.5–8.7):
+
+- **CVE-2025-47935** — fuga de memória: stream do busboy não fecha quando o pedido HTTP emite erro
+  (`< 2.0.0`).
+- **CVE-2025-47944** / **CVE-2025-7338** — exceção não tratada a partir de um pedido multipart
+  malformado → crash do processo, sem workaround (`1.4.4-lts.1` até `< 2.0.0` / `< 2.0.2`).
+- Mais 5 CVEs só corrigidas em versões 2.x posteriores (`2.1.0`, `2.1.1`, `2.2.0`) — incl.
+  **CVE-2026-3520**/**CVE-2026-3304**/**CVE-2026-2359** (stack overflow, recursão descontrolada,
+  exaustão de recursos — todas CVSS 8.7, sem autenticação nem interação necessárias) e
+  **CVE-2026-5079**/**CVE-2026-5038** (campos aninhados sem limite, ficheiros órfãos em disco de
+  uploads abortados).
+
+Um crash do processo Node derruba a app **inteira** — não só o upload, mas o tabuleiro do utente e o
+botão SOS de todos os residentes, já que é um único processo Express a servir tudo. Isto eleva o risco
+bastante acima de "só" um upload a falhar.
+
+### Tentativa de reproduzir o crash (transparência sobre o método)
+Antes de atualizar, tentei confirmar a vulnerabilidade ao vivo: um harness isolado com a config REAL de
+`uploadBotaoImage` (sem auth/BD), atacado com (1) um pedido com `Content-Length` maior que o corpo
+enviado e o socket destruído a meio, e (2) um corpo multipart com boundary declarado mas nunca usado no
+corpo. Nenhum dos dois fez o processo cair — os detalhes técnicos exatos das GHSA raramente são
+públicos, e as duas tentativas não encontraram o gatilho preciso. Isto é reportado com honestidade: não
+consegui reproduzir o crash pessoalmente, mas a evidência documental (CVE específica, intervalo de
+versões que inclui explicitamente `1.4.5-lts.2`, "sem workaround") é sólida e suficiente para justificar
+a atualização de qualquer forma. **Achado incidental relevante:** a tentativa (1) deixou um ficheiro
+`a.png` órfão de 4 bytes em `public/imagesBotoes/` — exatamente o sintoma da CVE-2026-5038 ("ficheiros
+parciais órfãos em disco de uploads abortados") a acontecer ao vivo contra a versão 1.x. Apagado depois
+de confirmado (não é um botão real).
+
+### Decisão
+Atualizar para `^2.2.0` (a mais recente da linha 2.x — cobre todas as CVEs encontradas, incluindo as
+mais recentes só corrigidas nessa versão). A única mudança de comportamento documentada em TODO o
+changelog 1.x→2.x é o mínimo de Node exigido (10.16.0) — muito abaixo do `>=20` já exigido pelo projeto
+(conector `mariadb`). Sem mudanças de código de produção necessárias.
+
+### Teste
+`npm install` — trocou 9 pacotes por 2 (a árvore antiga do multer 1.x por `busboy`+`concat-stream`),
+sem alterar a contagem de vulnerabilidades do `npm audit` (7, nenhuma delas do multer — confirma que
+nunca esteve nessa lista). Bateria de pedidos HTTP multipart REAIS (`fetch`/`FormData` nativos do Node)
+contra a cablagem real (`uploadBotaoImage` + `verifyImageSignature` + `errorHandler`, os mesmos objetos
+que `route.js` monta): upload válido, rejeição por extensão/mimetype, rejeição por magic bytes (+
+ficheiro apagado), `MulterError` por tamanho (>10MB) → 400 via `errorHandler`, e o fluxo completo de
+conflito de nome (409 → rename → replace) — **9/9 passaram**, mesmas mensagens e códigos de erro que
+antes. Os ficheiros de teste escreveram-se nas pastas reais `public/imagesBotoes`/`imagesUtentes`
+(onde o multer está configurado para gravar) e foram apagados a seguir, confirmados por `git status`
+limpo nessas pastas. `npm test` do Server: **27/27** (23 anteriores + 4 novos em
+`tests/uploads.test.mjs`, que fica a cobrir permanentemente os 3 casos mais ligados à segurança —
+fileFilter, magic bytes, tamanho — contra futuras regressões).
+
+### Estado
+Server: **27** testes (5 ficheiros). CLAUDE.md atualizado (nota de segurança + linha do "Test Server").
