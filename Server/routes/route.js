@@ -7,6 +7,7 @@ const boardController = require("../controller/boardController");
 const tabelaController = require("../controller/tabelaController");
 const tabelaPadraoController = require("../controller/tabelaPadraoController");
 const imageController = require("../controller/imageController");
+const auditoriaController = require("../controller/auditoriaController");
 const { requireStaff, identifyUtente, requireUtente } = require("../middleware/auth");
 const { staffAuthLimiter } = require("../middleware/rateLimiter");
 const { uploadBotaoImage, uploadUtentePhoto, verifyImageSignature } = require("../middleware/uploads");
@@ -82,6 +83,9 @@ router.get("/botoes", botaoController.getAllBotoes);
 router.post("/botoes", requireStaff, validate(createBotaoSchema), botaoController.createBotao);
 router.put("/botoes/:id", requireStaff, validate(updateBotaoSchema), botaoController.updateBotao);
 router.delete("/botoes/:id", requireStaff, botaoController.deleteBotao);
+
+// Auditoria (item 4 do IMPROVEMENTS_CHECKLIST.md) — trilho de mutações do staff.
+router.get("/auditoria", requireStaff, auditoriaController.list);
 
 // Pedidos — aggregated reads are staff only (RGPD); the board only uses its
 // own per-utente routes, which stay open (no auth on the tablet).

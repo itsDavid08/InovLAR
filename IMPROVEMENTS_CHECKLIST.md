@@ -26,8 +26,13 @@ marcados como **[TOP 3]** são as prioridades recomendadas.
   sem workaround). Sem mudanças de código (única breaking change do 1.x→2.x é o Node mínimo,
   já coberto). Verificado com pedidos HTTP reais (9/9) + 4 testes novos permanentes
   (`Server/tests/uploads.test.mjs`). Ver DEVELOPMENT_LOG.
-- [ ] **4. Sem trilho de auditoria.** PIN partilhado → não se sabe *quem* resolveu um pedido
-  ou alterou um perfil. Registar mutações (timestamp + ação + IP) num log simples (RGPD/paper).
+- [x] **4. Sem trilho de auditoria.** ✅ 2026-07-27. Tabela `audit_logs` (migration, não
+  sync()) + `Util/auditoria.js: registarAuditoria()` (nunca bloqueia a resposta), chamado
+  explicitamente em `utente.create/update/delete/rotateToken`, `pedido.update/delete`,
+  `auth.changePassword`. `GET /auditoria?limit=` para consultar. **De propósito fora de
+  âmbito:** contas de staff nomeadas (PIN continua partilhado — regista sessão/IP, não
+  pessoa) e CRUD de botões/tabelas/imagens (não são dados pessoais). Sem UI no client ainda.
+  Ver DEVELOPMENT_LOG.
 
 ## 📁 Organização e arquitetura
 

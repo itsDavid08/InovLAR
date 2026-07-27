@@ -7,8 +7,9 @@ const StaffSession = require('./StaffSession');
 const UtenteSession = require('./UtenteSession');
 const TabelaLayout = require('./TabelaLayout');
 const TabelaPadrao = require('./TabelaPadrao');
+const AuditLog = require('./AuditLog');
 
-const models = { Botao, Utente, Pedido, StaffAuth, StaffSession, UtenteSession, TabelaLayout, TabelaPadrao };
+const models = { Botao, Utente, Pedido, StaffAuth, StaffSession, UtenteSession, TabelaLayout, TabelaPadrao, AuditLog };
 
 const initDb = async () => {
     try {

@@ -1,5 +1,6 @@
 const { Pedido, Botao, Utente } = require("../models");
 const { notificarAlteracaoBD } = require("../Util/socketIO");
+const { registarAuditoria } = require("../Util/auditoria");
 const { PEDIDO_STATES } = require("../config/constants");
 
 // Every pedido read joins its botão and utente — the clients render both.
@@ -73,14 +74,17 @@ const pedidoController = {
 
         await pedido.update({ estado });
         notificarAlteracaoBD();
+        await registarAuditoria(req, "pedido.update", { pedidoId: pedido.id, utenteId: pedido.utenteId, estado });
         res.json(pedido);
     },
 
     // DELETE /pedidos/:id
     deletePedido: async (req, res) => {
-        const deleted = await Pedido.destroy({ where: { id: req.params.id } });
+        const pedidoId = Number(req.params.id);
+        const deleted = await Pedido.destroy({ where: { id: pedidoId } });
         if (!deleted) return res.status(404).json({ mensagem: "Pedido não encontrado" });
         notificarAlteracaoBD();
+        await registarAuditoria(req, "pedido.delete", { pedidoId });
         res.json({ mensagem: "Pedido eliminado com sucesso" });
     },
 };

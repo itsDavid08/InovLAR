@@ -4459,3 +4459,79 @@ fileFilter, magic bytes, tamanho — contra futuras regressões).
 
 ### Estado
 Server: **27** testes (5 ficheiros). CLAUDE.md atualizado (nota de segurança + linha do "Test Server").
+
+---
+
+## 2026-07-27 — Trilho de auditoria (item 4)
+
+### Contexto
+Item 4 do `IMPROVEMENTS_CHECKLIST.md`: com o PIN partilhado (sem contas nominais de staff), não
+havia forma de saber *quem* (ou de que sessão/dispositivo) resolveu um pedido ou alterou o perfil
+de um utente — relevante para RGPD e para o paper académico.
+
+### Decisão — o que fica de fora, e porquê
+O PIN é partilhado por desenho (dispositivo de kiosk, não contas individuais) — este item **não**
+adiciona contas de staff nomeadas (seria uma mudança de arquitetura muito maior, fora do âmbito).
+O que dá para registar sem isso: a **sessão/dispositivo** (via `StaffSession.id`, já existente) +
+IP + timestamp + a ação. Não identifica uma pessoa, mas já distingue "dispositivo A" de
+"dispositivo B", e é exatamente o que o checklist pedia ("timestamp + ação + IP").
+
+Segunda decisão: nova tabela via **migration**, não `sync()` — o item 5 do checklist já assinala a
+divisão migrations/sync() como dívida técnica; uma tabela nova não devia juntar-se ao lado errado
+dessa divisão só porque é mais rápido.
+
+Terceira decisão — âmbito das mutações cobertas: liguei a auditoria a `utente.create/update/delete/
+rotateToken`, `pedido.update/delete` (o exemplo literal do checklist — "quem resolveu um pedido") e
+`auth.changePassword`. **Deixei de fora** de propósito o CRUD de botões, a gravação de tabelas/
+templates, e o upload/eliminação de imagens — são operações de gestão de conteúdo, não mutações de
+dados pessoais de um utente (o RGPD é sobre dados de PESSOAS, não sobre ícones de botões). Uma foto
+pessoal nova continua coberta indiretamente: o upload em si não sabe ainda a que utente se destina
+(é um endpoint genérico `/imagesUtentes/upload` que devolve um `path`), só fica associada ao
+paciente quando esse `path` é gravado via `PUT /utentes/:id` — que já está auditado. Registei esta
+fronteira explicitamente no CLAUDE.md para não parecer um esquecimento.
+
+### Alterações
+- **`migrations/20260727090000-create-audit-logs.js`** + **`models/AuditLog.js`** — tabela
+  `audit_logs` (nome em minúsculas desde o início, seguindo o padrão-corrigido de `pedidos`, não o
+  padrão antigo `Utentes`/`Botoes`): `action` (string, "recurso.verbo"), `staffSessionId` (INTEGER,
+  **sem FK de propósito** — `StaffSession` é limpa por expiração/logout/purga no arranque, e uma FK
+  com CASCADE apagaria o histórico junto com a sessão), `ip`, `detalhes` (JSON livre), `createdAt`
+  (sem `updatedAt` — um registo de auditoria é imutável por natureza).
+- **`Util/auditoria.js`** — `registarAuditoria(req, action, detalhes)`. **Nunca rejeita**: o Express 5
+  encaminha promises rejeitadas para o `errorHandler`, e isto é chamado ANTES do `res.json()` nos
+  controllers — sem este cuidado, uma falha a escrever o log (BD momentaneamente em baixo, etc.)
+  transformaria uma mutação bem sucedida numa resposta 500 ao staff. O erro só vai para o console.
+- **`middleware/auth.js`** — `requireStaff` passa a guardar a sessão (antes descartava o valor de
+  `validarSessao`, só testava a verdade) e põe `req.staffSessionId = sessao.id`.
+- **`controller/auditoriaController.js`** + rota **`GET /auditoria?limit=`** (`requireStaff`) — lista
+  mais recentes primeiro; `limit` opcional, capado em 200 (nunca um dump ilimitado da tabela).
+- Chamadas a `registarAuditoria(...)` acrescentadas a `utenteController` (create/update/delete/
+  rotateToken), `pedidoController` (updatePedido/deletePedido) e `authController` (change) — sempre
+  a seguir ao `notificarAlteracaoBD()`, mesmo estilo de chamada explícita já usado para esse socket
+  broadcast (não uma nova camada de middleware genérico).
+
+### Teste
+Migration testada a sério contra a BD de dev: `db:migrate` → schema confirmado via
+`describeTable('audit_logs')` (`detalhes` é `LONGTEXT`, o alias de JSON documentado no CLAUDE.md) →
+`db:migrate:undo` (reversibilidade) → `db:migrate` outra vez. `Util/auditoria.js` testado a sério
+contra a BD real: insere, lê de volta (`detalhes` volta como objeto JSON parseado), e confirma que
+**nunca rejeita** mesmo forçando `AuditLog.create` a falhar — depois limpo (BD de dev fica vazia).
+Servidor real arrancado por completo: `/auth/staff/status` normal, `GET /auditoria` sem sessão →
+401 (confirma o `requireStaff` a proteger a rota nova, ponta a ponta, não só em teste mockado).
+
+Testes permanentes novos (`Server/tests/auditoria.test.cjs`, `.test.cjs` — mesmo motivo do
+`boardController.updatePedido.test.cjs`: partilhar o registo CJS para o `vi.spyOn` ser visto pelo
+código sob teste): `registarAuditoria` cria com a forma certa e nunca rejeita; `requireStaff` põe
+`req.staffSessionId` com sessão válida e não o define sem ela; `auditoriaController.list` usa o
+limite por omissão (50), aceita `?limit=` customizado, capa em 200, e cai no omisso se `limit` não
+for numérico. **Armadilha nova documentada:** tentei primeiro `vi.spyOn` em
+`Util/sessions.validarSessao`, mas `middleware/auth.js` desestrutura esse import no topo do ficheiro
+(`const { validarSessao } = require(...)`) — o spy no objeto do módulo não intercetava esse binding
+local. Corrigido espiando um nível abaixo, `StaffSession.findOne` (a chamada real dentro de
+`validarSessao`), o que teve o bónus de também exercitar a lógica real de hash/expiração em vez de a
+substituir por um stub.
+
+### Estado
+Server: **36** testes (6 ficheiros, +9 desde a entrada anterior). CLAUDE.md atualizado (árvore de
+ficheiros, ponto 5 "Schema management", endpoint novo, nota em "Known Limitations" a explicar
+exatamente o que fica coberto e o que fica de fora, de propósito).

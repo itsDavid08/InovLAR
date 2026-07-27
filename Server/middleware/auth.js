@@ -10,7 +10,13 @@ const { validarSessaoUtente } = require("../Util/utenteSessions");
 const requireStaff = async (req, res, next) => {
     try {
         const token = req.signedCookies && req.signedCookies[COOKIE_NAME];
-        if (await validarSessao(token)) return next();
+        const sessao = await validarSessao(token);
+        if (sessao) {
+            // Para o trilho de auditoria (Util/auditoria.js) — identifica a
+            // SESSÃO/dispositivo que fez a mutação, não uma pessoa (PIN partilhado).
+            req.staffSessionId = sessao.id;
+            return next();
+        }
         return res.status(401).json({ mensagem: "Não autenticado" });
     } catch (erro) {
         console.error("Erro ao validar sessão:", erro);

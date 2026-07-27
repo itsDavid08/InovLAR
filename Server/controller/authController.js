@@ -3,6 +3,7 @@ const { Transaction } = require("sequelize");
 const { StaffAuth, sequelize } = require("../models");
 const { COOKIE_NAME } = require("../middleware/auth");
 const { criarSessao, validarSessao, revogarSessao } = require("../Util/sessions");
+const { registarAuditoria } = require("../Util/auditoria");
 const { MIN_PASSWORD_DIGITS: MIN_DIGITS, MAX_PASSWORD_DIGITS: MAX_DIGITS, BCRYPT_COST } = require("../config/auth");
 
 const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
@@ -115,6 +116,7 @@ const authController = {
         }
         record.passwordHash = await bcrypt.hash(String(newPassword), BCRYPT_COST);
         await record.save();
+        await registarAuditoria(req, "auth.changePassword");
         res.json({ alterado: true });
     },
 

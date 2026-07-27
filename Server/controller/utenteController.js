@@ -3,6 +3,7 @@ const { Utente, Pedido, Botao, TabelaPadrao } = require("../models");
 const { notificarAlteracaoBD } = require("../Util/socketIO");
 const { applyTemplateToUtente } = require("../Util/applyTemplate");
 const { revogarSessoesDoUtente } = require("../Util/utenteSessions");
+const { registarAuditoria } = require("../Util/auditoria");
 const { PEDIDO_STATES } = require("../config/constants");
 
 // Whitelist: only these fields ever reach the model (no mass assignment).
@@ -45,6 +46,7 @@ const utenteController = {
             if (template) await applyTemplateToUtente(template, utente.id);
         }
         notificarAlteracaoBD();
+        await registarAuditoria(req, "utente.create", { utenteId: utente.id, nome: utente.nome });
         res.status(201).json(utente);
     },
 
@@ -53,8 +55,10 @@ const utenteController = {
         const utente = await Utente.findByPk(req.params.id);
         if (!utente) return res.status(404).json({ mensagem: "Utente não encontrado" });
 
-        await utente.update(pickUtenteFields(req.body));
+        const campos = pickUtenteFields(req.body);
+        await utente.update(campos);
         notificarAlteracaoBD();
+        await registarAuditoria(req, "utente.update", { utenteId: utente.id, campos: Object.keys(campos) });
         res.json(utente);
     },
 
@@ -69,14 +73,17 @@ const utenteController = {
         await utente.save();
         await revogarSessoesDoUtente(utente.id);
         notificarAlteracaoBD();
+        await registarAuditoria(req, "utente.rotateToken", { utenteId: utente.id });
         res.json({ accessToken: utente.accessToken });
     },
 
     // DELETE /utentes/:id
     deleteUtente: async (req, res) => {
-        const deleted = await Utente.destroy({ where: { id: req.params.id } });
+        const utenteId = Number(req.params.id);
+        const deleted = await Utente.destroy({ where: { id: utenteId } });
         if (!deleted) return res.status(404).json({ mensagem: "Utente não encontrado" });
         notificarAlteracaoBD();
+        await registarAuditoria(req, "utente.delete", { utenteId });
         res.json({ mensagem: "Utente eliminado" });
     },
 
