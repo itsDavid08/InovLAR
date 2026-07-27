@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import * as botoesApi from "../api/botoes";
 
 // Estado + operações dos botões (catálogo genérico). O botão é buscado sempre
@@ -29,5 +29,15 @@ export function useBotoesState() {
         setBotoes((prev) => prev.filter((b) => b.id !== id));
     }, []);
 
-    return { botoes, setBotoes, fetchBotoes, postBotao, editBotao, deleteBotao };
+    // Memoizado: sem isto, ContextProvider devolvia um objeto novo em cada render
+    // (mesmo quando nenhum destes valores mudou — ex.: um re-render disparado por
+    // navegação), o que por si só já dava ao Context.Provider um `value` novo e
+    // fazia TODOS os consumidores re-renderizar. Ver item 9 do
+    // IMPROVEMENTS_CHECKLIST.md — isto resolve o "re-render sem motivo"; o "um
+    // pedido re-renderiza consumidores de botões" continua a acontecer enquanto
+    // for um Context só (a prazo: dividir em vários contexts).
+    return useMemo(
+        () => ({ botoes, setBotoes, fetchBotoes, postBotao, editBotao, deleteBotao }),
+        [botoes, setBotoes, fetchBotoes, postBotao, editBotao, deleteBotao]
+    );
 }

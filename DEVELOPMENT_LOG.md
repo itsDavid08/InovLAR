@@ -4723,3 +4723,67 @@ erros de consola — prova que as 3 rotas resolvem e os componentes movidos carr
 ### Estado
 `Pages/` passa a conter todos os containers roteados da app (paridade completa com `App.jsx`).
 `Components/utentes/` e `Components/botoes/` ficam só com peças presentacionais.
+
+---
+
+## 2026-07-27 — ContextProvider: `value` memoizado (item 9, só o "quick win")
+
+### Contexto
+Item 9 do `IMPROVEMENTS_CHECKLIST.md`: `ContextProvider` compõe 4 hooks de estado
+(`useBotoesState`, `useUtentesState`, `usePedidosState`, `useStaffAuthState`) num único
+`Context.Provider`, cujo `value` era um objeto literal novo (`{ ...botoesState, ...utentesState,
+... }`) construído em CADA render — sem `useMemo` nenhum, nem no `value` final nem nos 4 hooks que
+o alimentam.
+
+### Porque um `useMemo` só no `value` final não bastava
+Os 4 hooks já usavam `useCallback` para as suas funções (referências estáveis) e `useState` para os
+dados — mas cada um fazia `return { botoes, fetchBotoes, ... }` como um objeto literal novo em cada
+render do hook, mesmo quando NADA lá dentro tinha mudado. Um `useMemo` no `value` do
+`ContextProvider` com `[botoesState, utentesState, pedidosState, authState, utenteId]` como
+dependências seria inútil sozinho: `botoesState` (o objeto DEVOLVIDO por `useBotoesState()`) teria
+sempre uma identidade nova a cada render, então o `useMemo` via sempre "uma dependência mudou" e
+recalculava o `value` de qualquer forma — um no-op disfarçado. Por isso os 4 hooks TAMBÉM precisam
+do seu próprio `useMemo`, com as dependências reais (os valores primitivos/callbacks que cada um
+devolve), para que `botoesState` etc. só ganhem uma referência nova quando o que contêm muda de
+facto.
+
+### O que este fix resolve — e o que NÃO resolve
+Resolve: o `ContextProvider` re-renderiza sempre que o seu componente-pai o obriga (ex.: o
+`<Router>` do react-router re-renderiza os filhos numa navegação, mesmo sem nenhum dos 4 hooks ter
+mudado nada) — antes desta correção, isso gerava um `value` novo de qualquer forma, obrigando TODOS
+os consumidores de `Context` em qualquer ponto da árvore a re-renderizar por nada. Agora o `value`
+só ganha referência nova quando `botoes`, `utentes`, `utente`, `pedidosUtilizador`,
+`pedidosPendentes`, `staffUnlocked`, `staffChecked` ou `utenteId` mudam de facto.
+
+NÃO resolve (de propósito, é o "a prazo" do próprio item): continua a ser um **Context só** — uma
+mudança em QUALQUER domínio (ex.: só os botões, via socket `bd_alterado`) ainda dá ao `value`
+combinado uma referência nova, e por isso ainda re-renderiza TODOS os consumidores, incluindo os que
+só leem `utente`/`pedidos`/`auth`. Resolver isto de vez exige dividir num Context por domínio (ou
+pelo menos separar o que muda com frequência do que quase nunca muda) — deixado para depois, dado o
+alcance (todos os ficheiros que fazem `useContext(Context)`, dezenas na app).
+
+### Teste
+`npm run lint`: 0 erros (mesmos 4 warnings pré-existentes; confirma que nenhuma dependência
+`useMemo` ficou incompleta aos olhos do `exhaustive-deps`). `npm run build`: sucesso, 153 módulos.
+`npm test` (Client): 29 + 2 xfail, inalterado.
+
+Verificação ao vivo, com uma sonda temporária (removida antes do commit): um `useRef` a comparar a
+referência do `value` entre renders consecutivos, logada como INALTERADO/MUDOU + o path atual.
+Confirmou o mecanismo central: cada "episódio" de arranque mostra 1–2 renders iniciais
+(INALTERADO, trivial — a comparar consigo próprio), depois exatamente os renders em que
+`fetchBotoes()`/`staffStatus()` resolvem com dados reais aparecem como MUDOU, e a partir daí fica
+INALTERADO indefinidamente até algo mudar de facto — o padrão esperado se a memoização estiver
+correta. **Não isolado de forma limpa**: o ambiente de dev partilhado deste projeto tem HMR do Vite
+a disparar constantemente (edições concorrentes de outra sessão/utilizador durante este teste, ver
+`pt.js`), e cada hot-update de um ficheiro que o `ContextProvider` importa (direta ou
+indiretamente) provoca um remount completo do componente via React Fast Refresh — o que reinicia o
+contador de renders e mistura o sinal que eu queria isolar especificamente (navegação sem mudança
+de dados). Dado que o mecanismo central já está confirmado de forma consistente em múltiplos
+episódios independentes, não persegui mais essa medição específica — precisaria de um ambiente sem
+HMR ativo (ex.: `npm run build && npm run preview`) para ficar limpa, o que fica registado aqui
+como nota para uma verificação futura mais rigorosa, se algum dia for preciso quantificar o ganho
+com precisão.
+
+### Estado
+`Client/src/state/use*.js` (4 ficheiros) + `ContextProvider.jsx` — todos memoizados. Comentários
+explicam o "porquê" (incl. o "não resolve X" tal como aqui) para quem tentar o split completo depois.

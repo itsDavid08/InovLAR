@@ -62,9 +62,14 @@ marcados como **[TOP 3]** são as prioridades recomendadas.
   `/editBotoes` → `/edit-botoes` (kebab, uniforme com o resto). Imports internos e o link
   de nav (`navItems.js`) atualizados. Verificado no browser (as 3 rotas resolvem e
   redirecionam corretamente sem sessão) + build limpo (153 módulos, igual a antes).
-- [ ] **9. Contexto único = re-renders globais.** Um só Context com os 4 hooks; qualquer
-  pedido re-renderiza todos os consumidores. Memoizar o `value` (quick win) e, a prazo,
-  dividir em 2–3 contexts.
+- [~] **9. Contexto único = re-renders globais.** ✅ *quick win* 2026-07-27, ⏳ *split* por
+  fazer. Os 4 hooks de estado (`useBotoesState`/`useUtentesState`/`usePedidosState`/
+  `useStaffAuthState`) e o `value` do `ContextProvider` ganharam `useMemo` — o `value` só
+  ganha referência nova quando algo realmente mudou, não em todo e qualquer re-render do
+  provider (ex.: causado por navegação, sem nenhum dado ter mudado). **Isto não resolve**
+  "qualquer pedido re-renderiza todos os consumidores" — continua a ser um Context só, uma
+  mudança em qualquer domínio ainda propaga a todos; isso só fecha com o split em 2–3
+  contexts, que continua por fazer (a prazo). Ver DEVELOPMENT_LOG para a verificação.
 - [x] **10. [TOP 3] Primeiros testes.** ✅ 2026-07-23. Vitest nos dois pacotes (`npm test`).
   Client (31): `gridSpans` + `constants` (geometria/cor, puro). Server (23): schemas zod,
   `validate`/`requireStaff`/`requireUtente`, e a posse do board (403). **Descoberta:** bug real em

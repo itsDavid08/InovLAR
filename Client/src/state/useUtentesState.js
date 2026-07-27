@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import * as utentesApi from "../api/utentes";
 import { fetchBoardUtente } from "../api/board";
 
@@ -34,5 +34,9 @@ export function useUtentesState() {
 
     const deleteUtente = useCallback((id) => utentesApi.deleteUtente(id), []);
 
-    return { utentes, setUtentes, utente, setUtente, fetchUtentes, fetchUtente, postUtente, editUtente, deleteUtente };
+    // Memoizado — ver useBotoesState.js para o raciocínio (item 9 do checklist).
+    return useMemo(
+        () => ({ utentes, setUtentes, utente, setUtente, fetchUtentes, fetchUtente, postUtente, editUtente, deleteUtente }),
+        [utentes, setUtentes, utente, setUtente, fetchUtentes, fetchUtente, postUtente, editUtente, deleteUtente]
+    );
 }

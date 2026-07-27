@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import * as pedidosApi from "../api/pedidos";
 import * as boardApi from "../api/board";
 
@@ -33,15 +33,29 @@ export function usePedidosState() {
         [],
     );
 
-    return {
-        pedidosUtilizador,
-        setPedidosUtilizador,
-        pedidosPendentes,
-        setPedidosPendentes,
-        fetchPedidosUtilizador,
-        fetchPedidosPendentesByEmergencia,
-        postPedido,
-        updatePedidoBoard,
-        updatePedido,
-    };
+    // Memoizado — ver useBotoesState.js para o raciocínio (item 9 do checklist).
+    return useMemo(
+        () => ({
+            pedidosUtilizador,
+            setPedidosUtilizador,
+            pedidosPendentes,
+            setPedidosPendentes,
+            fetchPedidosUtilizador,
+            fetchPedidosPendentesByEmergencia,
+            postPedido,
+            updatePedidoBoard,
+            updatePedido,
+        }),
+        [
+            pedidosUtilizador,
+            setPedidosUtilizador,
+            pedidosPendentes,
+            setPedidosPendentes,
+            fetchPedidosUtilizador,
+            fetchPedidosPendentesByEmergencia,
+            postPedido,
+            updatePedidoBoard,
+            updatePedido,
+        ]
+    );
 }

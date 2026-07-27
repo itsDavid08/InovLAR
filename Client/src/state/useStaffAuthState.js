@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { staffStatus } from "../api/auth";
 
 // Gate de "kiosk": staffUnlocked = true quando o staff tem acesso ao console.
@@ -28,5 +28,11 @@ export function useStaffAuthState() {
             .finally(() => setStaffChecked(true));
     }, []);
 
-    return { staffUnlocked, setStaffUnlocked, staffChecked, staffUnlockedRef };
+    // Memoizado — ver useBotoesState.js para o raciocínio (item 9 do checklist).
+    // staffUnlockedRef é um useRef (identidade estável para sempre) — incluído na
+    // dependência por completude, não porque alguma vez mude.
+    return useMemo(
+        () => ({ staffUnlocked, setStaffUnlocked, staffChecked, staffUnlockedRef }),
+        [staffUnlocked, setStaffUnlocked, staffChecked, staffUnlockedRef]
+    );
 }

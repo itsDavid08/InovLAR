@@ -2,7 +2,7 @@
 // Estado global da app. O estado e as operações de cada domínio vivem em hooks
 // próprios (`state/`); aqui fica só a composição e a orquestração transversal
 // (socket, gating das leituras só-staff, refetch ao mudar de utente).
-import { createContext, useState, useEffect, useRef } from "react";
+import { createContext, useState, useEffect, useRef, useMemo } from "react";
 import { io } from "socket.io-client";
 import { apiUrl } from "./api/client";
 import { useBotoesState } from "./state/useBotoesState";
@@ -70,19 +70,26 @@ export const ContextProvider = ({ children }) => {
         return () => socket.disconnect();
     }, [fetchBotoes, fetchUtentes, fetchPedidosPendentesByEmergencia, fetchUtente, fetchPedidosUtilizador, staffUnlockedRef]);
 
-    return (
-        <Context.Provider
-            value={{
-                ...botoesState,
-                ...utentesState,
-                ...pedidosState,
-                ...authState,
-                utenteId,
-                setUtenteId,
-                apiUrl,
-            }}
-        >
-            {children}
-        </Context.Provider>
+    // Memoizado (item 9 do IMPROVEMENTS_CHECKLIST.md): os 4 hooks de estado já
+    // devolvem objetos estáveis (useMemo próprio — só mudam quando o que
+    // realmente contêm muda), por isso este `value` só ganha uma referência nova
+    // quando algum deles (ou utenteId) muda de facto — não em todo e qualquer
+    // re-render do provider (ex.: um causado por navegação, sem nenhum destes
+    // dados ter mudado). Continua a ser um Context só: uma mudança em qualquer
+    // domínio (botões, utentes, pedidos, auth) ainda re-renderiza todos os
+    // consumidores — dividir em vários contexts fica para depois (a prazo).
+    const value = useMemo(
+        () => ({
+            ...botoesState,
+            ...utentesState,
+            ...pedidosState,
+            ...authState,
+            utenteId,
+            setUtenteId,
+            apiUrl,
+        }),
+        [botoesState, utentesState, pedidosState, authState, utenteId]
     );
+
+    return <Context.Provider value={value}>{children}</Context.Provider>;
 };
