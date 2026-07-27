@@ -18,7 +18,18 @@
 #
 # NÃO instala nem usa sqlite3 (removido na migração para MariaDB — era a origem do SEGV na Pi).
 #
+# TLS (opt-in, item 2 do IMPROVEMENTS_CHECKLIST.md): por omissão o script mantém o
+# comportamento de sempre — HTTP puro em :3000. Para pôr um Caddy à frente com HTTPS
+# (certificado self-signed, sem precisar de domínio):
+#   sudo ENABLE_TLS=true bash install.sh
+# Uma vez ativado (COOKIE_SECURE fica gravado no .env), execuções seguintes SEM a
+# variável não o desativam — evita que um `sudo bash install.sh` esquecido derrube a
+# segurança de uma instalação já em HTTPS. Ver Caddyfile e a nota "Operacional" no
+# fim deste script. IMPORTANTE nas primeiras vezes que ativas: os URLs dos tablets
+# mudam de http://<ip>:3000/... para https://<ip>/... — têm de ser reabertos.
+#
 # Uso:  sudo bash install.sh
+#       sudo ENABLE_TLS=true bash install.sh   # com HTTPS (Caddy + cert self-signed)
 #
 set -euo pipefail
 
@@ -29,6 +40,7 @@ SERVER_DIR="${APP_DIR}/Server"
 CLIENT_DIR="${APP_DIR}/Client"
 SERVICE_NAME="inov-lar"
 SERVICE_USER="${SUDO_USER:-pi}"         # utilizador que corre o serviço (quem chamou o sudo)
+ENABLE_TLS="${ENABLE_TLS:-false}"       # opt-in: Caddy + HTTPS self-signed (ver nota acima)
 
 DB_NAME="inovlar"
 DB_USER="inovlar_app"
@@ -115,6 +127,16 @@ else
   log "Gerado novo COOKIE_SECRET."
 fi
 
+# TLS_ACTIVE decide tudo o resto (Caddy, HOST do Express, mensagem final) — fica
+# "colado" a true assim que ativado (lido de volta do .env), mesmo que uma execução
+# futura não passe ENABLE_TLS=true (ver nota no topo do script).
+if [ -f "$ENV_FILE" ] && grep -q '^COOKIE_SECURE=true' "$ENV_FILE"; then
+  TLS_ACTIVE="true"
+else
+  TLS_ACTIVE="$ENABLE_TLS"
+fi
+[ "$TLS_ACTIVE" = "true" ] && COOKIE_SECURE_VAL="true" || COOKIE_SECURE_VAL="false"
+
 # root autentica por unix_socket na Pi → o cliente corre como root sem password.
 # Cria o utilizador para 127.0.0.1 (a app liga por TCP) e para localhost (conveniência/CLI).
 "$MYSQL_CLI" <<SQL
@@ -138,7 +160,7 @@ DB_PASS=${DB_PASS}
 DB_HOST=${DB_HOST}
 DB_PORT=${DB_PORT}
 COOKIE_SECRET=${COOKIE_SECRET}
-COOKIE_SECURE=false
+COOKIE_SECURE=${COOKIE_SECURE_VAL}
 ENV
 chown "${SERVICE_USER}:${SERVICE_USER}" "$ENV_FILE" 2>/dev/null || true
 log "Escrito ${ENV_FILE} (permissões 600)."
@@ -183,8 +205,37 @@ fi
 # node_modules / dist foram criados como root; devolve a posse ao utilizador do serviço.
 chown -R "${SERVICE_USER}:${SERVICE_USER}" "$APP_DIR"
 
-### -------- 5) Serviço systemd --------
+### -------- 5) Caddy + TLS (só se ENABLE_TLS=true / já ativado numa execução anterior) --------
+if [ "$TLS_ACTIVE" = "true" ]; then
+  if ! command -v caddy >/dev/null 2>&1; then
+    log "A instalar o Caddy (repositório oficial apt)..."
+    apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl
+    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
+      | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+    curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
+      -o /etc/apt/sources.list.d/caddy-stable.list
+    apt-get update -y
+    apt-get install -y caddy
+  else
+    log "Caddy já instalado — salto a instalação do pacote."
+  fi
+
+  log "A instalar ${APP_DIR}/Caddyfile em /etc/caddy/Caddyfile..."
+  cp "${APP_DIR}/Caddyfile" /etc/caddy/Caddyfile
+  systemctl enable --now caddy
+  systemctl reload caddy || systemctl restart caddy
+  log "Caddy pronto (HTTPS em :443, cert self-signed — ver nota no Caddyfile)."
+else
+  log "TLS desativado (ENABLE_TLS!=true) — a saltar a instalação do Caddy. HTTP puro em :${port:-3000}."
+fi
+
+### -------- 6) Serviço systemd --------
 log "A instalar o serviço systemd '${SERVICE_NAME}'..."
+# Com TLS ativo, o Express só ouve em 127.0.0.1 (HOST=127.0.0.1) — só alcançável
+# através do Caddy (:443, HTTPS); sem TLS, mantém-se o comportamento de sempre
+# (todas as interfaces, alcançável diretamente em :3000).
+HOST_ENV_LINE=""
+[ "$TLS_ACTIVE" = "true" ] && HOST_ENV_LINE="Environment=HOST=127.0.0.1"
 cat > "/etc/systemd/system/${SERVICE_NAME}.service" <<UNIT
 [Unit]
 Description=InovLAR (Express + Socket.io + MariaDB)
@@ -199,6 +250,7 @@ ExecStart=${NODE_BIN} ${SERVER_DIR}/main.js
 Restart=on-failure
 RestartSec=5
 Environment=NODE_ENV=production
+${HOST_ENV_LINE}
 
 [Install]
 WantedBy=multi-user.target
@@ -211,14 +263,29 @@ systemctl restart "${SERVICE_NAME}"
 log "Estado do serviço:"
 systemctl --no-pager --lines=10 status "${SERVICE_NAME}" || true
 
+PI_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+if [ "$TLS_ACTIVE" = "true" ]; then
+  APP_URL_LINE="  App:      https://${PI_IP:-<ip-da-pi>}  (ou https://localhost)"
+  TLS_NOTE="
+  TLS:      Caddy em :443, certificado self-signed (CA local do Caddy).
+            1ª visita em cada tablet mostra \"ligação não segura\" — aceitar uma
+            vez chega (não instala nada). Os URLs dos tablets mudam de
+            http://<ip>:3000/board/<token> para https://<ip>/board/<token> —
+            reabre cada um a partir da consola de staff.
+            Logs do Caddy: journalctl -u caddy -f"
+else
+  APP_URL_LINE="  App:      http://${PI_IP:-localhost}:3000  (HTTP puro — ver item 2 do IMPROVEMENTS_CHECKLIST.md)"
+  TLS_NOTE=""
+fi
+
 cat <<DONE
 
 ------------------------------------------------------------
 InovLAR instalado.
-  App:      http://localhost:3000
+${APP_URL_LINE}
   Serviço:  systemctl status ${SERVICE_NAME}
   Logs:     journalctl -u ${SERVICE_NAME} -f
   MariaDB:  ${MARIADB_VER}
-  BD:       ${DB_NAME} (user ${DB_USER}; credenciais em ${ENV_FILE})
+  BD:       ${DB_NAME} (user ${DB_USER}; credenciais em ${ENV_FILE})${TLS_NOTE}
 ------------------------------------------------------------
 DONE

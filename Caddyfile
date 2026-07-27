@@ -1,0 +1,25 @@
+# Caddyfile — reverse proxy HTTPS para o InovLAR na Raspberry Pi.
+#
+# Só é usado se ENABLE_TLS=true no install.sh (ver esse script + item 2 do
+# IMPROVEMENTS_CHECKLIST.md — "TLS em falta": sem isto, sessões de staff e do
+# tabuleiro viajam em HTTP puro na rede local). Instalado em /etc/caddy/Caddyfile.
+#
+# `tls internal`: certificado da CA local do próprio Caddy (self-signed) — não
+# precisa de domínio público nem de DNS, funciona por IP na LAN. O browser mostra
+# um aviso "ligação não segura" na primeira visita a cada tablet — aceitar uma vez
+# chega (o "cadeado" aqui não é o que protege os dados: o accessToken já é o
+# segredo real). Para eliminar o aviso, instala a CA local do Caddy
+# (/root/.local/share/caddy/pki/authorities/local/root.crt) como raiz confiável em
+# cada tablet — opcional, fora do âmbito deste ficheiro.
+#
+# O Express corre em 127.0.0.1:3000 (install.sh define HOST=127.0.0.1 quando
+# ENABLE_TLS=true) — só alcançável através deste proxy, nunca diretamente da LAN.
+
+:80 {
+	redir https://{host}{uri} permanent
+}
+
+:443 {
+	tls internal
+	reverse_proxy 127.0.0.1:3000
+}

@@ -4332,3 +4332,67 @@ destino livre para cada um (o scan passa a excluir a pegada do alvo).
 Client: **31** (29 + 2 xfail). Server: **23**. Ambos `npm test` verdes. Dependências novas: `vitest`
 (Client e Server), `supertest` (Server). CLAUDE.md atualizado (as afirmações "no automated tests" e a
 nota do CDN no helmet estavam desatualizadas).
+
+---
+
+## 2026-07-24 — TLS opt-in no install.sh (Caddy + cert self-signed)
+
+### Contexto
+Item 2 do `IMPROVEMENTS_CHECKLIST.md`: sessões de staff e do tabuleiro viajavam em HTTP puro na LAN —
+qualquer dispositivo no mesmo Wi-Fi do lar conseguia capturar o cookie de sessão. O `COOKIE_SECURE` já
+existia (opt-in, ver entrada de 2026-07-23 no CLAUDE.md), mas nada punha de facto um HTTPS à frente.
+
+### Decisão — Caddy com `tls internal`, e **opt-in** no install.sh
+Sem domínio público nem DNS (a Pi é acedida por IP na LAN), a única forma de TLS sem custos/dependências
+externas é um certificado self-signed. O Caddy resolve isto com uma linha (`tls internal`, CA local
+própria) — sem precisar de Let's Encrypt nem de um hostname.
+
+A decisão mais delicada não foi técnica: **por omissão o `install.sh` continua exatamente como estava**
+(HTTP puro). Ativar TLS muda o URL dos tablets (`http://<ip>:3000/board/<token>` →
+`https://<ip>/board/<token>`) — exatamente o mesmo tipo de mudança operacional já documentada para a
+migração do accessToken (2026-07-21: "every tablet's bookmarked URL changes ... re-open each from the
+staff console after deploy"). Fazer isto por omissão arriscava partir silenciosamente um lar já em
+produção só por alguém correr `sudo bash install.sh` para atualizar o código. Por isso: `ENABLE_TLS=true`
+é explícito, e uma vez ativado fica **sticky** (lido de volta do `.env` em execuções seguintes) — não
+regride mesmo que a variável seja esquecida numa próxima atualização.
+
+### Alterações
+- **`Server/main.js`:**
+  - `app.set('trust proxy', 'loopback')` — sem isto, atrás de um reverse proxy local TODOS os pedidos
+    apareceriam vindos de `127.0.0.1`, e o `staffAuthLimiter` (chaveado por `req.ip`,
+    `middleware/rateLimiter.js`) deixaria de distinguir atacantes: um único IP esgotava as 5 tentativas
+    para todo o staff. `'loopback'` só confia em `X-Forwarded-*` quando o hop imediato é 127.0.0.1/::1 —
+    inofensivo sem proxy à frente.
+  - `server.listen(port, host, cb)` — `host` vem de `process.env.HOST` (opt-in, `undefined` por omissão
+    = todas as interfaces, comportamento inalterado). O `install.sh` define `HOST=127.0.0.1` só quando
+    o TLS está ativo, para o Express deixar de ser alcançável diretamente da LAN (só via Caddy).
+- **`Caddyfile`** (novo, raiz do repo) — `:80` redireciona para `:443`; `:443` com `tls internal` faz
+  proxy para `127.0.0.1:3000`. Comentários no próprio ficheiro explicam o aviso "ligação não segura" que
+  aparece na 1ª visita de cada tablet (aceitar uma vez chega — o accessToken já é o segredo real, não o
+  cadeado) e como instalar a CA local do Caddy nos tablets para o eliminar (opcional).
+- **`install.sh`:**
+  - `ENABLE_TLS="${ENABLE_TLS:-false}"` no topo; `TLS_ACTIVE` computado com o padrão sticky (lido do
+    `.env` existente, ou forçado por `ENABLE_TLS=true` nesta execução) — única fonte de verdade para o
+    resto do script.
+  - `COOKIE_SECURE` no `.env` passa a `${COOKIE_SECURE_VAL}` (antes: sempre `false` hardcoded).
+  - Passo novo (5): instala o Caddy (repositório apt oficial, idempotente — salta se já instalado),
+    copia o `Caddyfile`, ativa o serviço — só se `TLS_ACTIVE=true`.
+  - O `systemd` unit ganha `Environment=HOST=127.0.0.1` condicional (`TLS_ACTIVE=true`).
+  - Mensagem final mostra `https://<ip-da-pi>` (via `hostname -I`) + nota sobre o aviso do browser e a
+    troca dos URLs dos tablets, ou o aviso do item 2 em aberto quando TLS continua desativado.
+
+### Teste
+`bash -n install.sh` — sintaxe válida. A lógica sticky do `TLS_ACTIVE`/`COOKIE_SECURE_VAL` foi isolada
+num harness à parte e testada com 4 cenários (instalação nova sem/com `ENABLE_TLS`, reexecução com TLS
+já ativo mas a variável esquecida — o caso que importava proteger — e reexecução nunca-ativado): todos os
+4 resultados bateram certo, incluindo a proteção contra regressão. `Server/main.js`: arrancado localmente
+sem `HOST` (loga `http://localhost:3000`, idêntico a antes) e com `HOST=127.0.0.1` (arranca, e
+`curl http://127.0.0.1:3000/auth/staff/status` responde 200 — confirma que fica alcançável exatamente
+como o Caddy o alcançaria). Testada a rota `/auth/staff/login` (rate-limited) com o `trust proxy` novo —
+sem avisos, resposta normal. `npm test` do Server: 23/23 na mesma.
+
+**Não testado** (fora do alcance deste ambiente): o `Caddyfile` em si e o passo de instalação do Caddy
+via apt nunca correram contra uma Pi real — não há `caddy` disponível para validar aqui. A sintaxe segue
+os exemplos oficiais da documentação do Caddy, mas a primeira execução em hardware real (`sudo
+ENABLE_TLS=true bash install.sh`) ainda precisa de ser verificada, incluindo o aviso de certificado nos
+tablets.

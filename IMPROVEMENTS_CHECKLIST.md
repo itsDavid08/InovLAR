@@ -13,9 +13,13 @@ marcados como **[TOP 3]** são as prioridades recomendadas.
   `<script>` do `index.html`; CSP do helmet sem `'unsafe-inline'`/CDN no `script-src`. Verificado
   no build e no browser. **Descoberta:** `bg-primary` mostra o azul do Bootstrap (`!important`),
   não o roxo M3 — pré-existente, não regressão; limpeza fica no item 11.
-- [ ] **2. TLS em falta.** Sessões (staff + board) viajam em HTTP puro na rede local →
-  qualquer dispositivo no Wi-Fi captura o cookie. Pôr um Caddy à frente do Express no Pi
-  (cert interno) + `COOKIE_SECURE=true`.
+- [~] **2. TLS em falta.** ✅ código 2026-07-24, ⏳ **por validar numa Pi real**. `install.sh
+  ENABLE_TLS=true` instala Caddy (`tls internal`, self-signed, sem domínio), define
+  `COOKIE_SECURE=true` + `HOST=127.0.0.1` (Express só alcançável via Caddy). `main.js` ganhou
+  `trust proxy: 'loopback'` (senão o rate limiter do PIN colapsava por IP atrás do proxy).
+  Opt-in e sticky — não muda o comportamento de instalações existentes. Ver Caddyfile +
+  DEVELOPMENT_LOG. **Falta:** correr `ENABLE_TLS=true` numa Pi real e confirmar o fluxo do
+  aviso de certificado nos tablets.
 - [ ] **3. `multer` 1.x com CVEs de DoS.** Atualizar para 2.x. Correr `npm audit` nos dois
   projetos.
 - [ ] **4. Sem trilho de auditoria.** PIN partilhado → não se sabe *quem* resolveu um pedido

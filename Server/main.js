@@ -9,6 +9,14 @@ const { COOKIE_SECRET } = require('./config/auth');
 const { StaffAuth, StaffSession, UtenteSession, TabelaLayout, TabelaPadrao } = require('./models');
 const app = express();
 const port = process.env.PORT || 3000;
+// 'loopback': confia em X-Forwarded-* só quando o hop imediato é 127.0.0.1/::1 (um
+// reverse proxy local, ex. Caddy — ver Caddyfile/install.sh, item 2 do
+// IMPROVEMENTS_CHECKLIST.md). Sem isto, atrás de um proxy TODOS os pedidos
+// pareceriam vir de 127.0.0.1 e o staffAuthLimiter (chaveado por req.ip) deixaria
+// de distinguir atacantes — um único IP esgotava o limite para todos os staff.
+// Sem proxy à frente (setup por omissão, sem TLS), isto é inofensivo: só muda o
+// comportamento para ligações cujo socket já é loopback.
+app.set('trust proxy', 'loopback');
 const router = require('./routes/route.js');
 const { errorHandler } = require('./middleware/errorHandler');
 const path = require('path');
@@ -130,5 +138,11 @@ setIO(io);
 // Exporte a função se quiser usar em outros arquivos de rota
 module.exports = { app, server, io};
 
-// Inicie o servidor
-server.listen(port, () => console.log(`Server started on http://localhost:${port}`));
+// Inicie o servidor. HOST é opt-in (process.env.HOST) — quando um reverse proxy
+// local (Caddy) fica à frente com TLS, install.sh define HOST=127.0.0.1 para o
+// Express deixar de ser alcançável diretamente de fora (só via HTTPS no proxy).
+// Sem HOST definido, o comportamento é o de sempre (todas as interfaces).
+const host = process.env.HOST;
+server.listen(port, host, () =>
+    console.log(`Server started on http://${host || 'localhost'}:${port}`)
+);
