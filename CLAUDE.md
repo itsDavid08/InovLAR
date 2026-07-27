@@ -77,7 +77,11 @@ Raspberry Pi deployment (MariaDB install, DB/user creation, migrations, systemd 
 
 4. **Responsive Design:** Sidebar+header on desktop; bottom navigation bar on mobile. Layout components centralized in `Components/layout/`.
 
-5. **Schema management is split, not uniform:** `Utente`, `Botao`, `Pedido` (and the `UtenteBotoes` join table), and `AuditLog` (added 2026-07-27) are managed by Sequelize **migrations** (`Server/migrations/`, run via `sequelize-cli db:migrate`). `StaffAuth`, `StaffSession`, `TabelaLayout`, `TabelaPadrao` are instead created via `Model.sync()` called directly in `main.js` on every server start — no migration files for these. When adding a column to the first group you must write a migration; for the second group, editing the model is enough. New tables added after the 2026-07 audit go in the migrated group by default (see `IMPROVEMENTS_CHECKLIST.md` item 5 — unifying the split itself is a separate, not-yet-done item).
+5. **Schema management is unified (2026-07-27, `IMPROVEMENTS_CHECKLIST.md` item 5):** every table is now created by a Sequelize **migration** (`Server/migrations/`, run via `sequelize-cli db:migrate`) — `StaffAuth`, `StaffSession`, `UtenteSession`, `TabelaLayout`, `TabelaPadrao` used to be created by `Model.sync()` in `main.js` on every server start (no migration files, no reproducible history — this is what caused the table-casing bug on the Pi, see below). `main.js` no longer calls `.sync()` for anything; `models/index.js`'s old `initDb()` (a blanket `sequelize.sync()`, unused/uncalled) was removed as dead code in the same pass. When adding a column to *any* table you now write a migration — there is no second, model-only path anymore.
+
+   The 5 migrations that back-fill this (`20260727100000`–`20260727100004`) are **idempotent by necessity**: on every existing install (dev machines, any already-deployed Pi) these tables already exist from the old `sync()` calls, so each migration's `up()` checks first and does nothing if the table is already there — it never touches a live install's schema or data, it only gives *fresh* installs a migration-based path from now on. That existence check must compare table names **case-insensitively** (`LOWER(TABLE_NAME) = LOWER(:nome)`), not with `BINARY` like `20260703150000-rename-pedidos-table.js` does for its own (different) purpose — this project's Windows/macOS MariaDB runs with `lower_case_table_names=1`, which folds every table name to lowercase in `information_schema` regardless of how it was declared, so a `BINARY` exact-case check against the original mixed-case name (`'TabelaLayouts'`) never matches and the guard silently fails open. This was caught live while writing these migrations (see `DEVELOPMENT_LOG.md` 2026-07-27) — no data was lost (verified by row counts before/after), but it's exactly the category of bug this whole item exists to prevent, so take the lesson: **never use `BINARY` in one of these existence checks unless you specifically need to distinguish two different-cased names from each other**, which is the rename migration's situation, not this one.
+
+   Two more things confirmed by direct schema introspection before writing these migrations, both preserved exactly rather than "improved" as a drive-by: `UtenteSession.utenteId` has **no** DB-level foreign key (never did — the model has no `.associate`), while `TabelaLayout.utenteId` **does** have a real FK to `Utentes` with `CASCADE`. `AuditLog.staffSessionId` also deliberately has no FK (see its own comment in the migration) — `StaffSession` rows get purged on expiry/logout, and a `CASCADE` FK would silently delete audit history along with the session that made it.
 
 ### File Structure
 
@@ -139,12 +143,12 @@ Server/
 │   ├── Botao.js          # Button/quick-request (imagem: allowNull)
 │   ├── Utente.js         # Patient (hasMany Botao, hasMany Tabela)
 │   ├── Pedido.js         # Request instance (timestamps, status); tableName: 'pedidos' (lowercase — see gotcha below)
-│   ├── StaffAuth.js      # Single row: passwordHash — sync()'d, no migration
-│   ├── StaffSession.js   # Active staff sessions: tokenHash (SHA-256, unique) + expiraEm — sync()'d, no migration
-│   ├── UtenteSession.js  # Active board sessions: tokenHash (SHA-256) + utenteId + expiraEm — sync()'d, no migration
-│   ├── TabelaLayout.js   # User-specific table layout (utente + device) — sync()'d, no migration
-│   ├── TabelaPadrao.js   # Template for bulk apply to patients — sync()'d, no migration
-│   ├── AuditLog.js       # Staff mutation trail (action/staffSessionId/ip/detalhes) — migrated, no sync()
+│   ├── StaffAuth.js      # Single row: passwordHash — migrated (2026-07-27, was sync()'d)
+│   ├── StaffSession.js   # Active staff sessions: tokenHash (SHA-256, unique) + expiraEm — migrated (2026-07-27, was sync()'d)
+│   ├── UtenteSession.js  # Active board sessions: tokenHash (SHA-256) + utenteId + expiraEm — migrated (2026-07-27, was sync()'d); utenteId has no DB-level FK (never did)
+│   ├── TabelaLayout.js   # User-specific table layout (utente + device) — migrated (2026-07-27, was sync()'d); utenteId HAS a real FK to Utentes, CASCADE
+│   ├── TabelaPadrao.js   # Template for bulk apply to patients — migrated (2026-07-27, was sync()'d)
+│   ├── AuditLog.js       # Staff mutation trail (action/staffSessionId/ip/detalhes) — migrated; staffSessionId has no FK on purpose (see below)
 │   └── index.js          # Exports + associations
 ├── routes/
 │   └── route.js          # Routing ONLY (no multer config, no model imports) — auth, board, utentes, botoes, pedidos, tabelas, images, auditoria
@@ -162,12 +166,12 @@ Server/
 │   ├── auditoria.js      # registarAuditoria(req, action, detalhes) — writes AuditLog, never throws (see Known Limitations/security notes)
 │   └── seedDefaults.js   # Create "Predefinida" template on first run (runs once — guards on TabelaPadrao.count())
 ├── seeders/              # Seed scripts (43 default botões); no run-once tracking table, re-running errors on dup IDs
-├── migrations/           # Sequelize migrations for Utente/Botao/Pedido/UtenteBotoes/AuditLog — run via db:migrate
+├── migrations/           # Sequelize migrations for every table (unified 2026-07-27, see point 5 above) — run via db:migrate
 ├── public/               # Static files served by Express
 │   ├── imagesBotoes/     # Flat structure (no subfolders); upload/delete here
 │   ├── imagesUtentes/    # Patient avatars: random filenames + predefinidos/ subfolder (see Image Management below)
 │   └── [other assets]
-└── main.js               # Entry point: Express + socket.io + static serving + SPA fallback; calls sync() for the non-migrated models; registers errorHandler last
+└── main.js               # Entry point: Express + socket.io + static serving + SPA fallback; no schema sync (all tables are migrated — see point 5 above); registers errorHandler last
 ```
 
 **Error handling (Server):** controllers have **no try/catch boilerplate** — Express 5 forwards

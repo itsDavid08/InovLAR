@@ -36,9 +36,17 @@ marcados como **[TOP 3]** são as prioridades recomendadas.
 
 ## 📁 Organização e arquitetura
 
-- [ ] **5. Gestão de schema dividida** (migrations vs. `sync()` no arranque). `StaffAuth`,
-  `StaffSession`, `UtenteSession`, `TabelaLayout`, `TabelaPadrao` sem histórico reproduzível
-  (já mordeu com o casing no Pi). Unificar tudo em migrations.
+- [x] **5. Gestão de schema dividida.** ✅ 2026-07-27. As 5 tabelas que só existiam via
+  `sync()` (`StaffAuth`, `StaffSession`, `UtenteSession`, `TabelaLayout`, `TabelaPadrao`)
+  ganharam migrations idempotentes (`20260727100000`–`100004`, só criam se a tabela ainda
+  não existir — nunca tocam em instalações já a correr). `main.js` já não chama `.sync()`
+  para nada; removido também o `initDb()` morto de `models/index.js`. **Bug real apanhado
+  a escrever isto:** o helper de "já existe" copiado da migration de referência usava
+  `BINARY` (comparação exata de maiúsculas) — no Windows/macOS (`lower_case_table_names=1`)
+  isso NUNCA encontra a tabela (o MariaDB guarda o nome em minúsculas), pelo que a migration
+  ia tentar recriar um índice já existente. Corrigido para comparação insensível a
+  maiúsculas antes de avançar; sem perda de dados (confirmado por contagem de linhas
+  antes/depois). Ver DEVELOPMENT_LOG.
 - [ ] **6. Seeders não idempotentes** — 2º `db:seed:all` rebenta com IDs duplicados. Usar
   `ignoreDuplicates: true` ou check prévio.
 - [x] **7. [TOP 3] Higiene dos `package.json`:** ✅ 2026-07-23

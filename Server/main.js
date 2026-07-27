@@ -6,7 +6,6 @@ const http = require('http');
 const { Server } = require('socket.io');
 const {setIO} = require('./Util/socketIO.js');
 const { COOKIE_SECRET } = require('./config/auth');
-const { StaffAuth, StaffSession, UtenteSession, TabelaLayout, TabelaPadrao } = require('./models');
 const app = express();
 const port = process.env.PORT || 3000;
 // 'loopback': confia em X-Forwarded-* só quando o hop imediato é 127.0.0.1/::1 (um
@@ -22,17 +21,19 @@ const { errorHandler } = require('./middleware/errorHandler');
 const path = require('path');
 const DIST = path.join(__dirname, '../Client/dist');
 
-// Garante que as tabelas existem (cria só se não existirem, não mexe nas outras).
+// StaffAuth/StaffSession/UtenteSession/TabelaLayout/TabelaPadrao eram criadas aqui
+// via Model.sync() no arranque; desde 2026-07-27 (item 5 do
+// IMPROVEMENTS_CHECKLIST.md) são migrations como todas as outras tabelas
+// (Server/migrations/20260727100000..100004) — correr `db:migrate` já é um passo
+// obrigatório no setup (ver CLAUDE.md), por isso deixar de as sincronizar aqui não
+// muda o fluxo documentado, só alinha estas 5 com Utente/Botao/Pedido (que nunca
+// foram sync()'d). Purga de sessões expiradas + seed continuam a correr no arranque
+// (não são criação de schema).
 const { seedDefaults } = require('./Util/seedDefaults');
 const { purgarExpiradas: purgarStaffSessions } = require('./Util/sessions');
 const { purgarExpiradas: purgarUtenteSessions } = require('./Util/utenteSessions');
 (async () => {
-    await StaffAuth.sync();
-    await StaffSession.sync();
-    await UtenteSession.sync();
-    await TabelaLayout.sync();
-    await TabelaPadrao.sync();
-    await purgarStaffSessions();     // limpa sessões expiradas (as tabelas já existem)
+    await purgarStaffSessions();     // limpa sessões expiradas
     await purgarUtenteSessions();
     await seedDefaults();            // cria a "Predefinida" (1ª vez) + aplica a utentes sem tabela
 })().catch((e) => console.error('Erro no arranque/seed:', e));

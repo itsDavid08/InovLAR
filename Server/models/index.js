@@ -11,15 +11,6 @@ const AuditLog = require('./AuditLog');
 
 const models = { Botao, Utente, Pedido, StaffAuth, StaffSession, UtenteSession, TabelaLayout, TabelaPadrao, AuditLog };
 
-const initDb = async () => {
-    try {
-        await sequelize.sync({ force: false }); // Cambiar a true solo en desarrollo
-        console.log('Database synchronized');
-    } catch (error) {
-        console.error('Error synchronizing database:', error);
-    }
-}
-
 // Establecer relaciones
 Object.keys(models).forEach((modelName) => {
     if (models[modelName].associate) {
@@ -27,4 +18,4 @@ Object.keys(models).forEach((modelName) => {
     }
 });
 
-module.exports = { ...models, sequelize, initDb };
+module.exports = { ...models, sequelize };

@@ -4535,3 +4535,102 @@ substituir por um stub.
 Server: **36** testes (6 ficheiros, +9 desde a entrada anterior). CLAUDE.md atualizado (árvore de
 ficheiros, ponto 5 "Schema management", endpoint novo, nota em "Known Limitations" a explicar
 exatamente o que fica coberto e o que fica de fora, de propósito).
+
+---
+
+## 2026-07-27 — Unificação da gestão de schema: migrations para as 5 tabelas que só tinham sync() (item 5)
+
+### Contexto
+Item 5 do `IMPROVEMENTS_CHECKLIST.md`: `StaffAuth`, `StaffSession`, `UtenteSession`, `TabelaLayout`,
+`TabelaPadrao` eram criadas por `Model.sync()` no arranque do `main.js`, sem ficheiro de migration —
+sem histórico reproduzível, ao contrário de `Utente`/`Botao`/`Pedido` (e agora `AuditLog`). É
+exatamente esta categoria de divergência entre "o que o código pensa que existe" e "o que existe de
+facto" que já causou o bug de casing na Pi (`Pedidos` vs `pedidos`, ver entrada 2026-07-03) — deixá-la
+por resolver era deixar a porta aberta ao mesmo tipo de problema noutra tabela, noutro dia.
+
+### Decisão — migrations idempotentes, nunca destrutivas em instalações existentes
+A parte delicada: em QUALQUER instalação já a funcionar (a BD de dev deste projeto, e potencialmente
+uma Pi já em produção), estas 5 tabelas **já existem**, criadas por anos de `sync()`. Uma migration
+`createTable` normal rebentaria logo ali ("table already exists"). A solução, replicando o padrão já
+estabelecido em `20260703150000-rename-pedidos-table.js` (citado no próprio CLAUDE.md como "o padrão
+de correção"): cada `up()` verifica primeiro se a tabela já existe e, se sim, não faz nada — só dá a
+instalações NOVAS um caminho via migration a partir de agora. `main.js` deixa de chamar `.sync()` para
+estas 5 (o passo `db:migrate` já era obrigatório no setup documentado — isto não muda o fluxo, só
+alinha estas 5 com as restantes tabelas, que nunca dependeram de `sync()`).
+
+Cada uma das 5 ficou na sua própria migration (`20260727100000` a `100004`), seguindo a convenção já
+usada para `create-utentes`/`create-botoes`/`create-pedidos` (um `create` por ficheiro).
+
+### 🐞 Bug real apanhado a escrever isto (não hipotético — aconteceu ao vivo)
+O helper `tabelaExisteExata` copiado da migration de referência usa `BINARY TABLE_NAME = :nome` — uma
+comparação EXATA de maiúsculas/minúsculas. Isso fazia sentido lá: aquela migration precisava de saber
+se existia uma tabela `'Pedidos'` **distinta** de `'pedidos'`, para decidir se havia um rename a fazer
+(útil em sistemas Linux/`lower_case_table_names=0`, onde as duas podem mesmo coexistir como tabelas
+diferentes). Copiei o padrão sem questionar se a comparação EXATA fazia sentido para o MEU objetivo —
+e não fazia: eu só queria saber "esta tabela já existe, seja qual for a capitalização".
+
+Ao correr `db:migrate` a sério contra a BD de dev (Windows, `lower_case_table_names=1`), a migration
+`create-tabela-layouts` falhou: `ERROR: Duplicate key name 'tabela_layouts_utente_id_dispositivo'`. O
+motivo: no Windows o MariaDB guarda os nomes de tabela em minúsculas no `information_schema`
+independentemente de como foram declarados — por isso `BINARY TABLE_NAME = 'TabelaLayouts'` (maiúscula)
+NUNCA batia certo com o `'tabelalayouts'` guardado, o guard devolvia sempre `false`, e a migration
+tentava recriar um índice único que já existia na tabela real (que o `CREATE TABLE` em si, por algum
+comportamento do conector/MariaDB, tolerou como no-op silencioso — mas o `ADD UNIQUE INDEX` a seguir
+não).
+
+**Confirmação de que não houve perda de dados:** contei as linhas das 5 tabelas ANTES de correr
+qualquer migration nova (StaffAuth: 1, StaffSession: 17, UtenteSession: 4, TabelaLayout: 6,
+TabelaPadrao: 1) e voltei a contar depois de resolver o bug e migrar com sucesso — números idênticos,
+e a listagem de tabelas confirmou que não ficou nenhuma tabela duplicada.
+
+**Correção:** troquei `BINARY TABLE_NAME = :nome` por `LOWER(TABLE_NAME) = LOWER(:nome)` (comparação
+insensível a maiúsculas, correta nos dois sistemas — no Linux com `lower_case_table_names=0` a tabela
+foi criada com a capitalização exata do model, por isso `LOWER()` dos dois lados continua a bater
+certo) em todas as 5 migrations, e limpei as 3 entradas parciais que tinham ficado no `SequelizeMeta`
+antes de voltar a correr.
+
+### Fidelidade ao schema real (nada "melhorado" por engano)
+Antes de escrever as migrations, introspecionei o schema REAL de cada tabela (`describeTable` +
+`information_schema.KEY_COLUMN_USAGE` para foreign keys) para as migrations serem uma cópia exata, não
+uma reconstrução a partir de memória. Duas subtilezas que só a introspecção revelou:
+- `UtenteSession.utenteId` **não tem** foreign key nenhuma (o model nunca teve `.associate`) —
+  replicado tal e qual, não "corrigido" para ter uma FK que nunca existiu.
+- `TabelaLayout.utenteId` **tem mesmo** uma FK real para `Utentes`, com `CASCADE`/`CASCADE` (vem do
+  `.associate` do model) — replicada com a mesma referência.
+
+### Limpeza relacionada: `initDb()` morto em `models/index.js`
+Ao mexer no arranque, reparei que `models/index.js` exportava um `initDb()` que fazia
+`sequelize.sync({ force: false })` — um sync GLOBAL de todo o schema, o oposto exato do que este item
+está a resolver. `grep` confirmou zero chamadas a `initDb` em todo o projeto: código morto, provavelmente
+um resquício de antes da app usar migrations a sério. Removido.
+
+### Teste
+Sem acesso a credenciais `root` da BD (o utilizador `inovlar_app` corretamente não tem privilégio
+`CREATE DATABASE` — confirmado ao tentar), não consegui criar uma BD descartável para simular uma
+instalação 100% nova do zero. Em vez disso:
+- **Caminho "já existe" (o que realmente importa para não partir instalações reais):** testado a sério
+  contra a BD de dev — `db:migrate` correu, as 5 tabelas ficaram intocadas (contagens de linhas
+  idênticas antes/depois, sem tabelas duplicadas), e o bug do `BINARY` foi APANHADO exatamente por este
+  teste, não hipoteticamente.
+- **Caminho "criar do zero" (DDL em si):** sem uma BD descartável, validado com tabelas descartáveis
+  (`zz_migration_test_*`) na MESMA BD, usando o código Sequelize IDÊNTICO ao das migrations reais
+  (`createTable` com coluna JSON, `createTable` com FK real + `addIndex` composto único) — incluindo
+  confirmar que a FK bloqueia mesmo uma referência inválida (`utenteId` inexistente rejeitado). Tabelas
+  de teste removidas a seguir.
+- Servidor real arrancado por completo, três vezes ao longo do processo (antes das migrations, depois
+  de as corrigir, e depois de remover o `.sync()`/`initDb`): `/auth/staff/status`, `/botoes` e
+  `/auditoria` (sem sessão → 401) sempre a responder normalmente.
+- `npm test`: 36/36, corrido 4 vezes seguidas para descartar instabilidade (uma corrida isolada teve 1
+  falha transitória — não reproduzida nas 3 seguintes, não relacionada com estas alterações).
+
+**Não testado** (fora do alcance deste ambiente, tal como o `Caddyfile`): a sequência completa
+`db:migrate` do zero absoluto, numa BD genuinamente nova — só simulada por partes (existência real +
+DDL real, separadamente). O raciocínio de fidelidade (schema introspecionado antes de escrever) e os
+testes de DDL isolado dão confiança alta, mas não substituem por completo um "fresh install" real —
+vale a pena confirmar na próxima vez que uma Pi for provisionada de raiz.
+
+### Estado
+As 5 tabelas + `AuditLog` + `Utente`/`Botao`/`Pedido`/`UtenteBotoes` — **todas** as tabelas do projeto
+são agora criadas por migration. Zero chamadas a `.sync()` em todo o `Server`. CLAUDE.md atualizado
+(ponto 5 reescrito de "dividido" para "unificado", árvore de ficheiros, nota sobre a armadilha do
+`BINARY`/`lower_case_table_names` para não se repetir).
