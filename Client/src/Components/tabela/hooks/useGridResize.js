@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { getSpan, colocarComEmpurrao } from "../gridSpans";
 
 // Redimensionar por arrasto (pega WYSIWYG). Eventos de ponteiro nativos, à
@@ -17,6 +17,17 @@ import { getSpan, colocarComEmpurrao } from "../gridSpans";
 // `colocarComEmpurrao` (ainda não trimado — quem chama decide isso).
 export function useGridResize({ cells, spans, cols, gridRef, onPlace }) {
     const [resizePreview, setResizePreview] = useState(null); // { pos, anchorPos, w, h }
+    // Espelha resizePreview para leitura síncrona em `finalizar` — necessário
+    // porque `onPlace` (que acaba por fazer setState noutro componente, o
+    // GerirTabela) não pode correr dentro do updater funcional do
+    // setResizePreview: o React processa esse updater durante o render deste
+    // componente, e um setState de outro componente lá dentro dispara o aviso
+    // "Cannot update a component while rendering a different component".
+    const previewRef = useRef(null);
+    const updatePreview = (value) => {
+        previewRef.current = value;
+        setResizePreview(value);
+    };
 
     // `rows` é passado pelo chamador no momento do gesto (não guardado no hook):
     // no início de um resize não há nenhum outro gesto ativo, por isso o `rows`
@@ -49,7 +60,7 @@ export function useGridResize({ cells, spans, cols, gridRef, onPlace }) {
               ? "bottom"
               : null;
 
-        setResizePreview({ pos, anchorPos: pos, w: startW, h: startH });
+        updatePreview({ pos, anchorPos: pos, w: startW, h: startH });
 
         const onMove = (ev) => {
             const deltaCols = Math.round((ev.clientX - startX) / cellPxW);
@@ -73,27 +84,26 @@ export function useGridResize({ cells, spans, cols, gridRef, onPlace }) {
             const novoW = novoRight - novoLeft + 1;
             const novoH = novoBottom - novoTop + 1;
             const novaAncora = novoTop * cols + novoLeft;
-            setResizePreview({ pos: novaAncora, anchorPos: pos, w: novoW, h: novoH });
+            updatePreview({ pos: novaAncora, anchorPos: pos, w: novoW, h: novoH });
         };
         const finalizar = (commit) => {
             window.removeEventListener("pointermove", onMove);
             window.removeEventListener("pointerup", onUp);
             window.removeEventListener("pointercancel", onCancel);
-            setResizePreview((prev) => {
-                if (commit && prev) {
-                    const resultado = colocarComEmpurrao(
-                        cells,
-                        spans,
-                        cols,
-                        prev.pos,
-                        cells[prev.anchorPos],
-                        { w: prev.w, h: prev.h },
-                        prev.anchorPos,
-                    );
-                    if (resultado) onPlace(resultado.cells, resultado.spans);
-                }
-                return null;
-            });
+            const prev = previewRef.current;
+            if (commit && prev) {
+                const resultado = colocarComEmpurrao(
+                    cells,
+                    spans,
+                    cols,
+                    prev.pos,
+                    cells[prev.anchorPos],
+                    { w: prev.w, h: prev.h },
+                    prev.anchorPos,
+                );
+                if (resultado) onPlace(resultado.cells, resultado.spans);
+            }
+            updatePreview(null);
         };
         const onUp = () => finalizar(true);
         const onCancel = () => finalizar(false);

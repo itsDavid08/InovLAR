@@ -2,7 +2,9 @@ import { resolverCorCategoria } from "./constants";
 import { t } from "../../i18n";
 
 // Painel colapsável "Cores por categoria" — só aparece quando o quadro atual
-// tem categorias (SOS nunca entra, ver isSOS/matrizCategorias em constants.js).
+// tem categorias. O SOS entra também (categoria "SOS"), para poder ter cor de
+// fundo própria; só nunca funde visualmente com vizinhos (ver isSOS/
+// matrizCategorias em constants.js).
 const PainelCoresCategoria = ({
     categoriasNoQuadro,
     coresCategoria,

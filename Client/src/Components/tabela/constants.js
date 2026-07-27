@@ -62,8 +62,11 @@ export const TAMANHOS = {
 
 export const COL_OPCOES = [2, 3, 4, 5, 6];
 
-// SOS é especial em todo o lado (sem cor de categoria, sem fusão, estilo próprio).
-// Regra única — antes estava copiada em 4 sítios.
+// SOS é especial num aspeto: nunca funde visualmente com vizinhos, fica sempre
+// uma "ilha" isolada (ver matrizCategorias/raioFusao). Pode ter cor de fundo
+// própria como qualquer categoria (categoria "SOS" em coresCategoria) — default
+// transparente até o staff escolher uma. Regra única — antes estava copiada em
+// 4 sítios.
 export const isSOS = (botao) =>
     !!botao && (botao.categoria === "SOS" || botao.nome === "SOS");
 

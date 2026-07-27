@@ -56,7 +56,9 @@ const GrelhaTabuleiro = ({ config, dispositivo, botaoPorId, apiUrl, onButtonClic
                         />
                     );
                 const sos = isSOS(b);
-                const cor = !sos ? resolverCorCategoria(b.categoria, coresCategoria) : null;
+                // SOS pode ter cor de fundo própria (categoria "SOS"), editável no painel —
+                // só não entra na fusão visual com vizinhos (ver matrizCategorias).
+                const cor = resolverCorCategoria(b.categoria, coresCategoria);
                 return (
                     <div
                         key={pos}

@@ -7,14 +7,14 @@ import { t } from "../../i18n";
 // (o lado/canto oposto) — ver a nota sobre pivôs fixos em useGridResize.js.
 // Data-driven: eram 8 blocos JSX quase idênticos, agora um único .map.
 const RESIZE_HANDLES = [
-    { handle: "nw", pos: "-top-1 -left-1 w-3.5 h-3.5", cursor: "cursor-nwse-resize" },
-    { handle: "ne", pos: "-top-1 -right-1 w-3.5 h-3.5", cursor: "cursor-nesw-resize" },
-    { handle: "sw", pos: "-bottom-1 -left-1 w-3.5 h-3.5", cursor: "cursor-nesw-resize" },
-    { handle: "se", pos: "-bottom-1 -right-1 w-3.5 h-3.5", cursor: "cursor-nwse-resize" },
-    { handle: "n", pos: "-top-1 left-1/2 -translate-x-1/2 w-5 h-2.5", cursor: "cursor-ns-resize" },
-    { handle: "s", pos: "-bottom-1 left-1/2 -translate-x-1/2 w-5 h-2.5", cursor: "cursor-ns-resize" },
-    { handle: "w", pos: "-left-1 top-1/2 -translate-y-1/2 w-2.5 h-5", cursor: "cursor-ew-resize" },
-    { handle: "e", pos: "-right-1 top-1/2 -translate-y-1/2 w-2.5 h-5", cursor: "cursor-ew-resize" },
+    { handle: "nw", pos: "-top-1 -left-1 w-3 h-3", cursor: "cursor-nwse-resize" },
+    { handle: "ne", pos: "-top-1 -right-1 w-3 h-3", cursor: "cursor-nesw-resize" },
+    { handle: "sw", pos: "-bottom-1 -left-1 w-3 h-3", cursor: "cursor-nesw-resize" },
+    { handle: "se", pos: "-bottom-1 -right-1 w-3 h-3", cursor: "cursor-nwse-resize" },
+    { handle: "n", pos: "-top-1 left-1/2 -translate-x-1/2 w-5 h-2", cursor: "cursor-ns-resize" },
+    { handle: "s", pos: "-bottom-1 left-1/2 -translate-x-1/2 w-5 h-2", cursor: "cursor-ns-resize" },
+    { handle: "w", pos: "-left-1 top-1/2 -translate-y-1/2 w-2 h-5", cursor: "cursor-ew-resize" },
+    { handle: "e", pos: "-right-1 top-1/2 -translate-y-1/2 w-2 h-5", cursor: "cursor-ew-resize" },
 ];
 
 // Célula da grelha (droppable; arrastável quando preenchida).

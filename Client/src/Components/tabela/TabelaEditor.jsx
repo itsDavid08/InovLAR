@@ -14,7 +14,7 @@ import EditorTopBar from "./EditorTopBar";
 import PainelCoresCategoria from "./PainelCoresCategoria";
 import BibliotecaBotoes from "./BibliotecaBotoes";
 import ButtonTile from "./ButtonTile";
-import { DISPOSITIVOS, isSOS, resolverCorCategoria, raioFusao, escalaPorColunas } from "./constants";
+import { DISPOSITIVOS, resolverCorCategoria, raioFusao, escalaPorColunas } from "./constants";
 import { getSpan, colocarComEmpurrao, trim } from "./gridSpans";
 import { useGridGeometry } from "./useGridGeometry";
 import { usePinchZoom } from "./hooks/usePinchZoom";
@@ -141,12 +141,14 @@ const TabelaEditor = ({
         setSelecionado(null);
     };
 
-    // categorias presentes no Quadro Atual (para o painel de cores), excluindo SOS
+    // categorias presentes no Quadro Atual (para o painel de cores). O SOS entra
+    // também — categoria "SOS" (ver isSOS/matrizCategorias) — para poder ter cor
+    // de fundo própria, editável; só não entra na fusão visual com vizinhos.
     const categoriasNoQuadro = useMemo(() => {
         const set = new Set();
         for (const bId of cells) {
             const b = botaoPorId[bId];
-            if (b && !isSOS(b)) set.add(b.categoria || "Sem categoria");
+            if (b) set.add(b.categoria || "Sem categoria");
         }
         return [...set].sort();
     }, [cells, botaoPorId]);
@@ -266,7 +268,7 @@ const TabelaEditor = ({
                                             const isAnchor = anchor === pos;
                                             const { w, h } = isAnchor ? getSpan(spansEfetivos, pos) : { w: 1, h: 1 };
                                             const b = isAnchor ? botaoPorId[cellsEfetivas[pos]] : null;
-                                            const cor = b && !isSOS(b) ? resolverCorCategoria(b.categoria, coresCategoria) : null;
+                                            const cor = b ? resolverCorCategoria(b.categoria, coresCategoria) : null;
                                             const r = Math.floor(pos / cols),
                                                 c = pos % cols;
                                             return (
