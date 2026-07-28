@@ -1,0 +1,7 @@
+<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+    <!-- Favicon do InovLAR — bolha de fala (comunicação, o propósito central
+         da app) na cor primária M3 do tema (ver tailwind.config.js / item 15
+         do IMPROVEMENTS_CHECKLIST.md). Substitui o vite.svg default (item 16). -->
+    <rect x="3" y="4" width="26" height="18" rx="6" fill="#4f378a" />
+    <path d="M9 22 L6.5 29 L15 22 Z" fill="#4f378a" />
+</svg>

@@ -116,11 +116,31 @@ marcados como **[TOP 3]** são as prioridades recomendadas.
 - [ ] **15. Categoria comunicada só por cor.** Fusão visual e identidade dependem 100% da cor
   → mau para daltónicos/baixa visão (a população-alvo). Adicionar redundância (rótulo/ícone de
   categoria). `darkMode: "class"` está configurado mas nunca ativado → um **modo alto
-  contraste** teria valor real. (Atkinson Hyperlegible é boa escolha, manter.)
-- [~] **16. Polimento do `index.html`:** `lang="en"`→`pt` ✅ e título `APCM`→`InovLAR` ✅
-  (feitos com o item 1). Falta: favicon ainda é o `vite.svg` default.
+  contraste** teria valor real. (Atkinson Hyperlegible é boa escolha, manter.) *(O modo escuro
+  chegou a ser implementado em 2026-07-27 e depois revertido a pedido — ver DEVELOPMENT_LOG.)*
+- [x] **16. Polimento do `index.html`.** ✅ 2026-07-27 (completo). `lang="en"`→`pt` e título
+  `APCM`→`InovLAR` (feitos com o item 1). Favicon novo (`public/favicon.svg`) — bolha de
+  fala na cor primária M3 do tema, já que não havia nenhum logótipo/ícone de marca no
+  projeto para reaproveitar (só os defaults do Vite/React, nunca usados — removidos
+  também `public/vite.svg` e `src/assets/react.svg`). Verificado por amostragem de
+  pixels (canvas) já que a captura de ecrã não estava disponível nesta sessão, e
+  confirmado a servir corretamente (200, `image/svg+xml`) no dev server.
 
 ---
+
+### Estado geral (2026-07-27)
+
+Dos 16 itens levantados nesta ronda, **12 fechados por completo** (1, 3, 4, 5, 6, 7, 8, 10, 13,
+16, e as partes tratadas de 9, 11). **4 com trabalho restante, deliberadamente adiado, não
+esquecido:**
+- **2** (TLS) — código pronto, falta validar `ENABLE_TLS=true` numa Pi real.
+- **9**/**11** — os "a prazo" de cada um (split em vários contexts; aposentar o Bootstrap) ficam
+  para uma sessão futura, alcance grande demais para "custo quase zero".
+- **12** — decisão do utilizador: não mexer na convenção de linguagem por agora.
+- **14** (parte da consolidação de cores) e **15** (dark mode + redundância para daltónicos) —
+  o modo escuro chegou a ser implementado em 2026-07-27 e foi revertido a pedido do utilizador
+  logo a seguir; item 15 fica todo por fazer outra vez. Âmbito grande/risco de regressão visual;
+  utilizador escolheu não fazer agora.
 
 ### Prioridades recomendadas (TOP 3)
 

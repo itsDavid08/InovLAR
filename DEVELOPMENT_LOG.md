@@ -4909,3 +4909,207 @@ sobrepõe parcialmente o item 11 (aposentar o Bootstrap/CSS legado, já classifi
 ### Estado
 Sem alterações de código. `IMPROVEMENTS_CHECKLIST.md` atualizado com os dois achados e a
 decisão do utilizador sobre o alcance.
+
+---
+
+## 2026-07-27 — Modo escuro funcional (item 15, só essa parte) [REVERTIDO — ver entrada de 2026-07-28]
+
+### Contexto
+Item 15 do `IMPROVEMENTS_CHECKLIST.md` tem duas partes: (a) categoria comunicada só por cor
+(má para daltónicos) e (b) `darkMode: "class"` configurado no Tailwind mas nunca ativado.
+Pedido explícito do utilizador: só (b), não (a) por agora.
+
+`darkMode: "class"` diz ao Tailwind para gerar as classes `dark:*` condicionadas a uma
+classe `dark` nalgum ancestral (normalmente `<html>`) — mas nada no código chamava alguma vez
+`classList.add("dark")`. Achado interessante ao investigar: `StaffSidebar.jsx`,
+`StaffShell.jsx`, `StaffBottomNav.jsx`, `BotaoForm.jsx` e `UtenteForm.jsx` **já tinham**
+classes `dark:bg-*`/`dark:text-*` espalhadas (10 ocorrências, já commitadas há muito) —
+código adormecido, escrito a prever este dia mas nunca ligado a nada.
+
+### Decisão de arquitetura — CSS custom properties, não `dark:` em cada classe
+A forma "óbvia" de suportar dark mode com o Tailwind seria acrescentar `dark:bg-X` a cada
+classe de cor usada nos componentes — um diff enorme, espalhado por dezenas de ficheiros.
+Em vez disso: os ~48 tokens de cor M3 (`primary`, `surface`, `on-surface`, etc.) passam a
+**CSS custom properties** (`src/theme/colors.css`, um bloco `:root` claro e um bloco
+`:root.dark` escuro), e o `tailwind.config.js` passa a apontar cada cor para `var(--token)`
+em vez de um hex fixo. Resultado: **toda** a app que já usa `bg-surface`/`text-on-surface`/etc.
+segue o tema automaticamente só por trocar a classe `dark` no `<html>` — as classes `dark:`
+já existentes (acima) continuam a funcionar por cima disto sem conflito (uma sobreposição
+pontual adicional nalguns sítios específicos, não a base do mecanismo).
+
+### O problema de onde arranjar os valores do tema escuro
+A paleta clara é claramente um export de um gerador Material 3 (nomes de tokens exatos:
+`on-tertiary-fixed-variant`, `surface-container-lowest`, etc.) — mas só o esquema **claro**
+existia; não há (nem nunca existiu) um esquema escuro correspondente para copiar. Inventar
+hexes à mão seria adivinhar, não derivar.
+
+Instalei `@material/material-color-utilities` (biblioteca oficial do Google/Material Design,
+a mesma família de código por trás do Material Theme Builder) **só localmente**, para gerar
+os valores — não fica como dependência do projeto, foi só uma ferramenta de derivação, como
+uma calculadora. (Nota técnica: a versão 0.4.0 publicada tem um bug de empacotamento —
+imports relativos sem extensão `.js`, que o Node em modo ESM estrito não resolve, apesar de
+funcionar em bundlers como o Vite — corrigido temporariamente no `node_modules` só para
+correr os scripts de derivação localmente; o pacote foi desinstalado depois, nunca chegou a
+entrar no `package.json`.)
+
+Processo de derivação, com verificação em cada passo (não confiei cegamente na primeira
+saída da biblioteca):
+1. **Semente errada inicial**: gerar um esquema a partir de `primary: "#4f378a"` com a API
+   de alto nível (`themeFromSourceColor`) deu valores que NÃO batiam certo com o resto da
+   paleta já existente (`primary` gerado = `#6750a4`, não `#4f378a`) — sinal de que a API
+   estava a usar uma versão do "color spec" diferente da que gerou a paleta original.
+2. **Confirmação via construção direta dos `Scheme`**: usando `new SchemeContent(hct, false,
+   0)` em vez da API de alto nível, `surface`/`on-surface` bateram **exatamente** com os
+   valores já existentes — confirma a semente e revela que a app usa a variante "Content".
+3. **Descoberta**: `primary` no tema claro desta app usa o **tom 30** da paleta primária, não
+   o tom 40 "de fábrica" do M3 (confirmado consultando a paleta tonal completa, tom a tom) —
+   uma personalização deliberada, não um erro meu. `secondary`/`tertiary` têm as SUAS próprias
+   sementes independentes (não derivadas algoritmicamente de `primary`) — confirmado
+   comparando `#63597c`/`#765b00` como sementes próprias contra os "fixed roles" já existentes
+   na app (`on-secondary-fixed`, `on-tertiary-fixed-variant`, etc.), todos batendo exatamente.
+4. **Mapeamento sistemático completo**: escrito um script que testa TODOS os ~48 tokens contra
+   TODOS os tons (0–100) de TODAS as paletas (primary/secondary/tertiary/error/neutral/
+   neutralVariant), reportando a correspondência mais próxima — **48/48 bateram exatas ou
+   quase-exatas** (diferenças de 1 dígito hex, atribuíveis a diferenças de arredondamento
+   entre versões da biblioteca, imperceptíveis visualmente). Revelou uma segunda camada de
+   personalização: vários papéis "container" (`primary-container`, `tertiary-container`,
+   `on-tertiary-container`, etc.) usam tons fora do padrão M3 (`primary-container` = tom 40
+   em vez de 90, por exemplo) — a app não segue a tabela padrão de forma nenhuma nestes casos.
+
+### A decisão que não tinha como confirmar com certeza absoluta
+Para os papéis "container" com tons personalizados no claro, não há forma de saber que tom o
+autor original teria escolhido para o escuro — o modo escuro nunca foi exportado. Decisão
+tomada: usar os tons 30/90 **padrão** do M3 no escuro para estes papéis, mesmo que o claro os
+tenha personalizado — garante contraste adequado (WCAG) entre o container e o seu texto, e
+consistência com o resto do esquema derivado (que segue o padrão à letra onde o claro
+também segue). Documentado como uma escolha de engenharia, não uma certeza.
+
+Papéis "Fixed"/"FixedDim" **não mudam** entre temas por definição do próprio M3 (confirmado:
+`primary-fixed`, `on-primary-fixed-variant`, etc. bateram exatamente ao recalculá-los "para o
+escuro" com a mesma semente) — ficam de fora do bloco `:root.dark`, herdando o valor único do
+`:root`. `inverse-primary` (escuro) foi corrigido para refletir o `primary` REAL do modo claro
+(tom 30, `#4f378a`) e não o tom 40 "de fábrica" (`#6750a4`, que é o que "surface-tint" já usa)
+— `inverse-X` significa literalmente "o X do outro tema", e o app's real light "primary" é a
+versão customizada, não a de fábrica.
+
+### Alterações
+- **`src/theme/colors.css`** (novo) — os ~48 tokens M3 como CSS custom properties, bloco
+  `:root` (claro, valores idênticos aos já existentes) + bloco `:root.dark` (escuro, derivado
+  e verificado como acima).
+- **`tailwind.config.js`** — cada cor passa de hex fixo a `var(--token)`. `status-green/yellow/
+  red` ficam fixos (fora do sistema M3, não fazem parte do tema).
+- **`src/hooks/useDarkMode.js`** (novo) — `localStorage` > `prefers-color-scheme` > claro,
+  aceita `forceLight` (usado para o tabuleiro do utente, `/board/*`, que fica sempre claro —
+  mesmo padrão de verificar o pathname já usado em `useStaffAuthState.js`).
+- **`public/theme-init.js`** (novo) — aplica a classe `dark` ANTES do React montar, para não
+  haver "flash" do tema errado num reload com o modo escuro já escolhido. **Ficheiro externo,
+  não inline**: um `<script>` inline no `index.html` seria bloqueado pela CSP fechada no item 1
+  (`script-src 'self'`, sem `'unsafe-inline'`) — um ficheiro em `/public` carregado via
+  `<script src="...">` já é `'self'`, sem precisar de reabrir a CSP.
+- **`ContextProvider.jsx`** — chama `useDarkMode(location.pathname.startsWith("/board"))` e
+  expõe `isDarkMode`/`toggleDarkMode` no `value` memoizado (mesma disciplina do item 9 — estes
+  dois entraram na lista de dependências do `useMemo`).
+- **`StaffShell.jsx`** — botão de alternar tema, um único ponto (canto superior direito,
+  visível em todas as páginas de staff, desktop e mobile) em vez de duplicar entre
+  `StaffSidebar`/`StaffBottomNav`.
+- **`index.html`** — referencia `theme-init.js`. `pt.js` — duas strings novas
+  (`darkMode`/`lightMode`).
+
+### Teste
+Confirmação ao vivo no browser (com o servidor de dev reiniciado — `tailwind.config.js` só é
+lido no arranque, tal como no item 1): as CSS custom properties trocam de valor ao
+adicionar/remover a classe `dark` no `<html>`; as classes Tailwind COMPILADAS (`bg-surface`,
+`text-on-surface`) respondem corretamente (confirmado com os hex exatos derivados); papéis
+"Fixed" (`primary-fixed`) ficam **idênticos** nos dois temas, confirmando que a lógica de
+"não muda entre temas" está correta; persistência via `localStorage` sobrevive a um reload
+completo (a classe já está aplicada antes do React montar); o tabuleiro (`/board/*`) fica
+sempre claro mesmo com a preferência guardada em "escuro". Ícones `dark_mode`/`light_mode`
+confirmados como glifos reais na fonte Material Symbols Outlined já embutida (não "tofu").
+`npm run lint`: 0 erros (mesmos 4 warnings pré-existentes, mais um apanhado e corrigido no
+`theme-init.js`: `catch (e)` com `e` nunca usado). `npm run build`: 154 módulos.
+
+**Não testado**: o botão de alternar tema em si, dentro de uma sessão de staff autenticada —
+sem o PIN de dev, não consegui chegar a nenhuma página que usa `StaffShell`. Testei o
+mecanismo INTEIRO de que o botão depende (Context, hook, CSS variables) diretamente via
+JavaScript no browser, o que dá confiança alta, mas não é o mesmo que ver o botão a ser
+clicado a sério numa página de staff real.
+
+`npm test`: 29 + 2 xfail — verificado **isolado** do trabalho em curso na mesma sessão de
+outra pessoa (`itsDavid08`, a afinar cores de categoria em `Components/tabela/constants.js`
+ao vivo, com o dev server a correr) via `git stash --keep-index`, exatamente como no item 13:
+sem essa isolação, `npm test` mostrava 1 falha (`resolverCorCategoria`) causada inteiramente
+pela alteração de cor dele em curso, não relacionada com este item.
+
+### Estado
+`src/theme/colors.css` novo; `tailwind.config.js` totalmente indireccionado por CSS
+variables; toggle funcional em `StaffShell.jsx`. A parte (a) do item 15 (categoria só por
+cor, daltonismo) fica por fazer, por pedido explícito do utilizador.
+
+**Revertido no dia seguinte (2026-07-28)** — ver a entrada correspondente mais abaixo. O
+processo de derivação da paleta escura fica documentado aqui para reaproveitar se o dark
+mode voltar a ser pedido no futuro; o código já não existe na árvore.
+
+---
+
+## 2026-07-27 — Favicon novo (item 16, completa a auditoria dos 16 itens)
+
+### Contexto
+Item 16 do `IMPROVEMENTS_CHECKLIST.md`: o favicon continuava a ser o `vite.svg` default do
+template do Vite. Ao investigar, confirmou-se que **não existe nenhum logótipo ou ícone de
+marca no projeto** — só os defaults do template (`public/vite.svg`, `src/assets/react.svg`),
+nenhum dos dois alguma vez referenciado fora do próprio `index.html` original. Não havia nada
+para reaproveitar; era preciso desenhar algo de raiz.
+
+### Decisão de design
+Uma bolha de fala (comunicação — "InovLAR gives patients... a simple way to communicate", a
+proposta de valor central da app), na cor primária M3 do tema (`#4f378a`, a mesma usada em toda
+a app desde o item 15). SVG simples e geométrico (retângulo arredondado + triângulo da "cauda"),
+deliberadamente **não** uma tentativa de replicar um glifo exato da fonte Material Symbols já
+usada na app (não tinha o path SVG exato de cor desse glifo à mão, e uma forma geométrica simples
+funciona melhor a tamanhos pequenos de favicon — 16×16 — do que um ícone com mais detalhe).
+
+### Teste
+A captura de ecrã não estava disponível nesta sessão (`the Browser pane is not displayed`,
+consistentemente, em várias tentativas) — em vez de assumir que o SVG estava correto só por
+"parecer bem" no código, validei por **amostragem de pixels via canvas**: desenhei o SVG num
+`<canvas>` de 32×32 no browser e li a cor em 6 pontos específicos (centro da bolha, os 4 cantos,
+dentro e fora da cauda) — todos bateram certo com o desenho pretendido (roxo onde devia haver
+forma, transparente nos cantos arredondados e fora da cauda). Confirmado também que
+`index.html` aponta para `/favicon.svg`, que o ficheiro serve `200`/`image/svg+xml` no dev
+server, e que aparece corretamente no `dist/` do build de produção. `npm run lint`: 0 erros.
+`npm run build`: 154 módulos.
+
+### Estado
+`public/favicon.svg` novo; `public/vite.svg` e `src/assets/react.svg` removidos (confirmados
+sem uso em lado nenhum antes de apagar). Com este item, os 16 pontos do
+`IMPROVEMENTS_CHECKLIST.md` levantados em 2026-07-23 foram todos abordados — 12 fechados por
+completo (item 15 voltou a ficar por fazer no dia seguinte, ver abaixo), os restantes com
+trabalho futuro claramente delimitado e documentado (ver o resumo no fim do próprio
+checklist).
+
+---
+
+## 2026-07-28 — Modo escuro (item 15) revertido a pedido do utilizador
+
+### Contexto
+O utilizador pediu para desfazer a implementação do modo escuro de 2026-07-27 (commits
+`56091ec` "Client: modo escuro funcional" e `3210e88` "Docs: registo do modo escuro").
+Como nenhum dos dois commits — nem o de favicon (`f5a8d1a`) que veio a seguir — tinha sido
+enviado para `origin/dev`, foram removidos da história em vez de anulados com um commit de
+reversão: `git rebase --onto <commit anterior a X> <último commit de X> dev`, que volta a
+aplicar `f5a8d1a` diretamente sobre o estado anterior ao dark mode. Resultado: história local
+limpa (`A-B-C-D`), sem qualquer vestígio de `X` — só possível porque nada tinha sido partilhado
+ainda; nunca se faria isto a commits já em `origin`.
+
+Conflitos durante o rebase (esperado — `f5a8d1a` mexe nos mesmos ficheiros): `index.html`
+resolveu-se sozinho (linhas independentes — favicon vs. `theme-init.js`); `DEVELOPMENT_LOG.md`
+e `IMPROVEMENTS_CHECKLIST.md` precisaram de resolução manual porque a entrada do item 16
+foi escrita a seguir à do item 15 e conta com o item 15 como "feito" no resumo final —
+corrigido para o item 15 voltar a `[ ]` por fazer e a contagem final passar de "13 fechados"
+para "12 fechados".
+
+### Estado
+`src/theme/colors.css`, `src/hooks/useDarkMode.js`, `public/theme-init.js` removidos;
+`tailwind.config.js` volta a hex fixo; `ContextProvider.jsx`/`StaffShell.jsx`/`index.html`/
+`pt.js` voltam ao estado anterior ao item 15. Item 16 (favicon) e todo o resto do histórico
+antes do dark mode ficam intactos.
