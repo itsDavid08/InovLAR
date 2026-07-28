@@ -103,8 +103,10 @@ describe("colocarComEmpurrao", () => {
         expect(r.cells[3]).toBe(30); // vizinho intacto
     });
 
-    it("mover um botão para cima de outro troca-os (swap)", () => {
-        // selfAnchor=0: move 10 de @0 para @1 (onde está 20) → 20 vai para @0
+    it("mover um botão para cima de outro (sem trocarComOrigem) empurra-o para a 1ª célula livre", () => {
+        // selfAnchor=0: move 10 de @0 para @1 (onde está 20) → sem a opção de troca, 20 vai
+        // para a 1ª célula livre da grelha (que aqui coincide com @0, a origem, por acaso —
+        // ver o teste seguinte para o caso em que NÃO coincide)
         const grid = Array(10).fill(null);
         grid[0] = 10;
         grid[1] = 20;
@@ -113,32 +115,56 @@ describe("colocarComEmpurrao", () => {
         expect(r.cells[1]).toBe(10);
     });
 
+    it("trocarComOrigem: move um botão para cima de outro e troca-os, mesmo quando a origem não é a 1ª célula livre", () => {
+        // 20@2, 10@5, @0 livre; move 10 de @5 para @2 (onde está 20) → com trocarComOrigem,
+        // 20 tem de ir para @5 (a origem de 10), não para @0 (que ficaria livre e "ganharia"
+        // no varrimento normal por vir antes de @5)
+        const grid = Array(10).fill(null);
+        grid[2] = 20;
+        grid[5] = 10;
+        const r = colocarComEmpurrao(grid, {}, 5, 2, 10, { w: 1, h: 1 }, 5, { trocarComOrigem: true });
+        expect(r.cells[2]).toBe(10);
+        expect(r.cells[5]).toBe(20);
+        expect(r.cells[0]).toBeNull();
+    });
+
+    it("trocarComOrigem: mais que um colidido cai para o empurrão normal", () => {
+        // move um botão 2×1 (de @5) para @0, colidindo com dois botões 1×1 (@0 e @1) —
+        // não há uma única "origem" para trocar, por isso ambos são empurrados normalmente
+        const grid = Array(10).fill(null);
+        grid[0] = 20;
+        grid[1] = 30;
+        grid[5] = 10;
+        const r = colocarComEmpurrao(grid, {}, 5, 0, 10, { w: 2, h: 1 }, 5, { trocarComOrigem: true });
+        expect(r.cells).toContain(20);
+        expect(r.cells).toContain(30);
+        expect(r.cells[0]).toBe(10);
+    });
+
     // ─────────────────────────────────────────────────────────────────────────
-    // BUG CONHECIDO (documentado, ainda não corrigido — ver DEVELOPMENT_LOG.md
-    // 2026-07-23 e o relatório ao utilizador). `colocarComEmpurrao` não reserva a
-    // pegada do ALVO em `ocup` antes de realocar os botões colididos, por isso um
-    // colidido pode ser colocado dentro da pegada do alvo e depois sobrescrito pelo
-    // `pousar(targetPos)` final → o botão desaparece (ou fica sobreposto). Alcançável
-    // pelo gesto de RESIZE por cima de um vizinho (useGridResize.js:84).
-    //
-    // Estes testes afirmam o comportamento CORRETO (o vizinho sobrevive). Estão como
-    // `it.fails` (xfail): passam enquanto o bug existir; quando for corrigido, o
-    // Vitest marca-os como falha inesperada — sinal para tirar o `.fails`.
+    // BUG antigo (documentado 2026-07-23, corrigido 2026-07-28 — ver DEVELOPMENT_LOG.md).
+    // `colocarComEmpurrao` não reservava a pegada do ALVO em `ocup` antes de realocar os
+    // botões colididos, por isso um colidido podia ser colocado dentro da pegada do alvo e
+    // depois sobrescrito pelo `pousar(targetPos)` final → o botão desaparecia (ou ficava
+    // sobreposto). Alcançável pelo gesto de RESIZE por cima de um vizinho (useGridResize.js)
+    // e, como reportado pelo utilizador, também ao arrastar um botão colocado por cima de
+    // outro. Fixo: a pegada do alvo agora fica reservada durante o empurrão (`reservado` em
+    // `colocarComEmpurrao`). Estes dois testes já não precisam de `it.fails`.
     // ─────────────────────────────────────────────────────────────────────────
-    it.fails("BUG: resize por cima do vizinho devia empurrá-lo, não perdê-lo", () => {
-        // 10@0, 20@1; redimensiona 10 para 2×1 (cobre 0,1) → 20 devia ir para @2
+    it("resize por cima do vizinho empurra-o, não o perde", () => {
+        // 10@0, 20@1; redimensiona 10 para 2×1 (cobre 0,1) → 20 vai para @2
         const grid = Array(10).fill(null);
         grid[0] = 10;
         grid[1] = 20;
         const r = colocarComEmpurrao(grid, {}, 5, 0, 10, { w: 2, h: 1 }, 0);
-        expect(r.cells).toContain(20); // ATUALMENTE 20 desaparece
+        expect(r.cells).toContain(20);
     });
 
-    it.fails("BUG: colocar sobre uma célula @0 ocupada devia relocalizar o ocupante", () => {
-        // 10@0; coloca 20@0 (1×1) → 10 devia ser realocado, não perdido
+    it("colocar sobre uma célula @0 ocupada relocaliza o ocupante", () => {
+        // 10@0; coloca 20@0 (1×1) → 10 é realocado, não perdido
         const grid = Array(10).fill(null);
         grid[0] = 10;
         const r = colocarComEmpurrao(grid, {}, 5, 0, 20, { w: 1, h: 1 });
-        expect(r.cells).toContain(10); // ATUALMENTE 10 desaparece
+        expect(r.cells).toContain(10);
     });
 });

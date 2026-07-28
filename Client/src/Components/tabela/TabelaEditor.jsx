@@ -128,8 +128,12 @@ const TabelaEditor = ({
             const resultado = colocarComEmpurrao(cells, spans, cols, pos, selecionado.botaoId, { w: 1, h: 1 }, null);
             if (resultado) commitPlacement(resultado.cells, resultado.spans);
         } else if (selecionado.tipo === "slot") {
+            // se cair em cima de outro botão, troca de lugar com ele (em vez de o empurrar
+            // para a 1ª célula livre da grelha) — ver colocarComEmpurrao
             const { w, h } = getSpan(spans, selecionado.pos);
-            const resultado = colocarComEmpurrao(cells, spans, cols, pos, cells[selecionado.pos], { w, h }, selecionado.pos);
+            const resultado = colocarComEmpurrao(cells, spans, cols, pos, cells[selecionado.pos], { w, h }, selecionado.pos, {
+                trocarComOrigem: true,
+            });
             if (resultado) commitPlacement(resultado.cells, resultado.spans);
         }
         setSelecionado(null);

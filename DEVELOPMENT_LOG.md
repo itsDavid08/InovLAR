@@ -5113,3 +5113,62 @@ para "12 fechados".
 `tailwind.config.js` volta a hex fixo; `ContextProvider.jsx`/`StaffShell.jsx`/`index.html`/
 `pt.js` voltam ao estado anterior ao item 15. Item 16 (favicon) e todo o resto do histórico
 antes do dark mode ficam intactos.
+
+## 2026-07-28 — Corrigido o bug de `colocarComEmpurrao` a perder botões no empurrão + troca de lugar ao mover
+
+### Contexto
+O utilizador reportou: ao selecionar um botão já colocado na tabela e largá-lo em cima de
+outro, o botão selecionado fica bem colocado, mas o que lá estava antes "salta" para uma
+célula qualquer da grelha (tipicamente a @0, lida como "posição 1x1") em vez de trocar de
+lugar com o que foi movido — e, ao tentar colocar um terceiro botão nessa célula, o que lá
+estava (o que tinha sido empurrado) desaparece.
+
+A segunda parte é exatamente o bug já documentado 2026-07-23 em `CLAUDE.md`/`gridSpans.test.js`
+(`colocarComEmpurrao` não reservava a pegada do ALVO em `ocup` antes de realocar os colididos,
+por isso um colidido podia ser "empurrado" para dentro da própria pegada do alvo e depois
+sobrescrito pela colocação final) — só que até agora só se sabia alcançável pelo gesto de
+RESIZE (`useGridResize.js`); o relatório do utilizador confirma que o mesmo algoritmo, chamado
+também a partir do arrasto/clique de mover um slot já colocado (`useDragPlacement.js`,
+`TabelaEditor.jsx: aoClicarCelula`), tem o mesmo problema.
+
+A primeira parte (o colidido "salta" para uma célula não relacionada em vez de trocar com a
+origem) não é bem o mesmo bug — é o comportamento *pretendido* de "empurrão" (varrimento
+linha-a-linha a partir da posição 0) a fazer o que sempre fez, só que numa situação em que o
+utilizador esperava antes um "swap" (mover um botão já colocado para cima de outro).
+
+### Decisão
+Duas mudanças em `gridSpans.js: colocarComEmpurrao`, mantendo a assinatura anterior
+retrocompatível (novo parâmetro é opcional):
+
+1. **Correção do bug**: um novo `Set` `reservado` (a pegada do alvo) é consultado a par de
+   `ocup` no varrimento de célula livre (`livre(p) = !ocup.has(p) && !reservado.has(p)`) — a
+   pegada do alvo fica reservada durante o empurrão, por isso um colidido nunca pode "pousar"
+   lá antes de ser sobrescrito pela colocação final. Fecha os dois `it.fails` (xfail) de
+   `gridSpans.test.js` — passam a testes normais.
+2. **Comportamento novo, pedido pelo utilizador**: parâmetro `{ trocarComOrigem: true }`. Ao
+   mover um botão já colocado (`selfAnchor != null`) para cima de exatamente um outro, o
+   colidido vai para a posição de onde o botão movido veio (`selfAnchor`), não para a 1ª célula
+   livre da grelha — uma troca de lugar direta, em vez de um "empurrão" que podia mandar o
+   colidido para uma célula sem relação nenhuma com a jogada. Só ativado nos dois pontos de
+   "mover um slot existente" (`useDragPlacement.js`, `TabelaEditor.jsx: aoClicarCelula`) — a
+   colocação vinda da biblioteca (`selfAnchor == null`) não tem "posição de origem" para trocar
+   e mantém o empurrão normal (agora sem o bug), tal como o utilizador pediu explicitamente
+   ("só funcione [o empurrão] se o botão selecionado não tinha posição prévia"). O resize
+   (`useGridResize.js`) não foi alterado — não pede a opção nova, por isso mantém sempre o
+   empurrão normal (com a correção do bug incluída); um "swap" não faz sentido conceptual para
+   um redimensionamento, onde alvo e âncora de origem podem coincidir.
+   Se houver mais que um colidido, ou o colidido não couber na posição de origem (tamanhos
+   diferentes), cai de volta para o empurrão normal — o swap só se aplica ao caso simples de
+   exatamente uma colisão.
+
+### Teste
+`gridSpans.test.js`: os dois `it.fails` antigos passam a `it` normais (bug fechado); dois testes
+novos para `trocarComOrigem` (troca mesmo quando a origem não é a 1ª célula livre da grelha;
+mais que um colidido cai para o empurrão normal). 22/22 testes de `gridSpans.test.js` a passar.
+Verificado também ao vivo no editor (`GerirTemplate`, dispositivo Telemóvel, template
+"Predefinida"): mover um botão já colocado para cima de outro troca os dois corretamente;
+arrastar um botão novo da biblioteca para cima de um já colocado continua a empurrá-lo para a
+1ª célula livre (sem perder nenhum), confirmando a distinção pedida entre os dois casos.
+
+### Estado
+Fechado. `CLAUDE.md` atualizado (bug marcado como corrigido na secção Known Limitations).

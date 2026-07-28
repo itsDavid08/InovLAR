@@ -58,10 +58,13 @@ export function useDragPlacement({ cells, spans, cols, gridRef, onPlace, onRemov
                 const resultado = colocarComEmpurrao(cells, spans, cols, anchor, a.botaoId, { w: 1, h: 1 }, null);
                 if (resultado) onPlace(resultado.cells, resultado.spans);
             } else if (a.tipo === "slot") {
-                // mover
+                // mover — se cair em cima de outro botão, troca de lugar com ele (em vez de o
+                // empurrar para a 1ª célula livre da grelha)
                 const { w, h } = getSpan(spans, a.pos);
                 const anchor = preview?.pos ?? o.pos;
-                const resultado = colocarComEmpurrao(cells, spans, cols, anchor, cells[a.pos], { w, h }, a.pos);
+                const resultado = colocarComEmpurrao(cells, spans, cols, anchor, cells[a.pos], { w, h }, a.pos, {
+                    trocarComOrigem: true,
+                });
                 if (resultado) onPlace(resultado.cells, resultado.spans);
             }
         }
