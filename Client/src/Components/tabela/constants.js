@@ -115,11 +115,11 @@ export const COR_CATEGORIA = {
 // Cor de fundo por categoria (pastel) — pinta o próprio botão no quadro. Default
 // usado quando o staff não escolheu um override em `config.coresCategoria`.
 export const COR_CATEGORIA_FUNDO = {
-    "Sinto-me": "#FDE7C8",
-    Necessidades: "#E6E1F0",
+    "Sinto-me": "#FDF3B4",
+    Necessidades: "#E6DCC8",
     Tecnologias: "#D6EBF9",
-    Chamar: "#FBE4C6",
-    Medicamentos: "#F6D3D3",
+    Chamar: "#FBCE8F",
+    Medicamentos: "#DFD3F0",
 };
 
 /**
