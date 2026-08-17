@@ -5172,3 +5172,122 @@ arrastar um botão novo da biblioteca para cima de um já colocado continua a em
 
 ### Estado
 Fechado. `CLAUDE.md` atualizado (bug marcado como corrigido na secção Known Limitations).
+
+## 2026-08-17 — Acesso por nome (mDNS opt-in no install.sh) + dois bugs que só apareciam fora do acesso por IP
+
+### Contexto
+Hoje, para abrir a app noutro dispositivo, é preciso correr `ipconfig`/`hostname -I` e escrever
+`http://<ip>:3000` à mão. O objetivo era tornar isso fácil para o staff da APCM. Da discussão
+saíram duas conclusões antes de se escrever código:
+
+1. **O problema divide-se em dois públicos.** Os tablets dos utentes abrem
+   `/board/<accessToken>` — 32 bytes aleatórios que ninguém escreve à mão, com ou sem nome; aí a
+   solução é o atalho no ecrã inicial, não o DNS. O nome curto só compensa mesmo para o staff,
+   que vai a `/login`.
+2. **O registo no DNS do router é preferível ao mDNS**, e ambos são preferíveis a instalar um
+   servidor DNS na Pi (dnsmasq/Pi-hole, que é o que a maioria dos tutoriais mostra). Critério:
+   não acrescentar um componente cujo raio de falha seja maior que o problema que resolve — DNS
+   na Pi significa que a Pi ir abaixo deixa a instituição inteira sem internet, para poupar o
+   trabalho de escrever um IP. O mDNS fica como plano B para quando não há acesso ao router.
+
+Ao procurar onde encaixar isto no `install.sh`, apareceram dois bugs, ambos invisíveis enquanto
+o acesso for feito por IP.
+
+### Bug 1 — o modo TLS do `install.sh` nunca poderia ter funcionado num browser
+O script faz o build do Client sem `VITE_API_URL`. O `apiUrl` (`Client/src/api/client.js`) cai
+então no valor por omissão `<hostname>:3000`, e o `ContextProvider` abre o socket.io a partir do
+mesmo valor. Mas com `ENABLE_TLS=true` o script põe o Caddy a servir em `:443` **e** o Express em
+`HOST=127.0.0.1` — ou seja, a página carregava pelo proxy e depois todas as chamadas à API iam
+contra uma porta 3000 que já não era alcançável de fora.
+
+Passou despercebido porque a validação do TLS (2026-07-24) foi feita ao nível do `curl` e do
+rate limiter, nunca abrindo a app num browser através do Caddy — que é o único sítio onde isto
+se manifesta. É a mesma categoria de falha do CORP do helmet (2026-07-23): verificação por
+`curl` não reproduz o que o browser faz.
+
+### Bug 2 — `upgrade-insecure-requests` parte a app assim que se lhe chama por um nome
+A CSP por omissão do helmet inclui `upgrade-insecure-requests`, que manda o browser trocar
+`http://` por `https://` em todos os pedidos. A especificação isenta desse upgrade os pedidos
+cujo host é um **IP literal** — e como o acesso a esta app foi sempre por IP, a diretiva nunca
+teve efeito nenhum. Ao aceder pelo **nome** da máquina a isenção desaparece: o browser passa a
+pedir os assets em `https://` a um Express que só fala HTTP, e a página fica em branco.
+
+Reproduzido em browser antes da correção (`http://DAVIDPC:3000`), com estas três linhas na
+consola a fecharem o diagnóstico:
+
+```
+Failed to load resource: net::ERR_SSL_PROTOCOL_ERROR   (index.css, index.js, favicon.svg)
+Unsafe attempt to load URL https://davidpc:3000/ from frame with URL http://davidpc:3000/
+```
+
+Isto seria um bloqueio total do plano do nome — a app deixaria de abrir precisamente no momento
+em que se lhe passasse a chamar `inov-lar.local`.
+
+### Decisão
+**`Server/main.js`** — `upgrade-insecure-requests` é removida da CSP (`directives:
+{ upgradeInsecureRequests: null }`, que em helmet 8.3.0 apaga a diretiva) **apenas quando não há
+TLS à frente**. O sinal é `COOKIE_SECURE === 'true'`, que o `install.sh` já grava no `.env`
+quando ativa o Caddy; atrás de HTTPS a diretiva é útil e mantém-se. `script-src 'self'` fica
+intacto nos dois modos — a proteção contra XSS que motivou o helmet não é afetada.
+
+**`install.sh`**, três alterações:
+1. O build passa a `VITE_API_URL=/` (base relativa). Corrige o Bug 1 e serve os três cenários que
+   o script sabe montar — HTTP simples, Caddy/TLS e nome na porta 80 — porque o Client passa a
+   chamar sempre a origem por onde a página foi servida, seja ela qual for.
+2. Secção nova de mDNS, opt-in por `MDNS_HOSTNAME`, com o mesmo padrão de persistência do
+   `ENABLE_TLS` (gravado no `.env`, relido depois, para uma execução futura sem a variável não
+   reverter o nome em silêncio). É o único passo do script com âmbito de **máquina** e não de
+   aplicação, daí nunca acontecer por omissão. Valida o nome à cabeça (só minúsculas, dígitos e
+   hífen, máx. 63) — um hostname inválido deixa a máquina sem resolver o próprio nome e o `sudo`
+   passa a demorar segundos por comando. Usa `raspi-config nonint do_hostname` quando existe (trata
+   do `/etc/hostname` e da linha `127.0.1.1` do `/etc/hosts` de uma vez) com fallback para
+   `hostnamectl` + edição manual do `/etc/hosts`; reinicia o `avahi-daemon` em vez de exigir
+   reboot. Idempotente: se o nome já estiver certo, não toca em nada.
+3. A mensagem final mostra o nome **a seguir** ao IP, nunca em vez dele, com nota sobre os dois
+   limites que interessam na prática (o mDNS não atravessa sub-redes; Android só o suporta
+   nativamente a partir da versão 12). O IP é a saída de emergência e tem de continuar à vista.
+
+**`install.ps1`** — das três, só a terceira se aplica, e numa forma adaptada. O script Windows
+**não faz build** (só `npm install`; é setup de desenvolvimento e arranca-se com `npm run dev`
+a seguir), e em dev o valor por omissão `<hostname>:3000` é o *correto*, porque o Vite serve em
+`:5173` e a API está mesmo noutra porta — forçar `VITE_API_URL=/` ali partia o fluxo de
+desenvolvimento. O mDNS também não se aplica: no Windows não há Avahi, e o equivalente seria
+`Rename-Computer` + reboot, invasivo de mais para um script de setup de dev. O que fazia sentido
+era resolver a queixa original: a mensagem final passa a mostrar o **IP da LAN** (filtrado pela
+interface que tem gateway por omissão e está `Up`, para não apanhar adaptadores virtuais de
+Hyper-V/WSL/VPN, que também têm IPv4 válido e nenhum serve), o nome NetBIOS da máquina, e as duas
+linhas de firewall/perfil de rede que são a causa nº1 de "não abre a partir do tablet".
+
+**`Server/.env.example`** — documenta `MDNS_HOSTNAME` marcando explicitamente que **não** é
+configuração da app (a app nunca lê essa chave; o `.env` é só onde o `install.sh` guarda o estado
+dele, como já fazia com o `COOKIE_SECURE`).
+
+### Teste
+- **Browser, o que interessava**: servidor numa porta à parte e `http://DAVIDPC:3001` aberto num
+  browser real. Assets todos `200 OK` em `http://` (zero upgrades), `GET /auth/staff/status` e
+  `GET /botoes` a `200` **na mesma origem e porta** (confirma também o `VITE_API_URL=/`),
+  socket.io ligado, página a renderizar. Sobram duas mensagens inofensivas — o header COOP
+  ignorado e o aviso de `Origin-Agent-Cluster` — que não bloqueiam nada e passam a ativas se
+  algum dia houver TLS.
+- **Header CSP** verificado com pedidos reais nos dois modos: sem TLS a diretiva não aparece, com
+  `COOKIE_SECURE=true` aparece; `script-src 'self'` igual em ambos.
+- **`install.sh`**: `bash -n` limpo; validador de nomes contra 7 casos (`inov lar`, `Inov-Lar`,
+  `inov.lar`, `-inov`, `inov-` recusados; `inov-lar`, `inovlar123` aceites); os três formatos da
+  mensagem final simulados (sem TLS/sem mDNS sai idêntico ao anterior — sem regressão).
+- **`install.ps1`**: parse sem erros e bloco final executado a sério, a detetar o adaptador certo.
+- Suite do Server: 36/36.
+- **Confirmado pelo utilizador num smartphone**: `davidpc:3000` abre a partir do telemóvel, sem
+  configurar nada no telefone.
+
+### Estado
+As correções dos dois bugs estão **verificadas em browser**. A secção de mDNS do `install.sh`
+está escrita e com a lógica testada, mas o caminho real (instalar o `avahi-daemon`, mudar o
+hostname, o nome resolver na rede) **ainda não correu numa Pi** — falta essa validação.
+
+Nota do teste no smartphone, que vale a pena seguir antes de investir no mDNS: o telemóvel
+resolveu `davidpc` **sem** mDNS e sem `.local`, o que indica que o router daquela rede já regista
+automaticamente no seu DNS os nomes que os clientes anunciam por DHCP. Se o router da APCM fizer
+o mesmo, basta dar o nome `inov-lar` à Pi para ficar disponível em todos os dispositivos, sem
+Avahi e sem pedir nada à TI — é o cenário "DNS de graça". Convém testar isso lá **antes** de
+ativar o mDNS, porque resolve melhor o problema (atravessa sub-redes, funciona em Android
+anterior ao 12) e sem alterar nada na máquina.

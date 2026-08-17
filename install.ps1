@@ -172,9 +172,34 @@ try {
     if ($LASTEXITCODE -ne 0) { Die "Seeders falharam." }
 } finally { Pop-Location }
 
+### -------- 7) Mensagem final --------
+# IP da LAN para não ser preciso ir ao `ipconfig` só para abrir a app no tablet. Filtra
+# pela interface que TEM gateway por omissão e está "Up": é a que está mesmo ligada à
+# rede. Sem esse filtro apanhavam-se também os adaptadores virtuais (Hyper-V, WSL, VPNs),
+# que têm IPv4 igualmente válido e nenhum deles serve para chegar aqui de outro
+# dispositivo. Se falhar, mostra-se um placeholder em vez de partir o script.
+$LanIp = $null
+try {
+    $LanIp = (Get-NetIPConfiguration -ErrorAction Stop |
+        Where-Object { $_.IPv4DefaultGateway -and $_.NetAdapter.Status -eq 'Up' } |
+        Select-Object -First 1).IPv4Address.IPAddress
+} catch { }
+if (-not $LanIp) { $LanIp = "<ip-desta-maquina>" }
+
 Write-Host "`n------------------------------------------------------------" -ForegroundColor Cyan
 Write-Host "InovLAR (dev) pronto." -ForegroundColor Cyan
 Write-Host "  Server:  cd Server; node main.js        -> http://localhost:3000"
 Write-Host "  Client:  cd Client; npm run dev          -> http://localhost:5173"
 Write-Host "  BD:      $DbName (user $DbUser; credenciais em $EnvFile)"
+Write-Host ""
+Write-Host "  De outro dispositivo na mesma rede (tablet, telemovel):" -ForegroundColor Cyan
+Write-Host "    Server:  http://${LanIp}:3000"
+Write-Host "    Client:  http://${LanIp}:5173   ('npm run dev' ja escuta em toda a rede)"
+Write-Host "    Este PC chama-se '$($env:COMPUTERNAME)' — a partir de outro Windows,"
+Write-Host "      http://$($env:COMPUTERNAME):3000 costuma funcionar sem saber o IP."
+Write-Host "      O Vite (5173) so aceita por IP: bloqueia hosts que nao conhece."
+Write-Host "    Nao abre de fora? E quase sempre a firewall ou a rede estar como 'Publica':" -ForegroundColor Yellow
+Write-Host "      Set-NetConnectionProfile -NetworkCategory Private"
+Write-Host "      New-NetFirewallRule -DisplayName 'InovLAR dev' -Direction Inbound ``"
+Write-Host "        -LocalPort 3000,5173 -Protocol TCP -Action Allow"
 Write-Host "------------------------------------------------------------`n" -ForegroundColor Cyan

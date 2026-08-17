@@ -60,7 +60,7 @@ function isOrigemPermitida(origin, host) {
 }
 
 // Headers de segurança HTTP (clickjacking, MIME-sniffing, referrer, HSTS, CSP —
-// ver DEVELOPMENT_LOG.md 2026-07-23). Uma exceção aos defaults do helmet:
+// ver DEVELOPMENT_LOG.md 2026-07-23). Duas exceções aos defaults do helmet:
 //
 // - crossOriginResourcePolicy: "cross-origin" em vez de "same-origin". Em dev o
 //   Vite serve a página em :5173 e as imagens (/imagesBotoes, /imagesUtentes) vêm
@@ -74,9 +74,24 @@ function isOrigemPermitida(origin, host) {
 // CDN): o Tailwind passou a ser um build real (ver index.html / tailwind.config.js),
 // por isso já não há nem script externo nem <script> inline de config a autorizar —
 // a CSP volta a barrar qualquer script inline injetado por XSS.
+// - `upgrade-insecure-requests` (vem nos defaults do helmet) é REMOVIDA da CSP quando
+//   não há TLS à frente. Essa diretiva manda o browser trocar http:// por https:// em
+//   todos os pedidos; servindo em HTTP puro, isso transforma todos os assets em
+//   ERR_SSL_PROTOCOL_ERROR e a página fica em branco. Nunca se notou porque o acesso
+//   era sempre por IP, e a especificação manda ignorar o upgrade quando o host é um IP
+//   literal — a isenção desaparece ao aceder por um NOME (mDNS, DNS, ou o próprio nome
+//   da máquina), e aí a app deixa de abrir. Reproduzido em browser com
+//   http://<nome>:3000 antes desta correção (ver DEVELOPMENT_LOG.md).
+//   COOKIE_SECURE=true é o sinal de que existe um proxy TLS à frente (posto pelo
+//   install.sh com ENABLE_TLS=true) — nesse caso a diretiva é útil e mantém-se.
+const TEM_TLS_A_FRENTE = process.env.COOKIE_SECURE === 'true';
 app.use(
     helmet({
         crossOriginResourcePolicy: { policy: "cross-origin" },
+        contentSecurityPolicy: {
+            useDefaults: true,
+            directives: TEM_TLS_A_FRENTE ? {} : { upgradeInsecureRequests: null },
+        },
     })
 );
 

@@ -28,8 +28,19 @@
 # fim deste script. IMPORTANTE nas primeiras vezes que ativas: os URLs dos tablets
 # mudam de http://<ip>:3000/... para https://<ip>/... — têm de ser reabertos.
 #
+# mDNS (opt-in): dá um nome à Pi para deixar de ser preciso decorar o IP — a app passa
+# a responder em http://<nome>.local. Instala/ativa o avahi-daemon e MUDA O NOME DA
+# MÁQUINA (não só da app), por isso é estritamente opt-in e nunca acontece por omissão:
+#   sudo MDNS_HOSTNAME=inov-lar bash install.sh
+# Fica "colado" da mesma forma que o TLS (gravado no .env, relido em execuções seguintes).
+# LIMITES do mDNS, a testar ANTES de contar com ele: não atravessa sub-redes (se os
+# tablets estiverem noutra Wi-Fi que não a da Pi, nunca resolve) e o Android só o
+# suporta nativamente a partir da versão 12. O IP continua sempre a funcionar como
+# alternativa — é por isso que a mensagem final mostra os dois.
+#
 # Uso:  sudo bash install.sh
-#       sudo ENABLE_TLS=true bash install.sh   # com HTTPS (Caddy + cert self-signed)
+#       sudo ENABLE_TLS=true bash install.sh          # com HTTPS (Caddy + cert self-signed)
+#       sudo MDNS_HOSTNAME=inov-lar bash install.sh   # com nome mDNS (inov-lar.local)
 #
 set -euo pipefail
 
@@ -41,6 +52,7 @@ CLIENT_DIR="${APP_DIR}/Client"
 SERVICE_NAME="inov-lar"
 SERVICE_USER="${SUDO_USER:-pi}"         # utilizador que corre o serviço (quem chamou o sudo)
 ENABLE_TLS="${ENABLE_TLS:-false}"       # opt-in: Caddy + HTTPS self-signed (ver nota acima)
+MDNS_HOSTNAME="${MDNS_HOSTNAME:-}"      # opt-in: nome mDNS (<nome>.local) — ver nota acima
 
 DB_NAME="inovlar"
 DB_USER="inovlar_app"
@@ -137,6 +149,31 @@ else
 fi
 [ "$TLS_ACTIVE" = "true" ] && COOKIE_SECURE_VAL="true" || COOKIE_SECURE_VAL="false"
 
+# MDNS_ACTIVE segue o mesmo padrão do TLS_ACTIVE: a variável de ambiente ganha, mas
+# na ausência dela relê-se o .env — uma execução futura sem MDNS_HOSTNAME não pode
+# reverter em silêncio o nome de uma máquina já configurada (e a app não lê esta
+# chave; o .env é aqui só o sítio onde o script guarda o estado dele, como o
+# COOKIE_SECURE).
+if [ -n "$MDNS_HOSTNAME" ]; then
+  MDNS_ACTIVE="$MDNS_HOSTNAME"
+elif [ -f "$ENV_FILE" ] && grep -q '^MDNS_HOSTNAME=.' "$ENV_FILE"; then
+  MDNS_ACTIVE="$(grep '^MDNS_HOSTNAME=' "$ENV_FILE" | head -n1 | cut -d= -f2-)"
+else
+  MDNS_ACTIVE=""
+fi
+
+# Validação à cabeça, antes de tocar em seja o que for: um hostname inválido (ponto,
+# espaço, maiúscula, hífen no início/fim) deixa a máquina sem resolver o próprio nome
+# e o sudo passa a demorar segundos em cada comando. Recusar aqui é muito mais barato
+# do que remediar depois — e este script corre com privilégios de root.
+if [ -n "$MDNS_ACTIVE" ]; then
+  case "$MDNS_ACTIVE" in
+    *[!a-z0-9-]*|-*|*-)
+      die "MDNS_HOSTNAME inválido: '${MDNS_ACTIVE}'. Só minúsculas, dígitos e hífen (sem pontos, espaços, acentos ou maiúsculas), e sem começar/acabar em hífen." ;;
+  esac
+  [ "${#MDNS_ACTIVE}" -le 63 ] || die "MDNS_HOSTNAME demasiado longo: máx. 63 caracteres."
+fi
+
 # root autentica por unix_socket na Pi → o cliente corre como root sem password.
 # Cria o utilizador para 127.0.0.1 (a app liga por TCP) e para localhost (conveniência/CLI).
 "$MYSQL_CLI" <<SQL
@@ -161,6 +198,7 @@ DB_HOST=${DB_HOST}
 DB_PORT=${DB_PORT}
 COOKIE_SECRET=${COOKIE_SECRET}
 COOKIE_SECURE=${COOKIE_SECURE_VAL}
+MDNS_HOSTNAME=${MDNS_ACTIVE}
 ENV
 chown "${SERVICE_USER}:${SERVICE_USER}" "$ENV_FILE" 2>/dev/null || true
 log "Escrito ${ENV_FILE} (permissões 600)."
@@ -176,8 +214,16 @@ log "A instalar dependências do Server..."
 ( export PATH="${NODE_DIR}:${PATH}"; cd "$SERVER_DIR" && "$NPM_BIN" install )
 
 if [ -d "$CLIENT_DIR" ]; then
+  # VITE_API_URL=/ → base RELATIVA: o Client passa a chamar a API (e a abrir o socket.io)
+  # na mesma origem por onde a página foi servida, seja ela qual for. Sem isto, o
+  # `apiUrl` (Client/src/api/client.js) cai no valor por omissão `<hostname>:3000` —
+  # correto no modo simples, mas ERRADO em tudo o resto que este script sabe montar:
+  # com ENABLE_TLS=true o Caddy serve em :443 e o Express fica em HOST=127.0.0.1, por
+  # isso o browser carregava a página e depois falhava TODAS as chamadas contra uma
+  # porta 3000 que já não é alcançável de fora. O mesmo se aplica a um nome mDNS na
+  # porta 80. Relativo funciona nos três casos, incluindo o simples.
   log "A instalar dependências e a fazer o build do Client (React)..."
-  ( export PATH="${NODE_DIR}:${PATH}"; cd "$CLIENT_DIR" && "$NPM_BIN" install && "$NPM_BIN" run build )
+  ( export PATH="${NODE_DIR}:${PATH}"; cd "$CLIENT_DIR" && "$NPM_BIN" install && VITE_API_URL=/ "$NPM_BIN" run build )
 else
   warn "Pasta Client não encontrada (${CLIENT_DIR}) — salto o build do frontend."
 fi
@@ -227,6 +273,48 @@ else
   log "TLS desativado (ENABLE_TLS!=true) — a saltar a instalação do Caddy. HTTP puro em :${port:-3000}."
 fi
 
+### -------- 5.5) mDNS / nome da máquina (só se MDNS_HOSTNAME definido/já ativado) --------
+# É o único passo deste script com âmbito de MÁQUINA e não de aplicação: tudo o resto
+# (BD, .env, serviço, ficheiros) vive dentro do projeto e desinstala-se sem deixar
+# rasto, enquanto o hostname afeta o SSH, os logs, o que o router mostra na lista de
+# dispositivos e qualquer outra coisa que corra nesta Pi. Daí ser opt-in explícito.
+if [ -n "$MDNS_ACTIVE" ]; then
+  if ! command -v avahi-daemon >/dev/null 2>&1; then
+    log "A instalar o avahi-daemon (mDNS)..."
+    apt-get install -y avahi-daemon
+  else
+    log "avahi-daemon já instalado — salto a instalação do pacote."
+  fi
+  systemctl enable --now avahi-daemon
+
+  HOSTNAME_ATUAL="$(hostname)"
+  if [ "$HOSTNAME_ATUAL" = "$MDNS_ACTIVE" ]; then
+    log "Nome da máquina já é '${MDNS_ACTIVE}' — nada a mudar."
+  else
+    log "A mudar o nome da máquina: '${HOSTNAME_ATUAL}' -> '${MDNS_ACTIVE}'..."
+    # O raspi-config trata do /etc/hostname E da linha 127.0.1.1 do /etc/hosts de uma
+    # vez; fora do Raspberry Pi OS não existe, e aí fazemos as duas à mão. Falhar a
+    # segunda é o que faz o `sudo` demorar segundos a cada comando ("unable to resolve
+    # host"), por isso nunca se muda uma sem a outra.
+    if command -v raspi-config >/dev/null 2>&1; then
+      raspi-config nonint do_hostname "$MDNS_ACTIVE"
+    else
+      hostnamectl set-hostname "$MDNS_ACTIVE"
+      if grep -q "^127.0.1.1" /etc/hosts; then
+        sed -i "s/^127.0.1.1.*/127.0.1.1\t${MDNS_ACTIVE}/" /etc/hosts
+      else
+        printf '127.0.1.1\t%s\n' "$MDNS_ACTIVE" >> /etc/hosts
+      fi
+    fi
+    # Reanuncia com o nome novo. Evita o reboot: o avahi relê o hostname ao arrancar.
+    systemctl restart avahi-daemon
+    warn "O nome desta máquina mudou. A sessão SSH atual aguenta-se até a fechares, mas a PRÓXIMA ligação é para '${MDNS_ACTIVE}.local' (o antigo '${HOSTNAME_ATUAL}.local' deixa de existir). A prompt da shell só mostra o nome novo depois de saíres e voltares a entrar."
+  fi
+  log "mDNS pronto — a app responde também em ${MDNS_ACTIVE}.local"
+else
+  log "mDNS desativado (MDNS_HOSTNAME não definido) — o acesso continua a ser por IP."
+fi
+
 ### -------- 6) Serviço systemd --------
 log "A instalar o serviço systemd '${SERVICE_NAME}'..."
 # Com TLS ativo, o Express só ouve em 127.0.0.1 (HOST=127.0.0.1) — só alcançável
@@ -263,6 +351,7 @@ systemctl --no-pager --lines=10 status "${SERVICE_NAME}" || true
 
 PI_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 if [ "$TLS_ACTIVE" = "true" ]; then
+  APP_SCHEME="https"; APP_PORT=""
   APP_URL_LINE="  App:      https://${PI_IP:-<ip-da-pi>}  (ou https://localhost)"
   TLS_NOTE="
   TLS:      Caddy em :443, certificado self-signed (CA local do Caddy).
@@ -272,15 +361,30 @@ if [ "$TLS_ACTIVE" = "true" ]; then
             reabre cada um a partir da consola de staff.
             Logs do Caddy: journalctl -u caddy -f"
 else
+  APP_SCHEME="http"; APP_PORT=":3000"
   APP_URL_LINE="  App:      http://${PI_IP:-localhost}:3000  (HTTP puro — ver item 2 do IMPROVEMENTS_CHECKLIST.md)"
   TLS_NOTE=""
+fi
+
+# O nome mDNS aparece a seguir ao IP, nunca em vez dele: é o endereço para o dia a
+# dia, mas o IP é a saída de emergência quando o nome não resolve (sub-rede diferente,
+# Android < 12, multicast filtrado) e quem instala tem de sair daqui com os dois.
+if [ -n "$MDNS_ACTIVE" ]; then
+  MDNS_NOTE="
+  Nome:     ${APP_SCHEME}://${MDNS_ACTIVE}.local${APP_PORT}
+            Alternativa ao IP acima — que continua sempre a funcionar. Testa este
+            nome a partir de CADA tipo de dispositivo antes de o dar ao staff: o
+            mDNS não atravessa sub-redes (tablets noutra Wi-Fi nunca o resolvem) e
+            o Android só o suporta nativamente a partir da versão 12."
+else
+  MDNS_NOTE=""
 fi
 
 cat <<DONE
 
 ------------------------------------------------------------
 InovLAR instalado.
-${APP_URL_LINE}
+${APP_URL_LINE}${MDNS_NOTE}
   Serviço:  systemctl status ${SERVICE_NAME}
   Logs:     journalctl -u ${SERVICE_NAME} -f
   MariaDB:  ${MARIADB_VER}
