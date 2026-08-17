@@ -12,5 +12,6 @@ export const NAV_ITEMS = [
     { label: t.nav.botoes, short: t.nav.botoes, icon: "tune", path: "/edit-botoes" },
     { label: t.nav.tabelas, short: t.nav.tabelas, icon: "grid_view", path: "/staff/tabelas" },
     { label: t.nav.pedidosPendentes, short: t.nav.pedidosShort, icon: "pending_actions", path: "/staff/pedidos" },
+    { label: t.nav.historico, short: t.nav.historicoShort, icon: "history", path: "/staff/historico" },
     { label: t.nav.changePassword, short: t.nav.passwordShort, icon: "lock", path: "/staff/alterar-password" },
 ];

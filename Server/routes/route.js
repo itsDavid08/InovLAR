@@ -92,6 +92,9 @@ router.get("/auditoria", requireStaff, auditoriaController.list);
 router.get("/pedidos", requireStaff, pedidoController.getAllPedidos);
 router.get("/pedidos/ativos/hora", requireStaff, pedidoController.getActivePedidosByTime);
 router.get("/pedidos/ativos/emergencia", requireStaff, pedidoController.getActivePedidosByEmergency);
+// ANTES de /pedidos/:id de propósito: o :id casaria com "historico" e o registo
+// nunca chegaria ao seu handler (daria 404 de "Pedido não encontrado").
+router.get("/pedidos/historico", requireStaff, pedidoController.getHistorico);
 router.get("/pedidos/:id", requireStaff, pedidoController.getPedidoById);
 router.get("/pedidos/utente/:utenteId", requireStaff, pedidoController.getActivePedidosByUtenteId); // o tabuleiro usa /board/pedidos
 // Criar/atualizar pedidos do tabuleiro é feito em /board/pedidos (sessão de tabuleiro).

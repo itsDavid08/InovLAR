@@ -39,14 +39,20 @@ const StaffSidebar = ({ children }) => {
             </div>
 
             {/* Navigation Links */}
-            <div className="flex-1 overflow-y-auto">
+            {/* O recuo lateral dos botões vive AQUI (px-2), não em `mx-2` neles: com
+                `w-full` (=100% do container) uma margem horizontal soma-se à largura
+                total e empurra 16px para fora. Como este `overflow-y-auto` faz o
+                overflow-x computar para `auto` (regra do CSS: se um eixo não é
+                `visible`, o outro deixa de o poder ser), esses 16px apareciam como
+                uma barra de scroll horizontal por baixo da sidebar. */}
+            <div className="flex-1 overflow-y-auto px-2">
                 {NAV_ITEMS.map(({ label, icon, path }) => {
                     const active = location.pathname === path;
                     return (
                         <button
                             key={path}
                             onClick={() => navigate(path)}
-                            className={`w-full flex items-center gap-4 px-4 py-3 mx-2 transition-colors active:scale-95 duration-150 mb-2 ${
+                            className={`w-full flex items-center gap-4 px-4 py-3 transition-colors active:scale-95 duration-150 mb-2 ${
                                 active
                                     ? "text-primary bg-surface-container-high dark:bg-surface-variant font-bold"
                                     : "text-on-surface-variant dark:text-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-variant"

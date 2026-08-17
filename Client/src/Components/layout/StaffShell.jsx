@@ -19,7 +19,15 @@ const StaffShell = ({ sidebar, children }) => {
             </nav>
 
             {/* Main Content Area */}
-            <main className="flex-1 md:ml-72 flex flex-col min-h-screen">
+            {/* `min-w-0` é obrigatório, não decorativo: um filho de flex tem
+                `min-width: auto` por omissão, o que o impede de encolher abaixo da
+                largura mínima do seu conteúdo. Uma tabela larga (ex.: o Registo de
+                Pedidos) esticava o <main> para além da janela e criava scroll
+                horizontal na PÁGINA — apesar de a tabela já ter o seu próprio
+                `overflow-x-auto`, que nunca chegava a ser usado porque o container
+                nunca era forçado a encolher. Com `min-w-0`, o <main> fica pela
+                largura disponível e é a tabela que faz scroll dentro de si. */}
+            <main className="flex-1 min-w-0 md:ml-72 flex flex-col min-h-screen">
                 {/* pb em mobile = altura da barra inferior (4rem) + folga + safe-area,
                     para a última linha de cartões não ficar escondida pela barra. */}
                 <div className="p-4 sm:p-6 md:px-10 md:py-8 flex-1 overflow-y-auto">

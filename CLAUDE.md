@@ -55,11 +55,26 @@ Requires Node ≥ 20 (the `mariadb` connector needs it) and a running local Mari
 
 (No need to repeat `db:migrate`/`db:seed:all` unless new migrations/seeders were added.)
 
+Both are also registered in `.claude/launch.json` as the preview configurations `server` (:3000) and
+`client` (:5173) — start them through the preview tooling rather than a bare shell, so the dev server
+stays attached and its logs are readable. Keep that file **strict JSON** (a trailing comma silently
+breaks the launcher).
+
 ### Production build
 
 ```bash
 cd Client && npm run build   # generates Client/dist/
 cd ../Server && node main.js # serves React build + API + socket.io on http://<ip>:3000
+```
+
+**If the app is ever reached on anything other than `<host>:3000`** (reverse proxy on :80/:443, a DNS
+name, TLS via Caddy), the build **must** set `VITE_API_URL` — `apiUrl` in `api/client.js` falls back to
+`<current hostname>:3000`, and `ContextProvider.jsx` opens the socket.io connection from that same
+value, so the page would load from the proxy but still call `:3000` directly (which `install.sh`'s TLS
+mode closes off with `HOST=127.0.0.1`). A relative base follows whatever host the user typed:
+
+```bash
+cd Client && VITE_API_URL=/ npm run build
 ```
 
 Raspberry Pi deployment (MariaDB install, DB/user creation, migrations, systemd service, optional TLS via Caddy) is automated by `install.sh` at the repo root — see it and `DEVELOPMENT_LOG.md` (Phase 3 entries, and 2026-07-24 for TLS) for the deployment-specific gotchas (Node version resolution under `sudo`, `lower_case_table_names` differences between Windows/Linux MariaDB, etc.).
@@ -78,7 +93,7 @@ Raspberry Pi deployment (MariaDB install, DB/user creation, migrations, systemd 
 
 3. **State Management:**
    - **ContextProvider:** Global state (utentes, botoes, pedidos, staffUnlocked) + API calls delegated to `api/` layer. It wraps `<Router>` in `App.jsx`, so it **survives all SPA navigation** — re-entering a page for the same entity (e.g. same patient's board) does *not* automatically refetch unless the effect's dependency actually changes. If a page looks stale on re-entry without a socket event in between, check whether its `useEffect` unconditionally refetches on mount vs. only on id-change (see `TabuleiroComunicacao.jsx` and the 2026-07-03 entry in `DEVELOPMENT_LOG.md`).
-   - **API Layer** (`src/api/`): Pure functions for HTTP requests (GET, POST, PUT, DELETE). Reads go through `get(path, { auth })` in `client.js`: `auth: true` sends the session cookie (`credentials: "include"`) for staff-only reads (roster, request aggregates, layouts, templates); open reads (patient board) omit it. Mutations (`mutate`) always send credentials. The staff-only aggregate reads are also gated in `ContextProvider` behind `staffUnlocked` (both the mount effect and the socket handler, via a `staffUnlockedRef` to dodge stale closures) so the patient board never fires them and never 401s.
+   - **API Layer** (`src/api/`): Pure functions for HTTP requests (GET, POST, PUT, DELETE), all built on `get(path, { auth })` / `mutate(path, { method, body, auth })` in `client.js`. **`auth` defaults to `false` on both** — it is opt-in per call and sends the session cookie (`credentials: "include"`). Every staff-only read/mutation *and* every `/board/*` call passes `auth: true` explicitly (the board has its own session cookie); only the genuinely open reads omit it — currently just `GET /botoes` and `GET /imagesBotoes`. A new staff mutation written without `auth: true` will 401. The API base is `VITE_API_URL` if set (must end in `/`), else `<current protocol>//<current hostname>:3000/` — same origin in production, `:3000` from the Vite dev server. The staff-only aggregate reads are also gated in `ContextProvider` behind `staffUnlocked` (both the mount effect and the socket handler, via a `staffUnlockedRef` to dodge stale closures) so the patient board never fires them and never 401s.
    - **Socket.io:** Real-time sync of DB changes across clients.
 
 4. **Responsive Design:** Sidebar+header on desktop; bottom navigation bar on mobile. Layout components centralized in `Components/layout/`.
@@ -100,10 +115,11 @@ Client/src/
 ├── hooks/            # Cross-cutting hooks: useFeedback, useButtonById, useAlarmeEmergencia
 ├── constants.js      # PEDIDO_STATES (pendente/concluido/cancelado)
 ├── Components/
-│   ├── layout/       # StaffShell, StaffSidebar, StaffBottomNav, ItemMenu, navItems.js
+│   ├── layout/       # StaffShell, StaffSidebar, StaffBottomNav, StaffSkeleton, ItemMenu, navItems.js
 │   ├── botoes/       # BotoesList + BotaoForm + CategoriaDropdown + ConflitoImagemModal (container EditBotoes lives in Pages/, see below)
 │   ├── utentes/      # UtenteForm + UtenteAvatar (photo or initials-in-corAvatar fallback) (containers EditUtente/NewUtente live in Pages/, see below)
 │   ├── pedidos/      # PedidosPhone, PedidosTV (view modes) + decorate.js (pedido→visual props) + usePagedRotation + useViewportMode
+│   │                 #   + HistoricoFiltros / HistoricoTabela (registo de pedidos; container HistoricoPedidos lives in Pages/)
 │   ├── tabela/       # See "Table editor structure" below — split into components + gesture hooks
 │   ├── Modal.jsx, SearchInput.jsx, FeedbackToast.jsx   # Shared UI primitives
 │   ├── RequireStaff.jsx       # Gate: blocks staff routes if staffUnlocked=false
@@ -117,15 +133,23 @@ Client/src/
 │   ├── StaffHome.jsx          # Patient list management
 │   ├── EditUtente.jsx, NewUtente.jsx  # Utente form containers (state/logic; render Components/utentes/UtenteForm)
 │   ├── EditBotoes.jsx         # Botão editor container (state/logic; renders Components/botoes/BotoesList or BotaoForm)
-│   ├── PedidosPendentes.jsx   # Monitor view (large screen format)
+│   ├── PedidosPendentes.jsx   # Monitor view (large screen format) — pending only
+│   ├── HistoricoPedidos.jsx   # Request log: full history, server-side filters/sort/paging (/staff/historico)
 │   ├── TabuleiroComunicacao.jsx  # Patient board (the "cage"; exit via PIN modal)
 │   ├── GerirTabela.jsx, GerirTemplate.jsx  # Table/template editors (both use useTabelaConfigs)
 │   ├── TabelasView.jsx, ChangePassword.jsx
 ├── ContextProvider.jsx        # Composes the state/ hooks + cross-cutting orchestration (socket, staff-read gating, per-utente refetch). Single Context.
 ├── App.jsx                    # Router + protected routes via RequireStaff
-├── main.jsx
-└── index.css                  # Global styles + responsive utilities
+├── main.jsx                   # Entry point; the CSS import order here is load-bearing (see below)
+├── fonts.css                  # @font-face declarations
+├── index.css                  # Global styles + responsive utilities (also holds a legacy colour palette — IMPROVEMENTS_CHECKLIST.md item 14)
+└── tailwind.css               # The three @tailwind directives (real PostCSS build, not the CDN)
 ```
+
+**CSS load order is deliberate** — `main.jsx` imports Bootstrap → `fonts.css` → `index.css` →
+`tailwind.css`, and Tailwind **must stay last**: that reproduces the ordering the old
+`cdn.tailwindcss.com` script had (injected at the end of `<head>`), so Tailwind utilities keep
+winning specificity ties against Bootstrap. A new global stylesheet goes *before* `tailwind.css`.
 
 **Table editor structure** (`Components/tabela/`) — the editor was one 1138-line file; it is now:
 - **Components**: `TabelaEditor` (orchestrator, ~340 lines), `EditorTopBar`, `BibliotecaBotoes`,
@@ -145,7 +169,7 @@ Server/
 │   ├── config.js         # sequelize-cli dialect config, reads DB_* from .env (dialect: 'mariadb')
 │   ├── database.js       # Sequelize instance built from config.js, used by models/index.js
 │   ├── constants.js      # PEDIDO_STATES + DEVICES whitelist (shared by controllers)
-│   └── auth.js           # COOKIE_SECRET, MIN_PASSWORD_DIGITS
+│   └── auth.js           # COOKIE_SECRET, MIN/MAX_PASSWORD_DIGITS (6–20), BCRYPT_COST (12)
 ├── .env                  # DB_NAME/DB_USER/DB_PASS/DB_HOST/DB_PORT — gitignored, copy from .env.example
 ├── models/
 │   ├── Botao.js          # Button/quick-request (imagem: allowNull)
@@ -165,7 +189,10 @@ Server/
 │   ├── auth.js           # requireStaff (async, validates StaffSession, fail-closed, sets req.staffSessionId) + identifyStaff/identifyUtente (non-blocking, set req.isStaff/req.utenteId) + requireUtente (board session)
 │   ├── errorHandler.js   # Central error handler (LAST middleware) — see "Error handling" below
 │   ├── uploads.js        # Multer configs (botão icons / utente photos) + shared imageFileFilter + isPersonalUtentePhoto
+│   ├── validate.js       # Generic validate(schema) — zod; strips unknown body fields, generic 400
 │   └── rateLimiter.js    # staffAuthLimiter — 5 failed attempts/10min/IP on /auth/staff/{login,setup,change}
+├── validation/
+│   └── schemas.js        # zod schema per route (incl. tabelaConfigSchema, .passthrough() on unknown keys)
 ├── Util/
 │   ├── sessions.js       # criarSessao/validarSessao/revogarSessao — StaffSession helpers (hashes token, lazy expiry cleanup)
 │   ├── utenteSessions.js # criarSessaoUtente/validarSessaoUtente/revogar… — UtenteSession helpers (board sessions)
@@ -243,6 +270,7 @@ utente from that session (never from the URL). See "Two Authentication Paths" be
 
 ### Pedidos (Requests)
 - `GET /pedidos` → all requests → **[requireStaff]**
+- `GET /pedidos/historico?de=&ate=&utenteId=&botaoId=&categoria=&estado=&emergencia=&q=&ordenar=&direcao=&limite=&offset=` → the staff **request log** (`/staff/historico`): every pedido, filtered/sorted/paged **in SQL** → **[requireStaff]**. Returns `{ total, limite, offset, resumo, pedidos }`, where `resumo` counts the whole filtered set (per estado + emergencies), not just the page. `limite` caps at 200 (default 50); `de`/`ate` are `YYYY-MM-DD` **days**, widened to the server's local midnight→23:59:59.999 (never `new Date("YYYY-MM-DD")`, which is UTC and shifts the range an hour in Portuguese summer time). Registered **before** `/pedidos/:id` in `route.js` — otherwise `:id` swallows `historico`. Query params are validated by `historicoPedidosQuerySchema` parsed **inside the controller**, not by `validate()`: that middleware reassigns `req.body`, and in Express 5 `req.query` is a getter with no setter.
 - `GET /pedidos/ativos/hora` → active by time → **[requireStaff]**
 - `GET /pedidos/ativos/emergencia` → SOS emergencies → **[requireStaff]**
 - `GET /pedidos/:id` → single request → **[requireStaff]**
@@ -278,8 +306,8 @@ utente from that session (never from the URL). See "Two Authentication Paths" be
 - **Shared password** (device-level, not per-user) — matches kiosk workflow; no per-person accounts needed.
 - **Real server-side sessions, not a stateless signed value** — the cookie carries a random 32-byte token; only its SHA-256 hash lives in `StaffSession`. This replaced an earlier design where the signed cookie just held the literal string `"ok"` (unrevocable, and a leaked `COOKIE_SECRET` could forge a valid cookie forever). See the 2026-07 entries in `DEVELOPMENT_LOG.md` for the full rationale.
 - **SHA-256 for the token, not bcrypt** — the token is already high-entropy (256 bits) random data, not a low-entropy password; a fast hash is correct here and bcrypt would just add latency per request.
-- **Bcryptjs** (not native bcrypt) — cross-platform JS; avoids build issues on Windows. (Still used for the PIN itself, cost factor 10.)
-- **Rate limiting on `/auth/staff/{login,setup,change}`** (`rateLimiter.js`) — mitigates brute-force of the 4-digit PIN; counts only failed attempts so normal use isn't penalized.
+- **Bcryptjs** (not native bcrypt) — cross-platform JS; avoids build issues on Windows. Used for the PIN itself at `BCRYPT_COST = 12` (`config/auth.js`; existing cost-10 hashes still validate, and are re-hashed at 12 on the next `setup`/`change`).
+- **Rate limiting on `/auth/staff/{login,setup,change}`** (`rateLimiter.js`) — mitigates brute-force of the PIN (6–20 digits, `MIN_PASSWORD_DIGITS`/`MAX_PASSWORD_DIGITS`); counts only failed attempts so normal use isn't penalized.
 - **Soft auth in frontend** (RequireStaff gate) vs **hard auth in backend** (`requireStaff` middleware, now async, validates against `StaffSession` on every request, fail-closed on error).
 
 ### 2. Image Management
@@ -326,7 +354,15 @@ whitelist in `tabelaController.js`). Rows are implicit — derived from `cells`/
   this existed). See `Client/src/Components/tabela/gridSpans.js`.
 - **Auto-push on collision** — placing/resizing a button at a target position pushes any
   colliding buttons to the next free cell (row-major scan; grid grows if needed). Deterministic
-  by position order, not drag order.
+  by position order, not drag order. `colocarComEmpurrao` **reserves the target footprint before
+  relocating the collided buttons** — without that reservation a pushed button lands inside the
+  target's own cells and is then overwritten by the final placement (the bug fixed 2026-07-28;
+  its regression tests are in `gridSpans.test.js`).
+- **Moving an already-placed button onto exactly one other swaps them** (`trocarComOrigem`) instead
+  of pushing the collided one to the grid's first free cell (which read as it "jumping" somewhere
+  unrelated). Wired only into the two "move an existing slot" call sites (`useDragPlacement.js`,
+  `TabelaEditor.jsx: aoClicarCelula`); library drops keep plain push (no origin to swap back to)
+  and so does resize (target and self-anchor can coincide, where a swap means nothing).
 - **Category coloring is opt-in, staff-overridable** — `constants.js` has default pastel colors
   per category; staff can override via `config.coresCategoria`. Precedence: staff override >
   default pastel > no color. Adjacent same-category cells visually "merge" (shared corners square
@@ -413,27 +449,40 @@ whitelist in `tabelaController.js`). Rows are implicit — derived from `cells`/
 
 | Task | Command |
 |------|---------|
-| Start Server (dev) | `cd Server && node main.js` |
+| Start Server (dev) | `cd Server && node main.js` (or `npm run dev` for nodemon auto-restart) |
 | Start Client (dev) | `cd Client && npm run dev` |
 | Build Client | `cd Client && npm run build` |
 | Reset staff password | Delete the single row in `StaffAuth` (e.g. `mysql -u inovlar_app -p inovlar_dev -e "DELETE FROM StaffAuth;"`), then restart the server |
-| Run migrations | `cd Server && npx sequelize-cli db:migrate` |
-| Seed test data | `cd Server && npx sequelize-cli db:seed:all` (idempotent since 2026-07-27 — `ignoreDuplicates: true`, safe to re-run, even self-heals a single deleted default botão) |
+| Run migrations | `cd Server && npm run migrate` (= `npx sequelize-cli db:migrate`) |
+| Undo the last migration | `cd Server && npx sequelize-cli db:migrate:undo` |
+| Seed test data | `cd Server && npm run seed` (idempotent since 2026-07-27 — `ignoreDuplicates: true`, safe to re-run, even self-heals a single deleted default botão) |
 | Full local dev setup (Windows) | `./install.ps1` from repo root |
 | Lint Client | `cd Client && npm run lint` (0 errors; 4 known warnings — see below) |
 | Test Client | `cd Client && npm test` (Vitest — grid geometry + category-colour logic) |
-| Test Server | `cd Server && npm test` (Vitest — zod schemas, auth/validate middleware, board ownership, upload security, audit trail) |
+| Test Server | `cd Server && npm test` (Vitest — zod schemas, auth/validate middleware, board ownership, request-log filters, upload security, audit trail) |
+| **Run a single test file** | from that package's dir: `npx vitest run src/Components/tabela/gridSpans.test.js` (Client) / `npx vitest run tests/schemas.test.mjs` (Server) |
+| **Run a single test by name** | `npx vitest run -t "<substring of the it()/describe() title>"` |
+| Watch mode | `cd Client && npm run test:watch` (Server: `npx vitest`) |
+| Type-check the `@ts-check` files | `cd Client && npx tsc -p jsconfig.json --noEmit` (only files carrying the `// @ts-check` pragma — see Code Conventions) |
 
 A **first** automated test suite exists (added 2026-07-23, `DEVELOPMENT_LOG.md`) — both packages use
 **Vitest** (`npm test` = `vitest run`). It is a targeted safety net, not full coverage: the pure logic
 of the table editor's grid (`Components/tabela/gridSpans` + `constants`) on the Client, and the auth/
 validation **contract** on the Server (zod schemas, `validate`/`requireStaff`/`requireUtente` middleware,
 and the board's per-utente ownership 403). Server tests never touch the DB — they mock the session layer,
-`vi.spyOn` the shared `Pedido` model, or exercise the DB-free fail-closed paths. Note the Server has a
-CJS/ESM split: most tests are `.test.mjs`, but any test that must share the CommonJS module registry with
-the source (e.g. spying a model the controller `require`s) is written as `.test.cjs` with Vitest globals
-(`vitest.config.mjs`). Everything the preview can't exercise still needs driving the running app — that is
-how the table-editor gesture rewrite was checked.
+`vi.spyOn` the shared `Pedido` model, or exercise the DB-free fail-closed paths; the middleware ones drive
+a throwaway Express app over **supertest**, so they assert real status codes, not handler return values.
+Note the Server has a CJS/ESM split: most tests are `.test.mjs`, but any test that must share the CommonJS
+module registry with the source (e.g. spying a model the controller `require`s) is written as `.test.cjs`
+with Vitest globals (`vitest.config.mjs`). Everything the preview can't exercise still needs driving the
+running app — that is how the table-editor gesture rewrite was checked.
+
+**Writing a *Client* test that renders a component needs setup work first.** The Client has **no**
+Vitest config at all — `vite.config.js` has no `test` block, and neither `jsdom` nor
+`@testing-library/*` is installed — so tests run in the bare Node environment and only pure logic is
+testable today (which is why the two existing files are `gridSpans`/`constants`, not components).
+Rendering anything means adding `jsdom` + Testing Library and a `test: { environment: "jsdom" }`
+block before the first component test, not after it fails mysteriously.
 
 ---
 
@@ -442,11 +491,19 @@ how the table-editor gesture rewrite was checked.
 - **ESLint warnings (4, all benign)** — `npm run lint` passes with 0 errors. Remaining: `react-refresh/only-export-components` on `ContextProvider.jsx` and `UtenteAvatar.jsx` (each exports a non-component alongside a component; clearing them means moving `Context`/`ICONE_PESSOA` to their own files and updating ~14 imports), and `react-hooks/exhaustive-deps` on `PedidosTV.jsx` (`fila`) and `PedidosPendentes.jsx` (`handleVoltar`).
 - **Safe-area inset for iPhone** — bottom nav could include `env(safe-area-inset-bottom)` in height for cleaner spacing near home indicator.
 - **Category communicated by color alone** (`IMPROVEMENTS_CHECKLIST.md` item 15, open) — the button-grid category merge/identity in the table editor relies 100% on color, which is a real accessibility gap for colorblind/low-vision users (the target population). Needs a redundant signal (label/icon), not just color. `tailwind.config.js` already has `darkMode: "class"` wired but never turned on in the UI — a high-contrast mode would have real value here. Dark mode itself was implemented once (2026-07-27) and then reverted at the user's request — don't re-add it without checking first.
-- **Production HTTPS** — **Fixed 2026-07-24 (opt-in):** `install.sh` can now set up a Caddy reverse proxy with a self-signed cert (`tls internal`, no domain needed) in front of Express — `sudo ENABLE_TLS=true bash install.sh`. It wires `COOKIE_SECURE=true`, restricts Express to `HOST=127.0.0.1` (only reachable through Caddy, never directly), and sets `app.set('trust proxy', 'loopback')` in `main.js` so `staffAuthLimiter`'s per-IP rate limiting keeps working behind the proxy (without this, every request would appear to come from `127.0.0.1` and one attacker would exhaust the shared limit for all staff). Default behavior (`ENABLE_TLS` unset) is **unchanged** — plain HTTP, exactly as before — so re-running `install.sh` on an existing deployment never silently changes its scheme; once enabled, it stays enabled on later runs even without repeating the flag (read back from `.env`, same idempotency pattern as `DB_PASS`/`COOKIE_SECRET`). See `Caddyfile` and `DEVELOPMENT_LOG.md` 2026-07-24. **Not yet deployed to a real Pi** — verified locally (server starts and responds on `HOST=127.0.0.1`, rate limiter unaffected by `trust proxy`) but the Caddyfile itself and the apt-based Caddy install haven't run against real hardware.
-- **Test coverage is thin (but no longer zero)** — a first Vitest suite landed 2026-07-23 (see Common Commands + `DEVELOPMENT_LOG.md`): grid geometry + category-colour logic on the Client, auth/validation contract + board ownership on the Server. It does **not** yet cover the table editor's drag/resize *gestures* (pixel-geometry, still verified by driving the app) or any full HTTP integration against a real DB. Writing the geometry tests surfaced a **real bug** in `colocarComEmpurrao` (see below).
-- **Audit trail (added 2026-07-27, `IMPROVEMENTS_CHECKLIST.md` item 4)** — `AuditLog` (migrated table) + `Util/auditoria.js: registarAuditoria(req, action, detalhes)`, called explicitly from controllers (same style as `notificarAlteracaoBD()` — no generic logging middleware). `requireStaff` now sets `req.staffSessionId` (the session/device, never a named person — the PIN is shared, there are no staff accounts) for this purpose. **Never blocks the response**: a failed audit write is caught and only logged to the console, so a flaky insert can't turn a successful mutation into a 500 for staff. **Currently wired into:** `utente.create/update/delete/rotateToken`, `pedido.update/delete` (staff resolving/deleting any pedido — the literal example that motivated this item), `auth.changePassword`. Read via `GET /auditoria?limit=`. **Deliberately not wired into:** botão CRUD, table/template saves, image upload/delete — lower-stakes content-management operations, not personal-data mutations; a personal photo change is still captured indirectly since the upload's resulting path is only persisted through `utente.update`. No client UI yet (query via `GET /auditoria` or the DB directly) — a staff-facing audit log page is a natural follow-up if this scope needs to grow.
-- **BUG — `colocarComEmpurrao` losing/overlapping buttons on push, FIXED 2026-07-28** (found 2026-07-23, also reported live by the user via drag-move, not just resize): it didn't reserve the target footprint in `ocup` before relocating collided buttons, so a pushed button could land in the target's cells and then be overwritten by the final placement. Reachable via the resize gesture over a neighbour (`useGridResize.js`) *and* via dragging/tapping an already-placed button onto another one (`useDragPlacement.js`, `TabelaEditor.jsx: aoClicarCelula`). Fix: the target footprint is now reserved (`reservado` set in `colocarComEmpurrao`) for the duration of the push-relocation scan, so nothing can land there before the final placement. The two `it.fails` (xfail) tests in `gridSpans.test.js` are now plain passing tests. **Also added per user request (same fix):** a `trocarComOrigem` option — when moving an already-placed button (not a fresh library drag) onto exactly one other button, the two swap positions instead of the collided one being pushed to the grid's first free cell (which read as the button "jumping" to an unrelated spot). Only wired into the two "move an existing slot" call sites; library placement and resize keep the plain push behaviour (library drops have no "origin" to swap back to; resize's target and self-anchor can coincide, where swap doesn't apply).
-- **Known security gaps** — from a manual audit (originally tracked in a now-removed `SECURITY_CHECKLIST.md`; see the 2026-07 entries in `DEVELOPMENT_LOG.md` for fix history). All 🔴 Critical items are fixed (rate limiting on staff login, real revocable sessions replacing the old static `"ok"` cookie, `COOKIE_SECRET` fallback removed/required in production, `secure` cookie flag wired up). **Fixed 2026-07-16:** mass assignment (`Pedido`/`Botao`/`Utente` create+update now whitelist fields), `erro.message` leakage (central `errorHandler` returns generic messages), and `GET /localIP` (endpoint removed). **Fixed 2026-07-14:** the *aggregated* patient-data GETs (`/utentes`, `/pedidos`, `/pedidos/ativos/*`, `/pedidos/:id`, `/tabelas`, `/tabelas-padrao`) are now `requireStaff`, so the patient tablet no longer downloads the whole roster. **Fixed 2026-07-21 (per-utente board sessions):** the two remaining 🟠 High items are closed — `PUT /pedidos/:id` request-ownership *and* the reversible URL token. The board now authenticates with a real per-utente session (`accessToken` → `UtenteSession`); all its reads/writes go through `/board/*`, which derive the utente from the session (`requireUtente`), so per-id enumeration is gone and `PUT /board/pedidos/:id` returns 403 across utentes. The old per-id reads and `PUT /pedidos/:id` are now `requireStaff`; `POST /pedidos` was removed. **Operational:** needs the `add-access-token-to-utentes` migration on the Pi, and every tablet's bookmarked URL changes (Feistel token → `/board/<accessToken>`) — re-open each from the staff console after deploy. **Fixed 2026-07-22:** CORS no longer reflects any origin — `main.js`'s `isOrigemPermitida()` allows only same-origin (dynamic, compares `Origin` against the request's own `Host`) or, outside production, the Vite dev origin; applied to both the REST API (`cors()` options-delegate) and socket.io (`io.use()`). No separate CSRF token layer was added — `sameSite: "lax"` already blocked cross-site `fetch`/`XHR` from attaching the cookie, so the CORS fix closes the remaining gap. **Fixed 2026-07-22:** image upload validation — `middleware/uploads.js` now checks real magic bytes (PNG/JPEG/GIF signatures) after multer writes the file, deleting it on mismatch (closes the client-supplied mimetype/extension spoofing gap), and both upload endpoints have `limits: { fileSize: 10MB, files: 1 }`. **Fixed 2026-07-22:** request-body schema validation — `middleware/validate.js` (generic `validate(schema)`, zod) + `validation/schemas.js`, wired into `/board/session`, `/board/pedidos`, `/board/pedidos/:id` (the only fully open, tablet-facing mutations); rejects malformed input with a generic 400 before it reaches the controller/ORM, and strips unrecognised body fields (reinforces, doesn't replace, the existing per-field whitelisting). **Fixed 2026-07-23:** schema validation extended to the `requireStaff`-gated mutation routes — `/utentes/create`, `/utentes/:id` (PUT), `/botoes`, `/botoes/:id` (PUT), `/utentes/:id/tabela/:dispositivo` (PUT), `/tabelas-padrao` (POST/PUT), `/tabelas-padrao/:id/aplicar`, `/pedidos/:id` (PUT). The table-layout schema (`tabelaConfigSchema`) validates `cols`/`cells`/`spans`/`coresCategoria` structurally but stays `.passthrough()` on unknown keys, since that JSON blob is deliberately backward-compatible (see "Variable-Size Buttons" above) — closes the gap where a malformed `config`/`configs` saved fine server-side but only broke later, client-side, when a patient's board tried to render it. **Fixed 2026-07-23:** botão image upload name-conflict handling — `middleware/uploads.js` now checks the real filesystem state at write time; a same-named upload without an explicit `onConflict=replace`/`rename` gets a 409 instead of a silent overwrite (previously the only conflict check lived client-side, against a possibly-stale in-memory file list, so a race between two staff sessions — or a direct API call bypassing the UI — could silently replace a shared icon in use by other botões). The client (`EditBotoes.jsx`) now shows the conflict modal reactively, only on a 409 from the server, instead of predicting it from that stale list. No item 🟡 Medium remains open. **Fixed 2026-07-23:** `/auth/staff/setup` no longer allows two truly concurrent requests to both create a `StaffAuth` row — the check-then-create runs inside a SERIALIZABLE transaction, retried up to 3 times on a MariaDB deadlock (`ER_LOCK_DEADLOCK`/`ER_LOCK_WAIT_TIMEOUT`), confirmed with a real 5-concurrent-request test (1× 200, 4× 409, exactly one row). This closes only the millisecond-scale race — the more realistic window (staff resets the PIN by deleting the row, and another device on the same network reaches `/setup` first) is inherent to a kiosk with no pre-shared setup secret and stays an accepted operational limitation: reconfigure the PIN immediately after a reset. **Fixed 2026-07-23:** staff PIN minimum raised from 4 to 6 digits (`config/auth.js: MIN_PASSWORD_DIGITS`) — 4 digits was only 10,000 combinations, brute-forceable in ~14 days even against the existing rate limiter from a single IP. A new `MAX_PASSWORD_DIGITS = 20` replaces the old client-only 8-digit cap (no practical ceiling, since the PIN can also be typed on the device's physical keyboard, not just the on-screen keypad). The new range only applies to *new* PINs (`setup`, and the `newPassword` in `change`) — the `currentPassword` step in `change` deliberately has no length check, since it may have been set under the old 4-digit-minimum rule and is validated by `bcrypt.compare` regardless of length. **Fixed 2026-07-23:** bcrypt cost factor raised from 10 to 12 (`config/auth.js: BCRYPT_COST`) — protects against offline cracking if the `StaffAuth` table were ever read directly (rate limiting only covers the online path). No migration: the cost is embedded in each bcrypt hash string, so existing cost-10 hashes keep validating via `bcrypt.compare` and only get upgraded to 12 on the next `setup`/`change`. **Fixed 2026-07-23:** `helmet` wired into `main.js` (mounted first in the middleware chain) — `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Strict-Transport-Security`, and a `Content-Security-Policy` on the default directives plus two explicit exceptions. (1) `script-src` allows `https://cdn.tailwindcss.com` and `'unsafe-inline'`, both required by `index.html`'s runtime Tailwind CDN script + inline theme config (that CDN usage is itself a separate, pre-existing tooling issue, not fixed here) — the `'unsafe-inline'` part is a known, documented trade-off: it still blocks scripts from unlisted origins but no longer blocks an injected inline `<script>`; closing that gap for real means moving off the Tailwind CDN to a real build. **Superseded 2026-07-23 (`IMPROVEMENTS_CHECKLIST.md` item 1):** the Tailwind CDN + inline config were removed in favour of a real PostCSS/Vite build, so `main.js`'s CSP now uses helmet's default `script-src` (`'self'` only — no `'unsafe-inline'`, no CDN), closing the XSS gap. (2) `crossOriginResourcePolicy` set to `"cross-origin"` instead of helmet's default `"same-origin"` — the default broke every image load in dev (`ERR_BLOCKED_BY_RESPONSE.NotSameOrigin`, caught only after a live-browser report, since `curl`-based verification doesn't reproduce browser-enforced CORP) because the Vite dev server (`:5173`) and this API (`:3000`) are different origins; production is unaffected either way (same-origin). The `accessToken` is stored in plaintext (acceptable — it guards the same data the DB already holds, and staff must be able to re-read the board URL). No items remain open from the original security checklist. **Fixed 2026-07-27 (`IMPROVEMENTS_CHECKLIST.md` item 3):** `multer` upgraded `1.4.5-lts.2` → `2.2.0` — the locked 1.x version was within the affected range of several HIGH-severity (CVSS 7.5–8.7) DoS CVEs (unhandled exceptions and memory/stream leaks from malformed or aborted multipart uploads — CVE-2025-47935, CVE-2025-47944, CVE-2025-7338, plus later 2.x-line fixes up through 2.2.0), none flagged by `npm audit` (its advisory DB didn't have these mapped for this dependency tree) — found via the package's own npm deprecation notice, then confirmed against the official GHSA/NVD records. No production code changes needed: the only documented breaking change across the whole 1.x→2.x line is the Node engine minimum (10.16.0, well below this project's own `>=20` requirement). Verified with real HTTP multipart requests (native `fetch`/`FormData`) against the actual `uploadBotaoImage`/`verifyImageSignature`/`errorHandler` wiring — valid upload, `fileFilter` rejection, magic-byte rejection (+ file deleted), oversized-file `MulterError`, and the name-conflict 409/rename/replace flow all behave identically to before; a permanent regression test (`Server/tests/uploads.test.mjs`) now covers the security-relevant cases. Incidentally reproduced the "orphaned partial files on disk from aborted uploads" failure mode (CVE-2026-5038) against the *old* 1.x version while probing for a crash.
+- **Production TLS is opt-in and unproven on hardware** — `sudo ENABLE_TLS=true bash install.sh` puts a Caddy reverse proxy with a self-signed cert (`tls internal`, no domain needed) in front of Express: it sets `COOKIE_SECURE=true`, pins Express to `HOST=127.0.0.1` (reachable only through Caddy), and `main.js` sets `app.set('trust proxy', 'loopback')` so `staffAuthLimiter` still rate-limits per real client IP instead of lumping every request under `127.0.0.1`. Default (`ENABLE_TLS` unset) stays plain HTTP, and once enabled it stays enabled on later runs (read back from `.env`, same idempotency pattern as `DB_PASS`/`COOKIE_SECRET`). **Verified locally only** — the `Caddyfile` and the apt-based Caddy install have never run on real hardware. Any proxy/hostname change also needs the Client rebuilt with `VITE_API_URL` (see Production build).
+- **Test coverage is thin** — the Vitest suite (see Common Commands) covers grid geometry + category-colour logic on the Client, and the auth/validation contract, board ownership and the request-log filter translation (`getHistorico`: query → `where`/`order`, day boundaries, INNER-JOIN-on-botão) on the Server. Green as of 2026-08-13 (Client 33/33 in 2 files, Server 54/54 in 7 files; `npm run lint` 0 errors / 4 known warnings and `npx tsc -p jsconfig.json --noEmit` clean on the same date). It does **not** cover the table editor's drag/resize *gestures* (pixel-geometry — still verified by driving the running app) or any HTTP integration against a real DB. Note `constants.test.js` asserts the default pastels as **literals**, on purpose — changing a colour in `COR_CATEGORIA_FUNDO` is meant to fail the test until you update it by hand (asserting against the constant itself would make the test tautological). It went stale exactly this way once, see `DEVELOPMENT_LOG.md` 2026-08-11.
+- **Audit trail has no UI** — `AuditLog` + `Util/auditoria.js: registarAuditoria(req, action, detalhes)`, called explicitly from controllers (same style as `notificarAlteracaoBD()` — no generic logging middleware). It records `req.staffSessionId`: the session/device, never a named person, because the PIN is shared. **Never blocks the response** — a failed audit write is caught and logged to the console only, so a flaky insert can't turn a successful mutation into a 500 for staff. **Wired into:** `utente.create/update/delete/rotateToken`, `pedido.update/delete`, `auth.changePassword`. **Deliberately not wired into:** botão CRUD, table/template saves, image upload/delete — content management, not personal-data mutations (a photo change is still captured indirectly, since the upload's resulting path is only persisted through `utente.update`). Read it via `GET /auditoria?limit=` or the DB directly; a staff-facing page is the natural follow-up.
+- **Security posture** — every item from the original manual audit is closed. `DEVELOPMENT_LOG.md` (2026-07-10 through 2026-07-27) carries the per-fix rationale and the CVE/GHSA references; what follows is the set of invariants that must not silently regress:
+  - Staff sessions are real, revocable server-side rows (`StaffSession`), never a self-contained signed value; `requireStaff` validates on every request and is fail-closed. `COOKIE_SECRET` is mandatory in production (`config/auth.js` exits without it).
+  - Board access is per-utente (`accessToken` → `UtenteSession`); `/board/*` derives the utente from the session, so cross-utente reads/writes return 403. No route takes a patient id from the URL without `requireStaff`.
+  - Aggregated patient data (`/utentes`, `/pedidos*`, `/tabelas*`) is `requireStaff` — the patient tablet must never download the roster.
+  - Create/update handlers whitelist fields (no mass assignment) **and** every mutation route runs a zod schema (`middleware/validate.js`) that strips unknown keys. `tabelaConfigSchema` stays `.passthrough()` on purpose — the layout blob is deliberately backward-compatible.
+  - `errorHandler` never leaks `erro.message` to the client.
+  - CORS allows same-origin only (`isOrigemPermitida()` compares `Origin` against the request's own `Host`), plus the Vite dev origin outside production — applied to **both** REST and socket.io (the socket.io half was a regression once). There is no separate CSRF token layer: `sameSite: "lax"` plus this restriction is the whole defence.
+  - Image uploads verify real magic bytes after multer writes the file (deleting on mismatch), cap at 10 MB / 1 file, and a name conflict without an explicit `onConflict=replace|rename` is a **409 from the server** — never a silent overwrite, and never a client-side prediction from a possibly-stale file list.
+  - `helmet` is mounted first in the chain. `crossOriginResourcePolicy` is `"cross-origin"` deliberately: the default `"same-origin"` breaks every image in dev, where Vite (`:5173`) and the API (`:3000`) are different origins — and `curl`-based checks don't reproduce it, only a real browser does.
+  - **Accepted trade-offs, still true:** the `accessToken` is stored in plaintext (it guards data the DB already holds, and staff must be able to re-read the board URL); and after a PIN reset (deleting the `StaffAuth` row) any device on the network can win the race to `/setup` — inherent to a kiosk with no pre-shared setup secret, so reconfigure the PIN immediately after a reset.
 
 ---
 
@@ -455,3 +512,17 @@ how the table-editor gesture rewrite was checked.
 See `DEVELOPMENT_LOG.md` for chronological decision log (authentication design, responsive mobile, image upload with cache-busting, kiosk flow, MariaDB migration, Raspberry Pi deployment, etc.). Key entries: 2026-06-09 (deployment unification), 2026-06-09 (staff auth), 2026-06-17 (image management), 2026-06-17 (responsive mobile), 2026-07-03 (MariaDB migration + Pi deployment, table-casing bug, ContextProvider refetch-on-navigation fix), 2026-07-14 (closing aggregated patient-data GETs).
 
 `README.md` / `README.pt.md` are the public-facing overview (bilingual EN/PT) — architecture diagram, features, setup, usage. The project is being prepared for open-source release alongside an academic paper; no license is chosen yet (see README's License section).
+
+`IMPROVEMENTS_CHECKLIST.md` is the 16-item audit that drove the 2026-07 refactor: 12 closed, and items
+**2** (TLS on real hardware), **9**/**11** (context split; retiring Bootstrap), **12** (language
+convention — deliberately parked) and **14**/**15** (colour consolidation; colour-blind redundancy and
+dark mode, reverted at the user's request) still open. Its "TOP 3 priorities" block at the bottom is
+**stale** — all three were done — so read the per-item status, not that summary.
+
+`paper/` (LaTeX draft of the usability study, plus its own `README.md`) is present in the working tree
+but **not committed**. Two things to know before touching it: the study is framed around a residential
+care home for **adults with cerebral palsy** — residents (PCP) *and* the health professionals who
+support them — which is narrower than the generic "nursing home" wording used throughout this file and
+the READMEs; and the folder is mirrored into Overleaf, so paper edits are normally handed over as
+find/replace instructions rather than applied to the local files. `paper/README.md` tracks per-section
+status and the `\TODO{}` draft markers.
