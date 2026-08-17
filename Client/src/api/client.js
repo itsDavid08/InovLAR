@@ -5,6 +5,18 @@ export const apiUrl =
     import.meta.env.VITE_API_URL ||
     `${window.location.protocol}//${window.location.hostname}:3000/`;
 
+// Junta uma base (ex.: `apiUrl`) com um caminho, garantindo sempre exatamente
+// uma barra entre os dois. Necessário para os `src` de imagem, que concatenam
+// `apiUrl` com caminhos já guardados com barra inicial (`/imagesBotoes/x.png`):
+// uma concatenação simples (`apiUrl + path`) produz `"//imagesBotoes/x.png"`
+// quando `apiUrl` é exatamente `"/"` (build com `VITE_API_URL=/`, ver Production
+// build no CLAUDE.md) — um URL "protocol-relative" que o browser interpreta como
+// tendo o host `imagesbotoes`, não como um caminho absoluto. `apiUrl + path`
+// simples continua correto para as chamadas de API (`path` sem barra inicial).
+export function joinUrl(base, path = "") {
+    return base.replace(/\/+$/, "") + "/" + String(path).replace(/^\/+/, "");
+}
+
 // GET simples — devolve o JSON; lança se a resposta não for 2xx (contrato igual
 // ao do `mutate`). Quem chama trata o erro (try/catch ou .catch).
 //  - `auth: true` envia o cookie de sessão (leituras só-staff: roster, agregados de pedidos,

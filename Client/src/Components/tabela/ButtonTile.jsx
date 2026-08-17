@@ -1,4 +1,5 @@
 import { TAMANHOS } from "./constants";
+import { joinUrl } from "../../api/client";
 
 const ButtonTile = ({ botao, apiUrl, size = "M", fill = false, w = 1 }) => {
     const t = TAMANHOS[size] || TAMANHOS.M;
@@ -20,7 +21,7 @@ const ButtonTile = ({ botao, apiUrl, size = "M", fill = false, w = 1 }) => {
             }
         >
             <img
-                src={apiUrl + (botao.imagem || "/imagesBotoes/default.png")}
+                src={joinUrl(apiUrl, botao.imagem || "/imagesBotoes/default.png")}
                 alt={botao.nome}
                 className={fill ? "flex-1 min-h-0 w-full object-contain" : ""}
                 style={fill ? undefined : { width: t.icon, height: t.icon, objectFit: "contain" }}

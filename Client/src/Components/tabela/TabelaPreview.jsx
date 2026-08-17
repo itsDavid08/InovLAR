@@ -1,6 +1,7 @@
 import { DISPOSITIVOS } from "./constants";
 import { getSpan } from "./gridSpans";
 import { useGridGeometry } from "./useGridGeometry";
+import { joinUrl } from "../../api/client";
 import { t } from "../../i18n";
 
 /** @typedef {import('./constants').TabelaConfig} TabelaConfig */
@@ -51,7 +52,7 @@ const TabelaPreview = ({ config, dispositivo, botaoPorId, apiUrl }) => {
                     <div key={pos} className="p-[6%]" style={{ gridColumn: `${c + 1} / span ${w}`, gridRow: `${r + 1} / span ${h}` }}>
                         {b ? (
                             <div className="w-full h-full rounded-md bg-surface-container-lowest border border-surface-variant flex items-center justify-center overflow-hidden">
-                                <img src={apiUrl + (b.imagem || "/imagesBotoes/default.png")} alt="" className="w-full h-full object-contain p-[10%]" draggable={false} />
+                                <img src={joinUrl(apiUrl, b.imagem || "/imagesBotoes/default.png")} alt="" className="w-full h-full object-contain p-[10%]" draggable={false} />
                             </div>
                         ) : (
                             <div className="w-full h-full rounded-md border border-dashed border-outline-variant/50" />

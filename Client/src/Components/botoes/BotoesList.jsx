@@ -6,6 +6,7 @@ import StaffShell from "../layout/StaffShell";
 import StaffSidebar from "../layout/StaffSidebar";
 import ItemMenu from "../layout/ItemMenu";
 import SearchInput from "../SearchInput";
+import { joinUrl } from "../../api/client";
 import { t } from "../../i18n";
 
 const BotoesList = ({
@@ -70,7 +71,7 @@ const BotoesList = ({
                                 boundaryRef={openCardRef}
                                 title={botao.nome}
                                 subtitle={botao.categoria || t.common.noCategory}
-                                thumbnail={<img src={apiUrl + (botao.imagem || '/imagesBotoes/default.png')} alt="" className="w-full h-full object-cover" />}
+                                thumbnail={<img src={joinUrl(apiUrl, botao.imagem || '/imagesBotoes/default.png')} alt="" className="w-full h-full object-cover" />}
                                 onEdit={() => onEdit(botao)}
                                 onDelete={() => onDelete(botao)}
                             />
@@ -78,7 +79,7 @@ const BotoesList = ({
                         <div className="flex items-center flex-col text-center mt-2 sm:mt-4">
                             <div className="w-16 h-16 sm:w-20 sm:h-20 lg:w-24 lg:h-24 mb-2 rounded-2xl bg-secondary-container text-on-secondary-container flex items-center justify-center overflow-hidden border-2 border-surface-container shadow-sm transform group-hover:scale-105 transition-transform duration-300">
                                 <img
-                                    src={apiUrl + (botao.imagem || '/imagesBotoes/default.png')}
+                                    src={joinUrl(apiUrl, botao.imagem || '/imagesBotoes/default.png')}
                                     alt={botao.nome}
                                     className="w-full h-full object-cover"
                                 />

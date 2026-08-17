@@ -2,7 +2,7 @@
 // Ícones são imagens reais (botao.imagem), não emojis. Cores seguem o tempo de
 // espera; a emergência tem sempre prioridade. Aproveita a ordem do servidor
 // (emergencia DESC, hora ASC) — não reordena.
-import { apiUrl } from "../../api/client";
+import { apiUrl, joinUrl } from "../../api/client";
 
 export function decorate(pedido, now) {
     const m = Math.max(0, Math.round((now - new Date(pedido.hora).getTime()) / 60000));
@@ -17,7 +17,7 @@ export function decorate(pedido, now) {
     return {
         id: pedido.id,
         emergencia: !!pedido.emergencia,
-        img: apiUrl + (pedido.botao?.imagem || "/imagesBotoes/default.png"),
+        img: joinUrl(apiUrl, pedido.botao?.imagem || "/imagesBotoes/default.png"),
         label: pedido.botao?.mensagem || "",
         nome: pedido.utente?.nome || "",
         quarto: pedido.utente?.quarto || "",

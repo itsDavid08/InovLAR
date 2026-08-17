@@ -5,6 +5,7 @@
 // baixo; em desktop (lg:flex-row) form à esquerda, preview à direita.
 import { useRef } from "react";
 import UtenteAvatar, { ICONE_PESSOA } from "./UtenteAvatar";
+import { joinUrl } from "../../api/client";
 import { t } from "../../i18n";
 
 // Paleta de cores de fundo do avatar (recolore iniciais e ícone). Pastéis legíveis.
@@ -118,7 +119,7 @@ const UtenteForm = ({
                                 <div className="flex flex-col items-center gap-1 w-16">
                                     <div className="relative group/foto">
                                         <img
-                                            src={`${apiUrl}${formData.imagem}`}
+                                            src={joinUrl(apiUrl, formData.imagem)}
                                             alt={t.utentes.personalPhoto}
                                             className="w-14 h-14 rounded-full object-cover ring-4 ring-primary scale-95"
                                         />

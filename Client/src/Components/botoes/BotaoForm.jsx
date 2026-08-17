@@ -2,6 +2,7 @@
 // Componente presentacional — todo o estado e a lógica vivem em EditBotoes.
 import { useRef } from "react";
 import CategoriaDropdown from "./CategoriaDropdown";
+import { joinUrl } from "../../api/client";
 import { t } from "../../i18n";
 
 const BotaoForm = ({
@@ -23,7 +24,7 @@ const BotaoForm = ({
     const uploadInputRef = useRef(null);
     // Acrescenta ?v=timestamp às imagens substituídas nesta sessão, para o browser
     // não mostrar a versão em cache do mesmo URL (ver DEVELOPMENT_LOG, cache-busting).
-    const imgSrc = (img) => `${apiUrl}${img}${versoes?.get(img) ? `?v=${versoes.get(img)}` : ''}`;
+    const imgSrc = (img) => `${joinUrl(apiUrl, img)}${versoes?.get(img) ? `?v=${versoes.get(img)}` : ''}`;
     return (
         <div className="bg-background text-on-background min-h-screen flex flex-col font-body-md">
             <header className="bg-surface dark:bg-inverse-surface top-0 sticky bg-surface-container-low dark:bg-surface-container shadow-sm z-30 border-b border-surface-variant">

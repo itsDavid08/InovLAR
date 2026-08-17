@@ -1,4 +1,5 @@
 import UtenteAvatar from "../utentes/UtenteAvatar";
+import { joinUrl } from "../../api/client";
 import { PEDIDO_STATES } from "../../constants";
 import { t } from "../../i18n";
 
@@ -59,7 +60,7 @@ const ColunaOrdenavel = ({ chave, label, ordenar, direcao, onOrdenar, className 
 };
 
 const HistoricoTabela = ({ pedidos, ordenar, direcao, onOrdenar, apiUrl }) => {
-    const imagemBotao = (p) => apiUrl + (p.botao?.imagem || "/imagesBotoes/default.png");
+    const imagemBotao = (p) => joinUrl(apiUrl, p.botao?.imagem || "/imagesBotoes/default.png");
 
     return (
         // Uma tabela só, em todos os tamanhos de ecrã (era uma tabela + uma lista

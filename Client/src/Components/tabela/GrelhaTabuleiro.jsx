@@ -1,6 +1,7 @@
 import { isSOS, resolverCorCategoria, raioFusao } from "./constants";
 import { getSpan } from "./gridSpans";
 import { useGridGeometry } from "./useGridGeometry";
+import { joinUrl } from "../../api/client";
 
 /** @typedef {import('./constants').TabelaConfig} TabelaConfig */
 
@@ -78,7 +79,7 @@ const GrelhaTabuleiro = ({ config, dispositivo, botaoPorId, apiUrl, onButtonClic
                             style={{ minHeight: 0, padding: "2%" }}
                         >
                             <img
-                                src={apiUrl + (b.imagem || "/imagesBotoes/default.png")}
+                                src={joinUrl(apiUrl, b.imagem || "/imagesBotoes/default.png")}
                                 alt={b.nome}
                                 style={{
                                     flex: "1 1 0",

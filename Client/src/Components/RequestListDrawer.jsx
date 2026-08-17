@@ -1,5 +1,6 @@
 import { useEffect, useState, useContext } from "react";
 import { Context } from "../ContextProvider";
+import { joinUrl } from "../api/client";
 import { PEDIDO_STATES } from "../constants";
 import { t } from "../i18n";
 
@@ -65,7 +66,7 @@ const RequestListDrawer = ({ visible, onClose }) => {
                         {pedidosUtilizador.map((item) => (
                             <div key={item.id} className="request-item">
                                 <img
-                                    src={apiUrl+(item.botao.imagem || '/imagesBotoes/default.png')}
+                                    src={joinUrl(apiUrl, item.botao.imagem || '/imagesBotoes/default.png')}
                                     alt={item.botao.nome}
                                     className="request-icon"
                                 />

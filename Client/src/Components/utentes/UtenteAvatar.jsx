@@ -5,6 +5,8 @@
 // A cor de fundo (`corAvatar`) recolore tanto o ícone como as iniciais.
 // O tamanho vem do `className` (largura/altura + text-size, que o ícone e as
 // iniciais herdam via font-size).
+import { joinUrl } from "../../api/client";
+
 export const ICONE_PESSOA = 'icone';
 
 export const iniciaisDe = (nome) =>
@@ -22,7 +24,7 @@ const UtenteAvatar = ({ imagem, corAvatar, nome, apiUrl = "", className = "" }) 
     if (ehFoto) {
         return (
             <img
-                src={`${apiUrl}${imagem}`}
+                src={joinUrl(apiUrl, imagem)}
                 alt={nome || "Foto"}
                 className={`object-cover rounded-full ${className}`}
             />
