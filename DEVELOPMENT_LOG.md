@@ -5368,3 +5368,34 @@ Fechado. `CLAUDE.md` atualizado (endpoint, árvore de ficheiros, contagem de tes
 Possíveis seguimentos, não feitos: exportar o registo filtrado para CSV, e ligar a página ao
 evento `bd_alterado` do socket (hoje atualiza-se com o botão "Atualizar" — num registo histórico
 não pareceu desejável a lista mexer-se sozinha enquanto se lê).
+
+## 2026-08-17 — Registo de pedidos: tabela também em telemóvel (fim dos cartões)
+
+### Contexto
+A pedido do utilizador. O `HistoricoTabela` tinha dois layouts — tabela em `md+` e uma lista de
+cartões em telemóvel (o padrão que o `PedidosPhone`/`PedidosTV` usa no monitor dos pendentes). Para
+um *registo*, porém, o utilizador quer as mesmas colunas em todo o lado: a leitura é de comparação
+(quem, quando, o quê, estado), e o cartão obriga a saltar de linha em linha para ver o mesmo campo.
+
+### Decisão
+Uma tabela só, em todos os tamanhos. Os ~35 linhas do bloco de cartões desapareceram (menos
+duplicação: o mesmo conteúdo estava escrito duas vezes, e uma coluna nova tinha de ser acrescentada
+nos dois sítios).
+
+Em ecrã estreito a tabela **não encolhe** — mantém `min-w-[46rem]` e desliza na horizontal dentro do
+seu contentor (`overflow-x-auto`, que já lá estava), nunca a página. A alternativa seria cortar
+texto com `truncate` para caber nos 375 px, mas isso esconde informação num registo — deslizar
+preserva-a. Espaçamento das células passou a `px-3 py-2.5 md:px-4 md:py-3` (constante `CELULA`,
+partilhada pelo cabeçalho e pelas linhas) para caber mais tabela antes de ser preciso deslizar.
+
+### Teste
+A 375×812: tabela presente com as 6 colunas, zero cartões, 34 linhas, a tabela (1002 px) desliza
+dentro do contentor de 326 px e `document.documentElement` **não** desliza na horizontal (a página
+em si fica quieta). Client 33/33, lint 0 erros / 4 avisos conhecidos, `tsc` limpo.
+
+Nota: a largura natural da tabela (1002 px) já era a de antes desta alteração — em ecrãs entre
+~930 px e ~1000 px de área de conteúdo a tabela desliza um pouco também no desktop. Não é regressão
+desta mudança e fica assim de propósito, pela mesma razão (não cortar texto).
+
+### Estado
+Fechado.

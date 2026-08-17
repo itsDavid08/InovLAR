@@ -11,6 +11,10 @@ import { t } from "../../i18n";
 const FORMATO = new Intl.DateTimeFormat("pt-PT", { dateStyle: "short", timeStyle: "short" });
 const quando = (hora) => FORMATO.format(new Date(hora));
 
+// Espaçamento das células, um pouco mais apertado em telemóvel para caber mais
+// tabela no ecrã antes de ser preciso deslizar para o lado.
+const CELULA = "px-3 py-2.5 md:px-4 md:py-3";
+
 const COR_ESTADO = {
     [PEDIDO_STATES.PENDING]: "bg-amber-100 text-amber-900",
     [PEDIDO_STATES.COMPLETED]: "bg-emerald-100 text-emerald-900",
@@ -35,7 +39,7 @@ const EmergenciaBadge = () => (
 const ColunaOrdenavel = ({ chave, label, ordenar, direcao, onOrdenar, className = "" }) => {
     const ativa = ordenar === chave;
     return (
-        <th scope="col" className={`px-4 py-3 text-left font-staff-mono text-staff-mono text-on-surface-variant ${className}`}
+        <th scope="col" className={`${CELULA} text-left font-staff-mono text-staff-mono text-on-surface-variant ${className}`}
             aria-sort={ativa ? (direcao === "asc" ? "ascending" : "descending") : "none"}>
             <button onClick={() => onOrdenar(chave)}
                 title={ativa && direcao === "desc" ? t.historico.sortAsc : t.historico.sortDesc}
@@ -58,90 +62,58 @@ const HistoricoTabela = ({ pedidos, ordenar, direcao, onOrdenar, apiUrl }) => {
     const imagemBotao = (p) => apiUrl + (p.botao?.imagem || "/imagesBotoes/default.png");
 
     return (
-        <>
-            {/* ===== Tabela (md+) ===== */}
-            <div className="hidden md:block bg-surface-container-lowest rounded-lg shadow-sm border border-surface-variant overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full border-collapse">
-                        <thead className="bg-surface-container border-b border-surface-variant">
-                            <tr>
-                                <ColunaOrdenavel chave="hora" label={t.historico.colDateTime} ordenar={ordenar} direcao={direcao} onOrdenar={onOrdenar} />
-                                <ColunaOrdenavel chave="utente" label={t.historico.colUtente} ordenar={ordenar} direcao={direcao} onOrdenar={onOrdenar} />
-                                <ColunaOrdenavel chave="botao" label={t.historico.colRequest} ordenar={ordenar} direcao={direcao} onOrdenar={onOrdenar} />
-                                <th scope="col" className="px-4 py-3 text-left font-staff-mono text-staff-mono text-on-surface-variant">{t.historico.colCategory}</th>
-                                <ColunaOrdenavel chave="estado" label={t.historico.colState} ordenar={ordenar} direcao={direcao} onOrdenar={onOrdenar} />
-                                <ColunaOrdenavel chave="emergencia" label={t.historico.emergency} ordenar={ordenar} direcao={direcao} onOrdenar={onOrdenar} />
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {pedidos.map((p) => (
-                                <tr key={p.id} className={`border-b border-surface-variant last:border-0 hover:bg-surface-container-low transition-colors ${p.emergencia ? "bg-red-50" : ""}`}>
-                                    <td className="px-4 py-3 font-staff-mono text-staff-mono text-on-surface whitespace-nowrap">{quando(p.hora)}</td>
-                                    <td className="px-4 py-3">
-                                        <div className="flex items-center gap-2 min-w-0">
-                                            <UtenteAvatar imagem={p.utente?.imagem} corAvatar={p.utente?.corAvatar} nome={p.utente?.nome}
-                                                apiUrl={apiUrl} className="w-8 h-8 text-[12px] shrink-0" />
-                                            <div className="min-w-0">
-                                                <div className="font-staff-mono text-staff-mono font-semibold text-on-surface truncate">{p.utente?.nome}</div>
-                                                <div className="font-staff-mono text-staff-mono text-on-surface-variant truncate">{p.utente?.quarto}</div>
-                                            </div>
+        // Uma tabela só, em todos os tamanhos de ecrã (era uma tabela + uma lista
+        // de cartões para telemóvel, a pedido do utilizador: o registo lê-se
+        // melhor com as mesmas colunas em toda a parte). Em ecrãs estreitos a
+        // tabela não encolhe — mantém a largura mínima e desliza na horizontal
+        // DENTRO do seu contentor, para a página em si nunca deslizar de lado.
+        <div className="bg-surface-container-lowest rounded-lg shadow-sm border border-surface-variant overflow-hidden">
+            <div className="overflow-x-auto">
+                <table className="w-full min-w-[46rem] border-collapse">
+                    <thead className="bg-surface-container border-b border-surface-variant">
+                        <tr>
+                            <ColunaOrdenavel chave="hora" label={t.historico.colDateTime} ordenar={ordenar} direcao={direcao} onOrdenar={onOrdenar} />
+                            <ColunaOrdenavel chave="utente" label={t.historico.colUtente} ordenar={ordenar} direcao={direcao} onOrdenar={onOrdenar} />
+                            <ColunaOrdenavel chave="botao" label={t.historico.colRequest} ordenar={ordenar} direcao={direcao} onOrdenar={onOrdenar} />
+                            <th scope="col" className={`${CELULA} text-left font-staff-mono text-staff-mono text-on-surface-variant`}>{t.historico.colCategory}</th>
+                            <ColunaOrdenavel chave="estado" label={t.historico.colState} ordenar={ordenar} direcao={direcao} onOrdenar={onOrdenar} />
+                            <ColunaOrdenavel chave="emergencia" label={t.historico.emergency} ordenar={ordenar} direcao={direcao} onOrdenar={onOrdenar} />
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {pedidos.map((p) => (
+                            <tr key={p.id} className={`border-b border-surface-variant last:border-0 hover:bg-surface-container-low transition-colors ${p.emergencia ? "bg-red-50" : ""}`}>
+                                <td className={`${CELULA} font-staff-mono text-staff-mono text-on-surface whitespace-nowrap`}>{quando(p.hora)}</td>
+                                <td className={CELULA}>
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <UtenteAvatar imagem={p.utente?.imagem} corAvatar={p.utente?.corAvatar} nome={p.utente?.nome}
+                                            apiUrl={apiUrl} className="w-8 h-8 text-[12px] shrink-0" />
+                                        <div className="min-w-0">
+                                            <div className="font-staff-mono text-staff-mono font-semibold text-on-surface truncate">{p.utente?.nome}</div>
+                                            <div className="font-staff-mono text-staff-mono text-on-surface-variant truncate">{p.utente?.quarto}</div>
                                         </div>
-                                    </td>
-                                    <td className="px-4 py-3">
-                                        <div className="flex items-center gap-2 min-w-0">
-                                            <img src={imagemBotao(p)} alt="" aria-hidden="true"
-                                                className="w-8 h-8 object-contain rounded shrink-0" />
-                                            <span className="font-staff-mono text-staff-mono text-on-surface truncate" title={p.botao?.mensagem}>
-                                                {p.botao?.mensagem || p.botao?.nome}
-                                            </span>
-                                        </div>
-                                    </td>
-                                    <td className="px-4 py-3 font-staff-mono text-staff-mono text-on-surface-variant whitespace-nowrap">
-                                        {p.botao?.categoria || t.common.noCategory}
-                                    </td>
-                                    <td className="px-4 py-3"><EstadoBadge estado={p.estado} /></td>
-                                    <td className="px-4 py-3">{p.emergencia ? <EmergenciaBadge /> : <span className="text-on-surface-variant">—</span>}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            {/* ===== Cartões (telemóvel) ===== */}
-            <div className="md:hidden flex flex-col gap-2">
-                {pedidos.map((p) => (
-                    <div key={p.id}
-                        className={`bg-surface-container-lowest rounded-lg p-3 shadow-sm border ${p.emergencia ? "border-red-300 bg-red-50" : "border-surface-variant"}`}>
-                        <div className="flex items-center justify-between gap-2 mb-2">
-                            <span className="font-staff-mono text-staff-mono text-on-surface-variant">{quando(p.hora)}</span>
-                            <EstadoBadge estado={p.estado} />
-                        </div>
-                        <div className="flex items-center gap-2 mb-2 min-w-0">
-                            <img src={imagemBotao(p)} alt="" aria-hidden="true" className="w-9 h-9 object-contain rounded shrink-0" />
-                            <div className="min-w-0">
-                                <div className="font-staff-mono text-staff-mono font-semibold text-on-surface truncate">
-                                    {p.botao?.mensagem || p.botao?.nome}
-                                </div>
-                                <div className="font-staff-mono text-staff-mono text-on-surface-variant truncate">
+                                    </div>
+                                </td>
+                                <td className={CELULA}>
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <img src={imagemBotao(p)} alt="" aria-hidden="true"
+                                            className="w-8 h-8 object-contain rounded shrink-0" />
+                                        <span className="font-staff-mono text-staff-mono text-on-surface truncate" title={p.botao?.mensagem}>
+                                            {p.botao?.mensagem || p.botao?.nome}
+                                        </span>
+                                    </div>
+                                </td>
+                                <td className={`${CELULA} font-staff-mono text-staff-mono text-on-surface-variant whitespace-nowrap`}>
                                     {p.botao?.categoria || t.common.noCategory}
-                                </div>
-                            </div>
-                        </div>
-                        <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 min-w-0">
-                                <UtenteAvatar imagem={p.utente?.imagem} corAvatar={p.utente?.corAvatar} nome={p.utente?.nome}
-                                    apiUrl={apiUrl} className="w-7 h-7 text-[11px] shrink-0" />
-                                <span className="font-staff-mono text-staff-mono text-on-surface truncate">
-                                    {p.utente?.nome} · {p.utente?.quarto}
-                                </span>
-                            </div>
-                            {p.emergencia && <EmergenciaBadge />}
-                        </div>
-                    </div>
-                ))}
+                                </td>
+                                <td className={CELULA}><EstadoBadge estado={p.estado} /></td>
+                                <td className={CELULA}>{p.emergencia ? <EmergenciaBadge /> : <span className="text-on-surface-variant">—</span>}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
             </div>
-        </>
+        </div>
     );
 };
 
