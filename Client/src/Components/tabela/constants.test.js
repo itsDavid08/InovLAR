@@ -24,7 +24,7 @@ describe("isSOS", () => {
 describe("resolverCorCategoria", () => {
     it("override do staff > pastel default > null", () => {
         expect(resolverCorCategoria("Chamar", { Chamar: "#111111" })).toBe("#111111");
-        expect(resolverCorCategoria("Necessidades", {})).toBe("#E6E1F0"); // pastel default
+        expect(resolverCorCategoria("Necessidades", {})).toBe("#E6DCC8"); // pastel default
         expect(resolverCorCategoria("Desconhecida", {})).toBeNull();
     });
 });
