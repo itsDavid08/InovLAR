@@ -22,6 +22,36 @@ const updatePedidoSchema = z.object({
     estado: z.enum(Object.values(PEDIDO_STATES)),
 });
 
+// Query de GET /pedidos/historico (registo de pedidos, vista de staff). Tudo é
+// opcional: sem filtros devolve o histórico todo, do mais recente para o mais
+// antigo. Os valores chegam sempre como string (query string), daí o z.coerce
+// nos números e o "true"/"false" no boolean.
+// Ao contrário dos outros schemas, este NÃO passa pelo middleware validate(): esse
+// substitui o req.body, e em Express 5 o req.query é um getter sem setter (não
+// pode ser reatribuído). Quem faz o safeParse é o controller — ver
+// pedidoController.getHistorico.
+const diaISO = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida");
+
+const historicoPedidosQuerySchema = z.object({
+    utenteId: z.coerce.number().int().positive().optional(),
+    botaoId: z.coerce.number().int().positive().optional(),
+    categoria: z.string().trim().min(1).max(255).optional(),
+    estado: z.enum(Object.values(PEDIDO_STATES)).optional(),
+    emergencia: z.enum(["true", "false"]).optional(),
+    // Texto livre sobre o nome/mensagem do botão pedido.
+    q: z.string().trim().min(1).max(255).optional(),
+    // Intervalo por DIA (o <input type="date"> do cliente manda YYYY-MM-DD); o
+    // controller alarga cada extremo às fronteiras do dia.
+    de: diaISO.optional(),
+    ate: diaISO.optional(),
+    ordenar: z.enum(["hora", "utente", "botao", "estado", "emergencia"]).default("hora"),
+    direcao: z.enum(["asc", "desc"]).default("desc"),
+    // Teto de 200 pela mesma razão que em GET /auditoria: uma página de registo
+    // nunca precisa de mais, e evita que um limite absurdo puxe a tabela toda.
+    limite: z.coerce.number().int().positive().max(200).default(50),
+    offset: z.coerce.number().int().min(0).default(0),
+});
+
 // STRING no MariaDB = VARCHAR(255) (ver models/Utente.js e models/Botao.js) — o
 // max(255) aqui faz o corte acontecer como um 400 previsível, não como um
 // SequelizeDatabaseError vindo do driver (500 genérico no errorHandler).
@@ -99,6 +129,7 @@ module.exports = {
     boardSessionSchema,
     createPedidoSchema,
     updatePedidoSchema,
+    historicoPedidosQuerySchema,
     createUtenteSchema,
     updateUtenteSchema,
     createBotaoSchema,

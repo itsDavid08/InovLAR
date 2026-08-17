@@ -5172,3 +5172,199 @@ arrastar um botão novo da biblioteca para cima de um já colocado continua a em
 
 ### Estado
 Fechado. `CLAUDE.md` atualizado (bug marcado como corrigido na secção Known Limitations).
+
+## 2026-08-11 — Revisão do `CLAUDE.md` (factos desatualizados) + teste de cor desatualizado
+
+### Contexto
+Passagem de manutenção ao `CLAUDE.md` (via `/init`, que ao encontrar um ficheiro já existente
+sugere melhorias em vez de o reescrever). O ficheiro tinha crescido para 53 mil caracteres e
+tinha divergido do código em quatro pontos — dois deles contradiziam-se a si próprios dentro do
+mesmo ficheiro, porque a secção "Key Design Decisions" nunca foi atualizada quando as decisões
+mudaram em 2026-07-23:
+
+1. **bcrypt "cost factor 10"** — é 12 desde 2026-07-23 (`config/auth.js: BCRYPT_COST`). O próprio
+   `CLAUDE.md` dizia 12 mais abaixo, na secção de segurança.
+2. **"brute-force of the 4-digit PIN"** — o mínimo passou a 6 dígitos (máximo 20) na mesma data.
+3. **"Mutations (`mutate`) always send credentials"** — falso, e é o erro mais perigoso dos
+   quatro: em `api/client.js` o `auth` faz default a `false` tanto no `get` como no `mutate`, é
+   opt-in chamada a chamada. Quem escrevesse uma mutação de staff a seguir à documentação
+   apanhava um 401 sem perceber porquê. A mesma frase dizia que "open reads (patient board) omit
+   it", também errado desde as sessões de tabuleiro (2026-07-21): o board passa `auth: true` em
+   tudo — os únicos reads mesmo abertos são `GET /botoes` e `GET /imagesBotoes`.
+4. **`middleware/validate.js` e `validation/schemas.js`** não constavam da árvore do Server,
+   apesar de a validação zod estar descrita em prosa noutro sítio.
+
+Ao verificar o estado dos testes para documentar a suite, apanhei uma falha real: 1 de 11 em
+`Components/tabela/constants.test.js`. Não era bug de código — o pastel de `Necessidades` mudou
+de `#E6E1F0` para `#E6DCC8` no commit `8f18344` (2026-07-28) e a expectativa do teste ficou para
+trás.
+
+### Decisão
+**Teste** (`constants.test.js`): atualizado o literal para `#E6DCC8`. Deliberadamente **não** o
+troquei por uma referência a `COR_CATEGORIA_FUNDO.Necessidades` — o teste passaria a comparar a
+constante consigo própria e deixava de detetar seja o que for. Um literal que é preciso atualizar
+à mão quando a paleta muda é o comportamento pretendido deste teste.
+
+**`CLAUDE.md`**: corrigidos os quatro pontos acima e acrescentado o que faltava para trabalhar no
+projeto — como correr **um** ficheiro de teste e **um** teste por nome (`npx vitest run -t "..."`),
+watch mode, `npx tsc -p jsconfig.json --noEmit` (que só estava mencionado no meio de um parágrafo
+das convenções), os scripts `npm run migrate`/`seed`/`dev` do Server e o `db:migrate:undo`.
+
+Registada também a armadilha do **`VITE_API_URL`**, que veio de uma conversa em paralelo sobre pôr
+um nome DNS na rede da APCM: o `apiUrl` cai para `<hostname>:3000` e o `ContextProvider` abre o
+socket.io a partir do mesmo valor, por isso qualquer reverse proxy ou nome novo obriga a rebuild
+do Client com `VITE_API_URL` — senão a página carrega pelo proxy e continua a chamar o `:3000`,
+que o modo TLS do `install.sh` fecha com `HOST=127.0.0.1`. (O tema do DNS em si fica para depois.)
+
+**Corte**: a secção "Known security gaps" era um único bullet de ~1900 palavras de histórico
+datado ("Fixed 2026-07-22: ...", "Fixed 2026-07-23: ..."), duplicando o que este log já tem
+entrada a entrada. Substituída por 8 invariantes curtas — o que não pode regredir — com ponteiro
+para aqui. O mesmo tratamento para os bullets do TLS, da auditoria e do bug do `colocarComEmpurrao`
+(que já estava corrigido e portanto não é uma "limitação"): o comportamento que interessa manter —
+a reserva da pegada do alvo e a troca via `trocarComOrigem` só nos dois pontos de mover um slot
+existente — passou para a secção de design do editor, onde é regra em vez de arqueologia.
+Resultado: 53.502 → 48.886 caracteres, com mais conteúdo acionável.
+
+### Teste
+Suites completas depois da correção: Client 33/33 (2 ficheiros), Server 36/36 (6 ficheiros).
+Confirmado que `npx tsc -p jsconfig.json --noEmit` sai a 0, e que os comandos de teste único
+documentados funcionam mesmo como estão escritos.
+
+### Estado
+Fechado. Nota de processo, para não se repetir: a meio disto corrompi os acentos do `CLAUDE.md`
+com um splice em PowerShell — o `Get-Content` do PS 5.1 lê ficheiros sem BOM como ANSI e a
+regravação em UTF-8 fica com dupla codificação. Recuperado com `git checkout -- CLAUDE.md` (o
+ficheiro estava commitado e limpo) e reaplicado. **Para edições a ficheiros com acentos, usar as
+ferramentas de edição diretas ou `[System.IO.File]::ReadAllLines($p, [Text.Encoding]::UTF8)` com
+`WriteAllLines` + `UTF8Encoding($false)` — nunca `Get-Content`/`Set-Content` à solta.**
+
+## 2026-08-13 — Segunda passagem ao `CLAUDE.md` (lacunas, não factos errados)
+
+### Contexto
+Nova execução do `/init` dois dias depois da revisão de 2026-08-11. Dessa vez a verificação não
+encontrou nenhuma afirmação errada — as quatro correções anteriores continuam válidas e as suites
+estão verdes (Client 33/33 em 2 ficheiros, Server 36/36 em 6, `npm run lint` 0 erros / 4 avisos
+conhecidos, `npx tsc -p jsconfig.json --noEmit` a sair 0). O que apareceu foram **lacunas**: coisas
+que só se descobrem por tentativa e erro e que não estavam escritas em lado nenhum.
+
+### Decisão
+Acrescentado ao `CLAUDE.md`:
+
+1. **Ordem de import do CSS no `main.jsx`** — Bootstrap → `fonts.css` → `index.css` →
+   `tailwind.css`, com o Tailwind obrigatoriamente em último para reproduzir a ordem do antigo CDN
+   (é assim que as utilities ganham os empates de especificidade ao Bootstrap). A árvore de
+   ficheiros só listava o `index.css`, portanto uma folha de estilos nova tinha boa probabilidade
+   de ir parar ao sítio errado. Acrescentados também o `fonts.css`, o `tailwind.css` e o
+   `StaffSkeleton.jsx`, que faltavam na árvore.
+2. **Não dá para escrever um teste de componente no Client sem trabalho prévio** — o Client não tem
+   configuração de Vitest nenhuma (o `vite.config.js` não tem bloco `test`) e não tem `jsdom` nem
+   `@testing-library/*` instalados, por isso os testes correm em Node puro e só lógica pura é
+   testável. Era exatamente a razão por que os dois ficheiros existentes são `gridSpans`/`constants`
+   e não componentes, mas isso nunca tinha sido escrito. Registado também que os testes de
+   middleware do Server usam **supertest** contra uma app Express descartável.
+3. **`.claude/launch.json`** — existia sem estar documentado; passa a estar referido na secção de
+   arranque como a forma preferida de correr os dois processos. **Corrigida uma vírgula final** no
+   array `configurations` que deixava o ficheiro em JSON inválido (`node -e "JSON.parse(...)"`
+   confirma agora que passa).
+4. **Ponteiros para `IMPROVEMENTS_CHECKLIST.md` e `paper/`** — do checklist ficou registado o que
+   continua aberto (2, 9/11, 12, 14/15) e o aviso de que o bloco "TOP 3 prioridades" no fim está
+   desatualizado (as três já foram feitas), para não se voltar a agir por ele. Do `paper/`: está na
+   árvore mas **não commitado**, o estudo é sobre um lar residencial de **adultos com paralisia
+   cerebral** (residentes + profissionais de saúde), enquadramento mais estreito do que o "nursing
+   home" genérico que o resto da documentação usa, e a pasta está espelhada no Overleaf — as edições
+   ao artigo entregam-se como instruções de find/replace, não aplicadas aos ficheiros locais.
+
+### Teste
+Suites, lint e `tsc` corridos antes de escrever (valores acima). `CLAUDE.md` 48.914 → 51.964
+caracteres. Acentos verificados depois das edições (sem dupla codificação — usadas as ferramentas
+de edição diretas, conforme a nota de processo da entrada de 2026-08-11).
+
+### Estado
+Fechado.
+
+## 2026-08-13 — Nova vista de staff: Registo de Pedidos (histórico filtrável)
+
+### Contexto
+Pedido do utilizador: uma página de staff para ver o registo de pedidos dos utentes, filtrável por
+data e por utente (mais outros filtros) e ordenável. O que existia era só o `/staff/pedidos`
+(monitor dos **pendentes**, com som e resolução) — depois de concluído ou cancelado, um pedido
+desaparecia do ecrã e só se via indo à base de dados. O `GET /pedidos` traz tudo sem filtro, sem
+ordem e sem corte, portanto não servia de base para uma página.
+
+### Decisão — filtrar no servidor, não no browser
+A tabela `pedidos` é a única que cresce para sempre (34 linhas na BD de dev hoje, mas ~100/dia num
+lar em produção). Puxar o histórico todo para o `ContextProvider` seria pior do que só lento: o
+provider re-busca tudo a cada evento `bd_alterado` do socket, ou seja, cada pedido novo obrigaria a
+transferir o histórico inteiro outra vez. Por isso o registo é a primeira leitura do projeto com
+filtro/ordenação/paginação **em SQL**, e a página faz o seu próprio fetch em vez de consumir o
+contexto (só usa o `utentes`/`botoes` que já lá estavam, para encher os dropdowns).
+
+**`GET /pedidos/historico`** (requireStaff) — filtros `de`, `ate`, `utenteId`, `botaoId`,
+`categoria`, `estado`, `emergencia`, `q` (texto no nome/mensagem do botão), ordenação por
+`hora|utente|botao|estado|emergencia` × `asc|desc`, `limite` (máx. 200, omissão 50) e `offset`.
+Devolve `{ total, limite, offset, resumo, pedidos }`. O `resumo` (contagens por estado +
+emergências) é do conjunto **filtrado inteiro**, não da página — é o que os contadores do cabeçalho
+mostram; sai de um único `count` agrupado por `(estado, emergencia)`.
+
+Quatro detalhes que não são óbvios e que ficam registados por isso:
+
+1. **A rota tem de ficar ANTES de `/pedidos/:id`** — senão o `:id` casa com `"historico"` e a
+   página levava um 404 de "Pedido não encontrado".
+2. **O `validate()` não serve para query strings** — esse middleware substitui o `req.body`, e em
+   Express 5 o `req.query` é um *getter* sem setter (não pode ser reatribuído). O schema
+   (`historicoPedidosQuerySchema`) fica na mesma em `validation/schemas.js`, mas quem faz o
+   `safeParse` é o controller.
+3. **Datas em hora local, não UTC** — `de`/`ate` são dias (`YYYY-MM-DD`, o que o `<input
+   type="date">` manda) alargados a 00:00:00.000 → 23:59:59.999. Construídos a partir dos
+   componentes, porque `new Date("2026-08-14")` é lido como UTC e no horário de verão português
+   deslocava o intervalo uma hora — "hoje" perderia os pedidos da primeira hora do dia.
+4. **Filtrar por categoria/texto obriga a `required: true` no include do botão** — sem isso o
+   Sequelize mantém o LEFT JOIN e o `where` do include não corta linha nenhuma.
+
+Acrescentado ainda o índice `pedidos_hora` (migração `20260814090000`): o registo filtra por
+intervalo de datas e ordena sempre por hora; os índices de `utenteId`/`botaoId` já vinham da
+migração inicial.
+
+### Cliente
+Rota `/staff/historico` (dentro do `RequireStaff`), 6º item da navegação (ícone `history`,
+"Registo"), container `Pages/HistoricoPedidos.jsx` + dois componentes burros em
+`Components/pedidos/` (`HistoricoFiltros`, `HistoricoTabela`), strings todas em `i18n/pt.js`.
+Tabela em ecrã médio/grande (cabeçalhos clicáveis para ordenar, com `aria-sort`), cartões em
+telemóvel. Atalhos de intervalo (Hoje / 7 dias / 30 dias / Tudo), procura por texto com *debounce*
+de 350 ms (os restantes filtros vão logo ao servidor), "Limpar filtros", "Atualizar", paginação
+de 50 com "X–Y de Z".
+
+Duas decisões pequenas no cliente: qualquer mudança de filtro ou de ordenação volta ao offset 0
+(senão ficava-se numa página 3 de um conjunto que agora só tem uma), e as respostas fora de ordem
+são ignoradas por um `vivo` no efeito — a escrever na caixa de procura chegam várias respostas e a
+última a sair não é necessariamente a última a chegar.
+
+### Teste
+Suite: Server 54/54 em 7 ficheiros (18 testes novos — o schema da query e a tradução
+filtros → `where`/`order` em `pedidoController.historico.test.cjs`, com `vi.spyOn` no
+`findAndCountAll`/`count`, sem tocar na BD), Client 33/33, `npm run lint` 0 erros / 4 avisos
+conhecidos (o 5º que a `HistoricoFiltros` introduziu — export de `isoDia` ao lado do componente —
+foi eliminado deixando o helper privado), `tsc -p jsconfig.json --noEmit` limpo.
+
+Contra a BD de dev: verificado com um script que compara, dia a dia, o `total` do endpoint com o
+`SELECT DATE(hora), COUNT(*) FROM pedidos GROUP BY DATE(hora)` — os 7 dias com dados batem certo,
+o que confirma as fronteiras de dia em hora local.
+
+Na app a correr (a Browser pane não estava a compor frames, por isso a verificação foi por DOM e
+não por screenshot): filtro por utente (34 → 1 e o resumo a acompanhar), só emergências (4 linhas,
+igual ao contador do conjunto sem filtros), atalho "Hoje" (estado vazio correto, sem pedidos hoje),
+"Tudo" a limpar as datas, procura "medica" → 3 linhas todas de "Preciso de medicação", ordenação
+por hora a inverter (`aria-sort` e primeira linha a mudar de 21/07 para 08/07), paginação com
+`LIMITE` temporariamente a 10: 1–10 / 11–20 / 31–34 de 34, "anterior" desativado na 1ª página e
+"seguinte" na última. Em 375 px a tabela dá lugar aos cartões, sem scroll horizontal, e a barra
+inferior mostra os 6 itens. Consola sem erros.
+
+Nota de processo: para conduzir a app foi preciso uma sessão de staff (o PIN é do utilizador),
+criada diretamente na `StaffSession` e **revogada no fim** — as 22 sessões que restam são as do
+próprio utilizador.
+
+### Estado
+Fechado. `CLAUDE.md` atualizado (endpoint, árvore de ficheiros, contagem de testes).
+Possíveis seguimentos, não feitos: exportar o registo filtrado para CSV, e ligar a página ao
+evento `bd_alterado` do socket (hoje atualiza-se com o botão "Atualizar" — num registo histórico
+não pareceu desejável a lista mexer-se sozinha enquanto se lê).

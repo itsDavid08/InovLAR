@@ -4,6 +4,7 @@ import { ContextProvider } from "./ContextProvider";
 import TabuleiroComunicacao from "./Pages/TabuleiroComunicacao.jsx";
 import StaffHome from "./Pages/StaffHome.jsx";
 import PedidosPendentes from "./Pages/PedidosPendentes.jsx";
+import HistoricoPedidos from "./Pages/HistoricoPedidos.jsx";
 import EditUtente from "./Pages/EditUtente.jsx";
 import NewUtente from "./Pages/NewUtente.jsx";
 import GerirTabela from "./Pages/GerirTabela.jsx";
@@ -38,6 +39,7 @@ function App() {
                         <Route path="/staff/tabelas" element={<RequireStaff><TabelasView /></RequireStaff>} />
                         <Route path="/staff/alterar-password" element={<RequireStaff><ChangePassword /></RequireStaff>} />
                         <Route path="/staff/pedidos" element={<RequireStaff><PedidosPendentes /></RequireStaff>} />
+                        <Route path="/staff/historico" element={<RequireStaff><HistoricoPedidos /></RequireStaff>} />
                         <Route path="/edit-botoes" element={<RequireStaff><EditBotoes /></RequireStaff>} />
 
                         {/* Tabuleiro do utente — a "gaiola" (só se sai com PIN). A URL leva o
